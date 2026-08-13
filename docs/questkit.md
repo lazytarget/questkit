@@ -14,16 +14,15 @@ know exactly what a given command or field does and why it exists.
 4. [Installation](#4-installation)
 5. [Development](#5-development)
 6. [CLI reference](#6-cli-reference)
-7. [Make integration](#7-make-integration)
-8. [Frontmatter reference](#8-frontmatter-reference)
-9. [`.questkit.yaml` configuration reference](#9-questkityaml-configuration-reference)
-10. [Multi-zone setup](#10-multi-zone-setup)
-11. [Versioning: Syncthing + Git](#11-versioning-syncthing--git)
-12. [Git hooks and validation](#12-git-hooks-and-validation)
-13. [IDE and tool integration](#13-ide-and-tool-integration)
-14. [Agentic support](#14-agentic-support)
-15. [Known limitations and open questions](#15-known-limitations-and-open-questions)
-16. [Appendix: full worked example](#16-appendix-full-worked-example)
+7. [Frontmatter reference](#7-frontmatter-reference)
+8. [`.questkit.yaml` configuration reference](#8-questkityaml-configuration-reference)
+9. [Multi-zone setup](#9-multi-zone-setup)
+10. [Versioning: Syncthing + Git](#10-versioning-syncthing--git)
+11. [Git hooks and validation](#11-git-hooks-and-validation)
+12. [IDE and tool integration](#12-ide-and-tool-integration)
+13. [Agentic support](#13-agentic-support)
+14. [Known limitations and open questions](#14-known-limitations-and-open-questions)
+15. [Appendix: full worked example](#15-appendix-full-worked-example)
 
 ---
 
@@ -56,7 +55,7 @@ Five design commitments fall out of that:
   that makes cross-references safe to write by hand and safe for links to
   survive — the tradeoff is that `quest validate` will report filename/title
   drift as informational noise, forever, rather than "fixing" it by
-  renaming (see [§12](#12-git-hooks-and-validation)).
+  renaming (see [§11](#11-git-hooks-and-validation)).
 - **Capture is single-log; mutation and querying are not.** `quest new`
   always lands in exactly one log — nearest-zone-wins, with a fatal guard
   against an ambiguous destination — so where a *new* thing gets filed is
@@ -67,7 +66,7 @@ Five design commitments fall out of that:
   aggregates read-only across every log the same way. There is still no
   *bulk* multi-log write, and still no cross-log reference concept — this
   is the v2 answer `QST-vl9cq` asked for (see
-  [§10](#10-multi-zone-setup)/[§15](#15-known-limitations-and-open-questions)).
+  [§9](#9-multi-zone-setup)/[§14](#14-known-limitations-and-open-questions)).
 - **Capture must be instant.** `quest new "title"` with nothing else is a
   complete, valid quest — `description` is the only field that's
   situationally required (waived while `status: draft`), specifically so a
@@ -77,7 +76,7 @@ Five design commitments fall out of that:
   a `modified` date — questkit fixes it on every save rather than asking a
   human or a linter to remember it. Where it can't (a missing description,
   a dangling reference), `quest validate` says so and stops there; it
-  never guesses at a fix (see [§12](#12-git-hooks-and-validation) on why
+  never guesses at a fix (see [§11](#11-git-hooks-and-validation) on why
   `--fix` was deliberately not built).
 
 ## 2. Role inside The Realm
@@ -103,8 +102,10 @@ Inside The Realm specifically, though, it plays a defined role:
   (`project: career-transition`, migrated from `career-todos.md`), and
   questkit's own `quests/` (`project: questkit` — questkit tracks its own
   backlog in itself).
-- **`make quest`/`make status`** are the Realm's own shims over the CLI,
-  wired into `99-system/Makefile` (see [§7](#7-make-integration)).
+- **The `quest`/`qst` CLI is used directly** — installed globally via `uv
+  tool install --editable` (part of `make setup-venv`; see §4.3). There is
+  no Make wrapper: an earlier `make quest`/`make status` shim was removed
+  in favor of calling the CLI itself everywhere.
 - **The Realm's root `AGENTS.md`** routes "bean"/"ticket"/"todo" — spoken
   synonyms from before this existed — to quest creation, so an agent
   primed on the Realm's conventions never has to be told twice.
@@ -144,7 +145,7 @@ uv pip install -e ".[dev]"
 ```
 See [§5](#5-development) for the full loop.
 
-### 4.2 For Make-shim usage only (`make quest`, `make status`)
+### 4.2 Shared per-OS venv (automatic, for 99-system tooling)
 
 Nothing to do manually — `make setup-venv` (part of `make init-system`)
 already runs:
@@ -155,10 +156,8 @@ already runs:
 
 installing questkit in editable mode into the same shared, per-OS venv
 `99-system` uses for everything else (`$(VENV)`, resolved per-OS/per-device
-— see the Makefile's OS-detection block). The Make targets call
-`$(VENV)/bin/quest` by absolute path, so this alone is enough for
-`make quest "title"` / `make status` to work from anywhere in the Realm,
-with zero PATH configuration.
+— see the Makefile's OS-detection block). This isn't itself a way to get a
+bare `quest` command on your interactive shell PATH — for that, see §4.3.
 
 ### 4.3 For a bare `quest`/`qst` on your interactive shell PATH
 
@@ -246,7 +245,7 @@ Notes for anyone changing questkit itself:
   pinned to a specific commit. A code change to `hooks.py`/`schema.py`
   doesn't take effect for them until their `.pre-commit-config.yaml`'s
   `rev:` is bumped to your new commit — see
-  [§12](#12-git-hooks-and-validation).
+  [§11](#11-git-hooks-and-validation).
 - **The `secrets`/`unicodedata`/`re` standard-library choices are
   deliberate**, not placeholders: `secrets.choice` for id generation (not
   `random` — doesn't matter cryptographically here, but there's no reason
@@ -258,7 +257,7 @@ Notes for anyone changing questkit itself:
 ## 6. CLI reference
 
 Every subcommand accepts `--in DIR` to override discovery entirely for
-that one call (see [§10](#10-multi-zone-setup) for the full resolution
+that one call (see [§9](#9-multi-zone-setup) for the full resolution
 order). Examples below assume you're standing inside an already-opted-in
 log unless `--in` is shown explicitly.
 
@@ -282,7 +281,7 @@ with a "captured" line dated today), and prints the created path.
   is the mechanism that keeps capture to two seconds; fill it in later via
   `quest set`.
 - `--project` overrides the log's own configured `project:` (see
-  [§9](#9-questkityaml-configuration-reference)); if neither is set, the
+  [§8](#8-questkityaml-configuration-reference)); if neither is set, the
   field is omitted entirely.
 - `--edit` opens `$EDITOR` on the new file afterward; silently skipped
   (with a message) if `$EDITOR` isn't set.
@@ -293,9 +292,9 @@ with a "captured" line dated today), and prints the created path.
   ancestor log is found from cwd *and* two or more quest logs exist
   somewhere downward, `quest new` fails fast rather than guessing —
   `Ambiguous destination. Multiple quest logs found in subdirectories.
-  Specify target with --in <DIR>.` (See [§10](#10-multi-zone-setup).)
+  Specify target with --in <DIR>.` (See [§9](#9-multi-zone-setup).)
 - **Custom fields** (declared in the log's `schema.fields` — see
-  [§9](#9-questkityaml-configuration-reference)) are written into the new
+  [§8](#8-questkityaml-configuration-reference)) are written into the new
   quest's frontmatter as explicit `null`, one `[warning]` per field printed
   to stderr, so an agent (or a human) notices the field needs filling in
   rather than silently missing it.
@@ -334,7 +333,7 @@ multi-log querying.
   `--where "status:exists"` as the "show every status" escape hatch.
 - **`--all`** aggregates quests from every log found by recursive descent
   from `--root` (or `QST_ROOT`, or the git root, or cwd — see
-  [§10](#10-multi-zone-setup)), instead of resolving to just one log.
+  [§9](#9-multi-zone-setup)), instead of resolving to just one log.
   A `project` column (the log's configured `project:`, or its directory
   name if unset) is appended automatically in this mode. A log whose
   config fails to load (bad version, broken schema `extends`) is skipped
@@ -374,12 +373,12 @@ has — a precise, single-log override, with no fallback if the id isn't
 found there. Without it, resolution is: the nearest log (today's walk-up)
 first; if the id isn't there, every other log under `QST_ROOT` (or the git
 root, or cwd) is swept until it turns up somewhere (see
-[§10](#10-multi-zone-setup)). Matching within a log is by filename prefix
+[§9](#9-multi-zone-setup)). Matching within a log is by filename prefix
 — `QST-x7k2m` or the full `QST-x7k2m--fix-the-garage-door-sensor` both
 work — via `find_by_id()`'s glob (`{id}*.md`), not the `id:` frontmatter
 field, so it's correct even if frontmatter were ever hand-edited to
 disagree (which `quest validate` would also catch —
-[§12](#12-git-hooks-and-validation)).
+[§11](#11-git-hooks-and-validation)).
 
 ### `quest set <id> field=value [field=value ...] [--in DIR]`
 
@@ -426,15 +425,15 @@ design** — safe to run any number of times; never overwrites an existing
   inside) something already named `quests/`, it uses that directory
   itself.
 - `--project NAME` is written into the new config's `project:` key (only
-  meaningful on first creation — see [§9](#9-questkityaml-configuration-reference)).
+  meaningful on first creation — see [§8](#8-questkityaml-configuration-reference)).
 - `--git auto|manual` sets the config's `git:` key at creation time
-  (default `manual` if omitted — see [§11](#11-versioning-syncthing--git)).
+  (default `manual` if omitted — see [§10](#10-versioning-syncthing--git)).
 - `--base` writes `quests/quests.base`, an Obsidian Bases view (see
-  [§13](#13-ide-and-tool-integration)). Skipped with a message if one
+  [§12](#12-ide-and-tool-integration)). Skipped with a message if one
   already exists.
 - `--hooks` wires questkit's own pre-commit hooks into the *git repo*
   containing the target (walks up looking for `.git`; a no-op with a
-  message if there isn't one) — see [§12](#12-git-hooks-and-validation)
+  message if there isn't one) — see [§11](#11-git-hooks-and-validation)
   for exactly what this does.
 
 ```bash
@@ -450,7 +449,7 @@ $ quest init --project pensieve --git manual --hooks --base
 
 Checks every file matching the log's configured `pattern` (default
 `QST-*.md`) against the full rule set — see
-[§12](#12-git-hooks-and-validation) for exactly what's checked and why the
+[§11](#11-git-hooks-and-validation) for exactly what's checked and why the
 hook checks a strict subset of it. Exits `0` with a summary line if clean,
 `1` with a `[!] path` / `error: ...` block per problem file otherwise.
 
@@ -491,55 +490,12 @@ Every subcommand's exceptions are caught once, centrally, in `cli.main()`
 prints as `[quest] error: <message>` to stderr and returns exit code `1`;
 you will never see a raw Python traceback from normal usage.
 
-## 7. Make integration
-
-`99-system/Makefile` wires two shims over the CLI:
-
-```makefile
-quest:
-	@$(QUEST) new "$(QUEST_ARGS)"
-
-status:
-	@$(QUEST) list
-```
-
-`$(QUEST)` resolves per-OS to the shared venv's binary (`$(VENV)/bin/quest`
-on POSIX, `Scripts\quest.exe` on Windows), so these work with zero PATH
-setup as long as `make setup-venv` has run once. `QUEST_LOG` is
-Makefile-defaulted (`?=`, so a real environment variable still wins) to
-`$(DIR_PROJECTS)/common/quests` — meaning `make status` from the Realm
-root, with no zone-local log nearby, still resolves to the central log
-instead of erroring.
-
-```bash
-$ make quest "Fix the garage door sensor"
-$ make status
-```
-
-**A note for anyone touching this Makefile block**: the multi-word-title
-absorption trick (`ifeq (quest,$(firstword $(MAKECMDGOALS))) ...
-.DEFAULT:`) exists because Make's own goal-parsing needs help — without
-it, `make quest "two words"` errors with `No rule to make target "two
-words"`. The comment in the Makefile right above that block explains a
-real bug that was found and fixed here: the *obvious*-looking fix,
-`$(eval $(QUEST_ARGS):;@:)`, re-splits the reconstructed title on
-whitespace and defines a no-op **per word** rather than for the whole
-phrase — which silently breaks if the title happens to contain the word
-"quest" or "bean" itself (it collides with the real target). `.DEFAULT:`
-was verified in isolation before landing here; don't revert to the
-`$(eval ...)` pattern.
-
-`make bean` still exists, as a deliberate deprecation stub — it absorbs
-its arguments the same way but only ever prints a pointer at `make quest`,
-on purpose, so the nudge is actually seen rather than silently routed
-around.
-
-## 8. Frontmatter reference
+## 7. Frontmatter reference
 
 | Field | Required? | Type | Notes |
 |---|---|---|---|
 | `id` | Yes | `QST-xxxxx` | 5-char lowercase base36, random (not sequential — see [§1](#1-purpose--design-philosophy)/README on why). Must match the filename's id prefix (`quest validate`, hard rule). |
-| `title` | Yes | string | Human-readable. Editing this after creation does **not** rename the file — see [§12](#12-git-hooks-and-validation) on slug drift. |
+| `title` | Yes | string | Human-readable. Editing this after creation does **not** rename the file — see [§11](#11-git-hooks-and-validation) on slug drift. |
 | `description` | Situational | string, ≤200 chars | Required unless `status: draft`. `quest new` defaults it to the title if `--description` isn't given (once status isn't draft). |
 | `created` | Yes | `YYYY-MM-DD` | Set once, at creation. |
 | `modified` | Yes | `YYYY-MM-DD` | Bumped by `quest set`/`done` and by the `quest-bump-modified` hook on every commit that touches the file. |
@@ -549,12 +505,12 @@ around.
 | `priority` | Yes | enum | `critical \| high \| medium \| low \| deferred` |
 | `effort` | No | enum | `xs \| s \| m \| l \| xl` |
 | `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (In The Realm specifically, the convention is `peter`/`jenika`, but that's a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
-| `agentic` | No | enum | `afk \| hitl`. Absent means "not yet triaged for agent handoff." See [§14](#14-agentic-support). |
-| `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§9](#9-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
+| `agentic` | No | enum | `afk \| hitl`. Absent means "not yet triaged for agent handoff." See [§13](#13-agentic-support). |
+| `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§8](#8-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
 | `due` | No | `YYYY-MM-DD` | Rarely used in practice — most quests never need a hard date. |
 | `tags` | Yes | list of strings | Presence of the *key* is required (an empty list is fine); lowercase kebab-case by convention. |
 | `blocked_by` | No | list of `QST-xxxxx` | One direction only — there is no `blocks` field. The reverse relationship ("what does this block") is always computable from the full set of quests in a log (and is exactly what Obsidian backlinks do automatically); storing both directions invites drift when only one side gets updated. `quest validate` resolves every id here against the current log. |
-| `aliases` | Yes (CLI-created) | list, always includes own `id` | Drives Obsidian search/quick-switcher/autocomplete. Does **not** make a bare `[[id]]` wikilink resolve on click — see [§13](#13-ide-and-tool-integration). `quest validate` (hard rule) flags a missing self-alias. |
+| `aliases` | Yes (CLI-created) | list, always includes own `id` | Drives Obsidian search/quick-switcher/autocomplete. Does **not** make a bare `[[id]]` wikilink resolve on click — see [§12](#12-ide-and-tool-integration). `quest validate` (hard rule) flags a missing self-alias. |
 | `related_adrs` | No, not schema-enforced | list of ADR references | Not part of the closed schema at all — carried over from the Beans-era migration as free-form extra metadata. Any field not listed here is accepted without complaint; `quest validate` never rejects unknown keys. |
 
 List fields always render flow-style (`[a, b]`) at 0–1 items and
@@ -564,13 +520,13 @@ control over it.
 
 **Custom fields** — beyond the closed set above, a log can declare its own
 fields via `schema.fields` in `.questkit.yaml` (see
-[§9](#9-questkityaml-configuration-reference)). `quest new` writes each as
+[§8](#8-questkityaml-configuration-reference)). `quest new` writes each as
 an explicit `null` with a stderr warning; `quest validate` fails if one
 marked `required: true` is still null or missing. This is the only
 schema-agnostic escape hatch — everything else in this table is a fixed,
 hardcoded vocabulary (itself overridable per-log — see the next section).
 
-## 9. `.questkit.yaml` configuration reference
+## 8. `.questkit.yaml` configuration reference
 
 Lives **inside** the `quests/` directory it governs — this is deliberate:
 a quest log plus its config is a single, portable, self-contained unit
@@ -607,10 +563,10 @@ schema:
 | `pattern` | `QST-*.md` | The glob every log-scanning command (`list`, `validate`) uses to enumerate quest files. Changing the `prefix` alone does **not** change this — they're independent knobs; keep them consistent by hand if you customize either. |
 | `prefix` | `QST-` | Prepended to generated ids by `quest new`. |
 | `id_length` | `5` | Random suffix length. `generate_id()` retries up to 50 times on a same-directory collision before giving up with an actionable message suggesting you raise this — raise it if a log ever gets large enough that collisions start happening in practice (extremely unlikely at 5 chars / base36 for any realistic log size). |
-| `git` | `manual` | `manual`: questkit never touches git; you (or your existing commit conventions/agent instructions) commit. `auto`: `new`/`set`/`done` commit their own change immediately, pathspec-limited to the one touched file, with message `quest(<log-dir-name>): <new\|update> ...`. If the log isn't inside a git repo at all, `auto` mode prints a warning and continues rather than erroring. See [§11](#11-versioning-syncthing--git) for when to choose which. |
+| `git` | `manual` | `manual`: questkit never touches git; you (or your existing commit conventions/agent instructions) commit. `auto`: `new`/`set`/`done` commit their own change immediately, pathspec-limited to the one touched file, with message `quest(<log-dir-name>): <new\|update> ...`. If the log isn't inside a git repo at all, `auto` mode prints a warning and continues rather than erroring. See [§10](#10-versioning-syncthing--git) for when to choose which. |
 | `project` | *(absent)* | If set: `quest new` auto-stamps every new quest's `project:` field with this value (unless `--project` overrides it per-call), and `quest validate` flags any quest whose own `project:` disagrees. If absent (as in the central/catch-all log): no auto-stamping, no drift-checking — quests there can carry any `project:` value, or none, purely as free-form metadata. |
 | `defaults.type` / `.status` / `.priority` | `task` / `draft` / `medium` | Used by `quest new` whenever the corresponding `--type`/`--status`/`--priority` flag isn't given. Loading a config that doesn't specify one of these three falls back to the same hardcoded defaults — `defaults:` in the file only needs to list the ones you want to override. |
-| `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list --all`, cross-log id resolution) walks this log's own tree — see [§10](#10-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention `syncthing.yaml`/`scaffold_syncthing.py` uses elsewhere in the Realm, so a log inside the Realm can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
+| `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list --all`, cross-log id resolution) walks this log's own tree — see [§9](#9-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention `syncthing.yaml`/`scaffold_syncthing.py` uses elsewhere in the Realm, so a log inside the Realm can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
 | `schema` | *(absent)* | Overrides/extends the built-in `type`/`status`/`tier`/`priority`/`effort` vocabularies and/or declares custom fields, for this log only. See the dedicated subsection below — absent entirely, a log behaves exactly as if this key didn't exist at all (full backward compatibility). |
 
 Config values load through the exact same `ruamel.yaml` instance used for
@@ -622,7 +578,7 @@ formatting conventions as quest files themselves.
 
 Absent this key, a log's valid `type`/`status`/`tier`/`priority`/`effort`
 values are exactly the hardcoded frozensets in `schema.py` (see
-[§8](#8-frontmatter-reference)) — nothing below changes anything for a log
+[§7](#7-frontmatter-reference)) — nothing below changes anything for a log
 that doesn't opt in.
 
 - **`extends: <path>`**, if present, must be the *first* key read
@@ -650,7 +606,7 @@ Use `quest schema quest [field]` (see [§6](#6-cli-reference)) to introspect
 the actual merged result for a log, rather than reading the YAML chain by
 hand.
 
-## 10. Multi-zone setup
+## 9. Multi-zone setup
 
 **Resolution order, for every command, every time:**
 
@@ -665,9 +621,12 @@ hand.
    root if neither matches.
 3. **`QUEST_LOG` environment variable** — deliberately checked *last*, not
    first. Checking it first would break "nearest zone wins" on every
-   machine where it's set, i.e. all of them (The Realm sets it via
-   `make setup-venv`'s Makefile default so `make status`/`make quest` from
-   the Realm root land in the central log).
+   machine where it's set. Nothing in the Realm sets this for you
+   automatically (there's no Make wrapper anymore to default it) — if you
+   want `quest`/`qst` run from a directory with no nearby log (e.g. the
+   Realm root itself) to fall back to the central log instead of erroring,
+   export it yourself: `export QUEST_LOG=/path/to/02-projects/common/quests`
+   in your shell profile.
 4. **An actionable error** — `no quest log found: run 'quest init' here,
    or set QUEST_LOG to your central log.` Never an interactive prompt;
    scripts and agents get a clean failure to react to instead of hanging.
@@ -712,7 +671,7 @@ command" (§1): it only ever *finds* a file across logs, and only ever
 *mutates exactly one file* once found. It does not enable bulk multi-log
 writes, and there is still no cross-log reference concept — a
 `blocked_by`/wikilink still only resolves within its own log (see
-[§12](#12-git-hooks-and-validation)).
+[§11](#11-git-hooks-and-validation)).
 
 ### `QST_ROOT` and cross-log discovery
 
@@ -736,7 +695,7 @@ for `.questkit.yaml`, pruning as it goes:
   notes flagged (a stray `.stversions/` copy of a quest file showing up in
   a naive `find`/`grep`).
 - Each log's own `ignore:` config (see
-  [§9](#9-questkityaml-configuration-reference)) extends that for its own
+  [§8](#8-questkityaml-configuration-reference)) extends that for its own
   project — in practice, its parent directory's tree too, since the
   common shape is `project/quests/.questkit.yaml` naming a sibling like
   `project/dist`. A one-level lookahead means declaration order among
@@ -759,7 +718,7 @@ only option).
 **Writes still don't aggregate.** `quest list --all` is read-only; there
 is still no command that mutates more than one file per invocation.
 
-## 11. Versioning: Syncthing + Git
+## 10. Versioning: Syncthing + Git
 
 Quest logs in The Realm are typically versioned by **both** Syncthing (for
 device-to-device sync) and Git (for history) simultaneously, and the two
@@ -803,7 +762,7 @@ interact in specific ways worth understanding:
   defense (which is just "5 random base36 characters is a big enough
   space").
 
-## 12. Git hooks and validation
+## 11. Git hooks and validation
 
 ### What ships
 
@@ -898,7 +857,7 @@ Verify a bump actually works before trusting it:
 pre-commit run quest-validate --files quests/QST-something.md
 ```
 
-## 13. IDE and tool integration
+## 12. IDE and tool integration
 
 ### Obsidian
 
@@ -953,7 +912,7 @@ all.
 
 ### AI agents
 
-See [§14](#14-agentic-support) — the short version is: `quest list
+See [§13](#13-agentic-support) — the short version is: `quest list
 --format json|csv|prompt` gives a structured or agent-tuned view when one
 helps, `quest schema quest` (see [§6](#6-cli-reference)) means an agent
 never has to guess a valid enum value, every command's failure mode is a
@@ -961,7 +920,7 @@ clean one-line message rather than a traceback, and the frontmatter schema
 itself carries the vocabulary (`agentic:`) for marking which quests are
 safe to hand to an agent unsupervised.
 
-## 14. Agentic support
+## 13. Agentic support
 
 Two frontmatter fields exist specifically for human/agent collaboration,
 deliberately **not conflated into one**:
@@ -1012,9 +971,9 @@ section is missing.
 
 Inside The Realm, the root `AGENTS.md` carries the instruction that
 "bean", "ticket", and "todo" are spoken synonyms for "quest" — an agent
-told to "create a ticket for this" should create a quest via `make quest
-"<title>"` (or `quest new` directly), landing wherever nearest-zone-wins
-discovery puts it, with no clarifying question needed. This is a Realm
+told to "create a ticket for this" should create a quest via `quest new
+"<title>"`, landing wherever nearest-zone-wins discovery puts it, with no
+clarifying question needed. This is a Realm
 convention, not something questkit's code enforces (questkit itself has
 no opinion on what a human calls the thing) — but it's worth knowing this
 document's audience includes agents primed on that instruction, arriving
@@ -1044,16 +1003,16 @@ here specifically to learn *how* to act on it.
    prompt` (or `--format json` for programmatic consumption) is usually a
    better fit than reading raw files.
 
-## 15. Known limitations and open questions
+## 14. Known limitations and open questions
 
 - **Cross-log query and global-id mutation resolution shipped in v2** —
   `quest list --all` and the `set`/`show`/`done` sweep (see
-  [§10](#10-multi-zone-setup)) are the answer `QST-vl9cq` asked for; see
+  [§9](#9-multi-zone-setup)) are the answer `QST-vl9cq` asked for; see
   `QST-v0hnq` (questkit's own log) for the full design and the decision
   record. What's still deliberately *not* here: **bulk multi-log writes**
   (every command still only ever mutates one file per invocation) and a
   **cross-log reference concept** (`blocked_by`/wikilinks still only
-  resolve within their own log — see [§12](#12-git-hooks-and-validation)).
+  resolve within their own log — see [§11](#11-git-hooks-and-validation)).
   If either of those ever changes, it should be its own deliberate
   decision, not a side effect of the query/resolution work already done.
 - **`ignore:`/`schema.extends` failures during a sweep degrade per-log,
@@ -1063,7 +1022,7 @@ here specifically to learn *how* to act on it.
   currently aggregates or de-duplicates them across a large sweep.
 - **Wikilinks cannot cross Obsidian vault boundaries.** Confirmed upstream
   behavior, not fixable by questkit or any Obsidian plugin — see
-  [§13](#13-ide-and-tool-integration).
+  [§12](#12-ide-and-tool-integration).
 - **Recurrence is explicitly out of scope.** Recurring work (weekly
   chores, monthly reports) deserves its own design, not a bolt-on field —
   see the README's "What's deliberately not here" and `QST-whm2e`'s
@@ -1083,7 +1042,7 @@ here specifically to learn *how* to act on it.
   been tested by more than one real person using a shared log yet. Worth
   revisiting if that changes.
 
-## 16. Appendix: full worked example
+## 15. Appendix: full worked example
 
 A quest that's been through a full lifecycle — created, groomed, worked,
 and completed — with every field in play:
