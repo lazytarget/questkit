@@ -71,6 +71,7 @@ class QuestLogConfig:
         if self.project:
             data["project"] = self.project
         with config_path.open("w", encoding="utf-8") as handle:
+            handle.write("---\n")
             _yaml.dump(data, handle)
 
 
