@@ -79,17 +79,18 @@ aliases: [QST-x7k2m]             # surfaces the short id in Obsidian search/quic
 
 `aliases` does **not** make a bare `[[QST-x7k2m]]` link resolve on click —
 Obsidian's wikilink resolver only reads filenames, not frontmatter aliases
-(confirmed upstream gap, not a settings/plugin issue). Use the piped form
-instead, which resolves via the real filename while still displaying the
-short id:
+(confirmed upstream gap, not a settings/plugin issue). Use the full filename
+instead, with no pipe:
 
 ```markdown
-[[QST-x7k2m--fix-garage-door|QST-x7k2m]]
+[[QST-x7k2m--fix-garage-door]]
 ```
 
-Aliases still make typing links easy: type `[[QST-x7k2m`, Obsidian's
-autocomplete matches on the alias and inserts the correct piped link for
-you. It's only pre-written/scripted links that need the piped form by hand.
+This resolves correctly (a real filename match) and reads better than a
+piped short form — a descriptive slug is faster for a human to recognize
+than a bare id, and it's fewer characters for an agent to read, not more.
+Aliases still earn their keep elsewhere: type `[[QST-x7k2m`, Obsidian's
+autocomplete matches on the alias and inserts the full link for you.
 
 This is also vault-scoped: wikilinks cannot resolve across separate
 Obsidian vaults at all, so a cross-reference between quests in different
@@ -99,9 +100,34 @@ vault is open. For a genuinely cross-zone reference, prefer plain text
 (`QST-x7k2m`, greppable and `quest show`-able) over a wikilink that will
 silently fail to resolve in the common case.
 
+### List field style
+
+`Quest.save()` normalizes every list-valued field (`tags`, `blocked_by`,
+`aliases`, ...) to flow style (`[a, b]`) at 0-1 items and block style (one
+per line) at 2+ items — compact for the common single-item case, diff-
+friendly for multi-item lists. This happens on every save, so a
+hand-edited file that doesn't follow it self-corrects the next time any
+`quest` command (or the `quest-bump-modified` hook) touches it — no
+separate lint-and-fix step needed.
+
 `agentic: afk` is a claim, not a declaration — `quest validate` checks that
 an AFK quest actually carries a `## Spec`/`## Design` section and an
 `## Acceptance Criteria` checklist before treating it as handoff-ready.
+
+### What else `quest validate` checks
+
+Beyond required fields and enum membership: that the log's declared
+`project` (if any) matches each quest's own `project:`; that the filename's
+id matches frontmatter `id` and `aliases` includes it; that the filename's
+slug is still consistent with a freshly-slugified `title` (informational —
+filenames are immutable by design, so this reports drift rather than
+implying a rename, e.g. after a `quest set ... title=...` edit); and that
+every `blocked_by` id and every `[[QST-xxxxx...]]` wikilink in the body
+actually resolves to a file in the current log (code spans and fenced code
+blocks are skipped, since those are usually syntax examples, not real
+references). All of it is scoped to the one log being validated — there's
+no cross-log reference concept, matching the vault-boundary limitation
+above.
 
 `owner` is intentionally free text, not a closed enum — questkit doesn't
 know who's on your team.

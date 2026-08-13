@@ -106,6 +106,18 @@ def test_validate_flags_dangling_backlink(quest_log, capsys):
     assert "backlink references 'QST-zzzzz', not found" in err
 
 
+def test_validate_ignores_wikilinks_inside_code_spans_and_fences(quest_log, capsys):
+    quest_id = _new_quest_id(quest_log, "Illustrates link syntax", capsys)
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+    path.write_text(
+        path.read_text()
+        + "\nUse `[[QST-zzzzz]]` to link a quest.\n"
+        + "\n```\nexample: [[QST-yyyyy]]\n```\n"
+    )
+
+    assert main(["validate"]) == 0
+
+
 def test_validate_accepts_real_blocked_by_and_backlink(quest_log, capsys):
     target_id = _new_quest_id(quest_log, "Target quest", capsys)
     source_id = _new_quest_id(quest_log, "Source quest", capsys)

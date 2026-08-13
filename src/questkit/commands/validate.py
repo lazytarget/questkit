@@ -12,6 +12,8 @@ from ..discovery import resolve_log
 from ..quest import Quest, QuestFileError, find_by_id
 
 _WIKILINK_ID_RE = re.compile(r"\[\[(QST-[0-9a-z]{5})")
+_FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -88,8 +90,12 @@ def _check_references(quest, quests_dir: Path) -> list[schema.ValidationError]:
                 )
             )
 
+    # Code spans/blocks are illustrative, not live links -- e.g. a doc
+    # showing `` [[QST-x7k2m]] `` as a syntax example, not a real reference.
+    prose = _INLINE_CODE_RE.sub("", _FENCED_CODE_RE.sub("", quest.body))
+
     seen: set[str] = set()
-    for match in _WIKILINK_ID_RE.finditer(quest.body):
+    for match in _WIKILINK_ID_RE.finditer(prose):
         ref_id = match.group(1)
         if ref_id == own_id or ref_id in seen:
             continue
