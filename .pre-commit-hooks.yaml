@@ -1,0 +1,15 @@
+- id: quest-validate
+  name: quest-validate
+  description: Validate quest frontmatter against the questkit schema.
+  entry: quest-validate
+  language: python
+  files: (^|/)quests/QST-[^/]+\.md$
+  pass_filenames: true
+
+- id: quest-bump-modified
+  name: quest-bump-modified
+  description: Bump a quest's `modified` date to today when it changes.
+  entry: quest-bump-modified
+  language: python
+  files: (^|/)quests/QST-[^/]+\.md$
+  pass_filenames: true

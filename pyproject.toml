@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "questkit"
+version = "0.1.0"
+description = "File-based quest tracking: Markdown + YAML frontmatter tickets, for humans and agents."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Peter Åslund" }]
+dependencies = [
+  "ruamel.yaml>=0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.4.0",
+  "pre-commit>=3.7.0",
+]
+
+[project.scripts]
+quest = "questkit.cli:main"
+qst = "questkit.cli:main"
+quest-validate = "questkit.hooks:validate_main"
+quest-bump-modified = "questkit.hooks:bump_modified_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
