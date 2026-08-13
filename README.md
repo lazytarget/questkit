@@ -10,6 +10,11 @@ A **quest** is questkit's unit of work: `QST-<id>--<slug>.md`. Side quests
 and epics are just quests with a `type`/`blocked_by` relationship — the
 noun scales from "buy stamps" to "rebuild the deploy pipeline."
 
+> This README is the pitch and the quickstart. For implementation detail,
+> rationale, the full CLI/config/frontmatter reference, multi-zone setup,
+> Git/Syncthing versioning, hooks, IDE integration, and agentic support in
+> depth, see **[docs/questkit.md](docs/questkit.md)**.
+
 ## Install
 
 ```bash
