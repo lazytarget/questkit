@@ -65,22 +65,23 @@ def validate_quest(quest) -> list[ValidationError]:
         elif agentic == "afk":
             errors.extend(_check_afk_readiness(quest))
 
-    errors.extend(_check_identity_drift(quest))
+    errors.extend(_check_identity(quest))
 
     return errors
 
 
-def _check_identity_drift(quest) -> list[ValidationError]:
-    """Cross-check filename, frontmatter id, title-derived slug, and aliases.
+def _check_identity(quest) -> list[ValidationError]:
+    """Cross-check filename id vs frontmatter id, and aliases vs frontmatter id.
 
-    The filename is deliberately immutable once created (so links never
-    break), which means it's expected to drift from the title over time --
-    this reports that drift for visibility, it doesn't imply the filename
-    should be renamed to match.
+    Blocking: both are cheap to keep correct (quest new always gets them
+    right) and a mismatch usually means something's actually wrong -- a
+    careless rename, a hand-edit that dropped the self-alias. Unlike slug
+    drift (see check_slug_drift), there's no legitimate reason for these to
+    disagree, so this runs as part of the hard rules used by both `quest
+    validate` and the pre-commit hook.
     """
     errors: list[ValidationError] = []
-    stem = quest.path.stem
-    file_id, _, file_slug = stem.partition("--")
+    file_id = quest.path.stem.partition("--")[0]
 
     fm_id = quest.frontmatter.get("id")
     if fm_id and fm_id != file_id:
@@ -90,18 +91,6 @@ def _check_identity_drift(quest) -> list[ValidationError]:
             )
         )
 
-    title = quest.frontmatter.get("title")
-    if title and file_slug:
-        expected_slug = slugify(title)
-        if expected_slug != file_slug:
-            errors.append(
-                ValidationError(
-                    quest.path,
-                    f"filename slug '{file_slug}' disagrees with the title-derived slug "
-                    f"'{expected_slug}' (title may have changed since creation)",
-                )
-            )
-
     aliases = quest.frontmatter.get("aliases") or []
     if fm_id and fm_id not in aliases:
         errors.append(
@@ -109,6 +98,33 @@ def _check_identity_drift(quest) -> list[ValidationError]:
         )
 
     return errors
+
+
+def check_slug_drift(quest) -> list[ValidationError]:
+    """Compare the filename's slug against a freshly-slugified title.
+
+    Informational, not part of validate_quest()'s hard rules, and
+    deliberately excluded from the pre-commit hook: the filename is
+    immutable once created (so links never break), so drift here is
+    *expected* whenever a title is edited after creation, or when a
+    migration chose a different slug than mechanical slugify() would --
+    it's not something a commit should be blocked on.
+    """
+    title = quest.frontmatter.get("title")
+    file_slug = quest.path.stem.partition("--")[2]
+    if not title or not file_slug:
+        return []
+
+    expected_slug = slugify(title)
+    if expected_slug == file_slug:
+        return []
+    return [
+        ValidationError(
+            quest.path,
+            f"filename slug '{file_slug}' disagrees with the title-derived slug "
+            f"'{expected_slug}' (title may have changed since creation)",
+        )
+    ]
 
 
 def _blank(value) -> bool:

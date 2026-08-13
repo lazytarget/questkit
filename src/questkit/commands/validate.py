@@ -42,6 +42,7 @@ def run(args: argparse.Namespace) -> int:
         errors = schema.validate_quest(quest)
         errors.extend(_project_drift(quest, config))
         errors.extend(_check_references(quest, quests_dir))
+        errors.extend(schema.check_slug_drift(quest))
         if errors:
             print(f"[!] {path}")
             for error in errors:

@@ -130,12 +130,19 @@ def test_filename_id_disagreeing_with_frontmatter_id_is_flagged():
 
 
 def test_filename_slug_disagreeing_with_title_is_flagged():
-    errors = schema.validate_quest(
-        _quest(_base_fm(title="A brand new title"), path=Path("QST-abcde--example.md"))
-    )
+    quest = _quest(_base_fm(title="A brand new title"), path=Path("QST-abcde--example.md"))
+
+    errors = schema.check_slug_drift(quest)
+
     messages = " ".join(e.message for e in errors)
     assert "filename slug" in messages
     assert "a-brand-new-title" in messages
+
+
+def test_slug_drift_is_not_part_of_validate_quest_hard_rules():
+    quest = _quest(_base_fm(title="A brand new title"), path=Path("QST-abcde--example.md"))
+
+    assert schema.validate_quest(quest) == []
 
 
 def test_missing_self_alias_is_flagged():
