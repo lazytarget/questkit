@@ -71,9 +71,33 @@ agentic: hitl                  # afk | hitl — optional; can an agent run this 
 project: some-project          # optional; stamped from the log's own config, if it declares one
 tags: []
 blocked_by: []                  # ids this quest is blocked by
-aliases: [QST-x7k2m]             # so [[QST-x7k2m]] wikilinks resolve despite the slug
+aliases: [QST-x7k2m]             # surfaces the short id in Obsidian search/quick-switcher/autocomplete
 ---
 ```
+
+### Cross-referencing other quests in Obsidian
+
+`aliases` does **not** make a bare `[[QST-x7k2m]]` link resolve on click —
+Obsidian's wikilink resolver only reads filenames, not frontmatter aliases
+(confirmed upstream gap, not a settings/plugin issue). Use the piped form
+instead, which resolves via the real filename while still displaying the
+short id:
+
+```markdown
+[[QST-x7k2m--fix-garage-door|QST-x7k2m]]
+```
+
+Aliases still make typing links easy: type `[[QST-x7k2m`, Obsidian's
+autocomplete matches on the alias and inserts the correct piped link for
+you. It's only pre-written/scripted links that need the piped form by hand.
+
+This is also vault-scoped: wikilinks cannot resolve across separate
+Obsidian vaults at all, so a cross-reference between quests in different
+zones/logs only resolves when a vault containing both is open (e.g. a
+realm-root vault nesting every zone) — never when a narrower, per-zone
+vault is open. For a genuinely cross-zone reference, prefer plain text
+(`QST-x7k2m`, greppable and `quest show`-able) over a wikilink that will
+silently fail to resolve in the common case.
 
 `agentic: afk` is a claim, not a declaration — `quest validate` checks that
 an AFK quest actually carries a `## Spec`/`## Design` section and an
