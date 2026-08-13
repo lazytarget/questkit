@@ -5,13 +5,14 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from ruamel.yaml.comments import CommentedMap
 
 from .. import schema
 from ..config import QuestLogConfig
-from ..discovery import resolve_log
+from ..discovery import resolve_log_for_new
 from ..gitutil import auto_commit
 from ..ids import generate_id
 from ..quest import Quest
@@ -21,7 +22,7 @@ from ..utils import slugify
 
 
 def run(args: argparse.Namespace) -> int:
-    quests_dir = resolve_log(explicit=args.in_dir)
+    quests_dir = resolve_log_for_new(explicit=args.in_dir)
     config = QuestLogConfig.load(quests_dir)
 
     quest_id = generate_id(quests_dir, prefix=config.prefix, length=config.id_length)
@@ -46,6 +47,13 @@ def run(args: argparse.Namespace) -> int:
     project = args.project or config.project
     if project:
         frontmatter["project"] = project
+    for field_name in sorted(config.schema.fields):
+        frontmatter[field_name] = None
+        print(
+            f"[warning] custom field '{field_name}' is uninitialized "
+            f"(set with 'quest set {quest_id} {field_name}=...')",
+            file=sys.stderr,
+        )
     frontmatter["tags"] = list(args.tags or [])
     frontmatter["blocked_by"] = []
     frontmatter["aliases"] = [quest_id]

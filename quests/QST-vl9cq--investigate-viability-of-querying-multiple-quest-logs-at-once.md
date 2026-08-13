@@ -6,7 +6,7 @@ created: '2026-08-13'
 modified: '2026-08-13'
 type: feature
 tier: brief
-status: todo
+status: completed
 priority: low
 project: questkit
 tags:
@@ -91,14 +91,27 @@ Open questions to resolve before building anything:
 
 ## Acceptance Criteria
 
-- [ ] Decide: build it, or is grep/the discovery loop good enough
+- [x] Decide: build it, or is grep/the discovery loop good enough
       permanently?
-- [ ] If building: pick one of the three shapes above (or a better one)
+- [x] If building: pick one of the three shapes above (or a better one)
       and write a follow-on Blueprint-tier quest with the actual design
-- [ ] Either way, document the chosen answer (including "we decided not
+- [x] Either way, document the chosen answer (including "we decided not
       to") somewhere durable — this quest, or its follow-on
 
 ## Log
 
 - 2026-08-13: captured, with investigation notes carried over from the
   session that first hit this gap while demoing the CLI
+- 2026-08-13: decided — build it. Follow-on Blueprint quest is `QST-v0hnq`
+  (questkit v2: dynamic schema engine and multi-log architecture, this
+  same log), now implemented (tests + docs done; not yet committed). Shape
+  chosen: a `QST_ROOT`
+  env var (option 2 from the Spec above) rather than a generated index —
+  no cache-freshness problem, and it's the one that needed the least new
+  machinery. `quest list --all` covers the "unified sort/filter across
+  logs" case; `set`/`show`/`done` additionally resolve an id across logs
+  for targeted mutations (a deliberate, narrow extension beyond pure
+  query, confirmed with the user first — still only ever touches one file
+  per call, no bulk multi-log write). The `.stversions`/noise-in-`grep`
+  problem this quest's investigation notes flagged is solved structurally
+  by `discovery.find_all_logs()`'s default ignore list, not by convention.

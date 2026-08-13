@@ -5,18 +5,18 @@ from __future__ import annotations
 import argparse
 
 from ..config import QuestLogConfig
-from ..discovery import resolve_log
+from ..discovery import resolve_mutation_target
 from ..gitutil import auto_commit
-from ..quest import Quest, find_by_id
+from ..quest import Quest
 from ..timeutil import today
 
 
 def run(args: argparse.Namespace) -> int:
-    quests_dir = resolve_log(explicit=args.in_dir)
-    path = find_by_id(quests_dir, args.id)
-    if path is None:
-        print(f"[quest] no quest matching id '{args.id}' found in {quests_dir}")
+    found = resolve_mutation_target(args.id, explicit_in=args.in_dir)
+    if found is None:
+        print(f"[quest] no quest matching id '{args.id}' found")
         return 1
+    quests_dir, path = found
 
     quest = Quest.load(path)
     for assignment in args.assignments:

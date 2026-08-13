@@ -128,3 +128,98 @@ def test_validate_accepts_real_blocked_by_and_backlink(quest_log, capsys):
     path.write_text(text)
 
     assert main(["validate"]) == 0
+
+
+# --- v2: custom schema fields ---------------------------------------------------
+
+
+def _add_required_sprint_field(quest_log):
+    config_path = quest_log / ".questkit.yaml"
+    with config_path.open("a", encoding="utf-8") as handle:
+        handle.write("schema:\n  fields:\n    sprint:\n      type: string\n      required: true\n")
+
+
+def test_new_warns_and_null_injects_custom_fields(quest_log, capsys):
+    _add_required_sprint_field(quest_log)
+
+    assert main(["new", "Needs a sprint", "--status", "todo"]) == 0
+    captured = capsys.readouterr()
+
+    assert "[warning] custom field 'sprint' is uninitialized" in captured.err
+    path = next(quest_log.glob("QST-*.md"))
+    assert "sprint:" in path.read_text()
+
+
+def test_validate_fails_on_missing_required_custom_field(quest_log, capsys):
+    _add_required_sprint_field(quest_log)
+    quest_id = _new_quest_id(quest_log, "Needs a sprint", capsys)
+
+    exit_code = main(["validate"])
+    out = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "missing required custom field 'sprint'" in out
+
+    assert main(["set", quest_id, "sprint=42"]) == 0
+    capsys.readouterr()
+    assert main(["validate"]) == 0
+
+
+# --- v2: global-id cross-log mutation resolution --------------------------------
+
+
+def test_set_and_show_resolve_across_logs(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("QUEST_LOG", raising=False)
+    proj_a = tmp_path / "proj_a"
+    proj_b = tmp_path / "proj_b"
+    proj_a.mkdir()
+    proj_b.mkdir()
+    monkeypatch.chdir(proj_a)
+    assert main(["init"]) == 0
+    monkeypatch.chdir(proj_b)
+    assert main(["init"]) == 0
+
+    monkeypatch.chdir(proj_a)
+    assert main(["new", "Cross log quest", "--status", "todo"]) == 0
+    quest_id = capsys.readouterr().out.strip().split("/")[-1].split("--")[0]
+
+    monkeypatch.chdir(proj_b)
+    monkeypatch.setenv("QST_ROOT", str(tmp_path))
+    assert main(["show", quest_id]) == 0
+    assert "Cross log quest" in capsys.readouterr().out
+
+    assert main(["set", quest_id, "priority=high"]) == 0
+    capsys.readouterr()
+    assert main(["show", quest_id]) == 0
+    assert "priority: high" in capsys.readouterr().out
+
+
+def test_set_reports_not_found_when_id_is_nowhere(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("QUEST_LOG", raising=False)
+    monkeypatch.setenv("QST_ROOT", str(tmp_path))
+    assert main(["init"]) == 0
+
+    exit_code = main(["set", "QST-zzzzz", "priority=high"])
+
+    assert exit_code == 1
+    assert "no quest matching id 'QST-zzzzz' found" in capsys.readouterr().out
+
+
+# --- v2: ambiguous destination guard on `quest new` ------------------------------
+
+
+def test_new_fails_fast_on_ambiguous_destination(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("QUEST_LOG", raising=False)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    monkeypatch.chdir(tmp_path / "a")
+    assert main(["init"]) == 0
+    monkeypatch.chdir(tmp_path / "b")
+    assert main(["init"]) == 0
+
+    monkeypatch.chdir(tmp_path)
+    exit_code = main(["new", "Should not land anywhere"])
+
+    assert exit_code == 1
+    assert "Ambiguous destination" in capsys.readouterr().err

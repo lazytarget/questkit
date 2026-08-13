@@ -57,12 +57,17 @@ Five design commitments fall out of that:
   survive — the tradeoff is that `quest validate` will report filename/title
   drift as informational noise, forever, rather than "fixing" it by
   renaming (see [§12](#12-git-hooks-and-validation)).
-- **One log, one scope, per command.** Every command resolves to exactly
-  one quest log (a `quests/` directory) and operates only within it. There
-  is no cross-log write, and no cross-log reference concept. This is a
-  deliberate v1 boundary, not an oversight — see
-  [§15](#15-known-limitations-and-open-questions) and `QST-vl9cq` for the
-  live discussion about whether that should ever change.
+- **Capture is single-log; mutation and querying are not.** `quest new`
+  always lands in exactly one log — nearest-zone-wins, with a fatal guard
+  against an ambiguous destination — so where a *new* thing gets filed is
+  never a silent guess. But since ids are globally unique, `quest set` /
+  `show` / `done` resolve by id alone: the nearest log is checked first,
+  then every other log under `QST_ROOT` is swept, and whichever single file
+  matches gets mutated in place, wherever it lives. `quest list --all`
+  aggregates read-only across every log the same way. There is still no
+  *bulk* multi-log write, and still no cross-log reference concept — this
+  is the v2 answer `QST-vl9cq` asked for (see
+  [§10](#10-multi-zone-setup)/[§15](#15-known-limitations-and-open-questions)).
 - **Capture must be instant.** `quest new "title"` with nothing else is a
   complete, valid quest — `description` is the only field that's
   situationally required (waived while `status: draft`), specifically so a
@@ -210,15 +215,19 @@ uv pip install -e ".[dev]"
 
 Notes for anyone changing questkit itself:
 
-- **Test before you commit, every time** — `pytest` (37 tests as of this
-  writing) covers config load/save, discovery/resolution, id generation,
-  the Quest round-trip and list-style normalization, schema validation
-  (including AFK-readiness and the identity/slug-drift split), slugify's
-  Unicode handling, and full CLI-integration lifecycles (init → new → list
-  → show → set → done → validate, plus the reference-resolution checks).
-  `ruff check .` (rules: `E W F I UP B SIM RUF`, line length 100, `E501`
-  ignored since `_yaml.width = 4096` already keeps frontmatter lines long
-  on purpose) catches the rest.
+- **Test before you commit, every time** — `pytest` (99 tests as of this
+  writing) covers config load/save, discovery/resolution (including the
+  cross-log sweep, the ambiguity guard, and `ignore:`/`#include`
+  resolution), id generation, the Quest round-trip and list-style
+  normalization, schema validation (including AFK-readiness, the
+  identity/slug-drift split, the dynamic schema engine's `extends` merge
+  and custom-field validation), `quest list`'s `--where` filter grammar and
+  output formats, `quest schema`'s introspection output, slugify's Unicode
+  handling, and full CLI-integration lifecycles (init → new → list → show
+  → set → done → validate, plus the reference-resolution and cross-log
+  checks). `ruff check .` (rules: `E W F I UP B SIM RUF`, line length 100,
+  `E501` ignored since `_yaml.width = 4096` already keeps frontmatter lines
+  long on purpose) catches the rest.
 - **`Quest.save()` is the one place formatting happens.** If you're adding
   a new frontmatter field or command, don't hand-roll YAML dumping — build
   a `CommentedMap`/plain dict, assign through `Quest`, call `.save()`, and
@@ -280,6 +289,16 @@ with a "captured" line dated today), and prints the created path.
 - If the log's config has `git: auto`, the new file is committed
   immediately, pathspec-limited to just that file, with the message
   `quest(<log-dir-name>): new <id> <title>`.
+- **Destination resolution is stricter than a plain walk-up**: if no
+  ancestor log is found from cwd *and* two or more quest logs exist
+  somewhere downward, `quest new` fails fast rather than guessing —
+  `Ambiguous destination. Multiple quest logs found in subdirectories.
+  Specify target with --in <DIR>.` (See [§10](#10-multi-zone-setup).)
+- **Custom fields** (declared in the log's `schema.fields` — see
+  [§9](#9-questkityaml-configuration-reference)) are written into the new
+  quest's frontmatter as explicit `null`, one `[warning]` per field printed
+  to stderr, so an agent (or a human) notices the field needs filling in
+  rather than silently missing it.
 
 ```bash
 $ quest new "Fix the garage door sensor" --type task --priority high --tag home
@@ -289,32 +308,78 @@ $ quest new "Fix the garage door sensor" --type task --priority high --tag home
 ### `quest list [options]`
 
 ```
-quest list [--status a,b,...] [--type X] [--tag X] [--in DIR]
+quest list [--where EXPR ...] [--all] [--root DIR] [--in DIR]
+           [--format table|json|csv|prompt] [--columns a,b,c]
+           [--sort field[:asc|desc]] [--limit N] [--offset N] [--out FILE]
 ```
 
-Prints one line per matching quest: id, status, priority, title — column
-widths adjust to the widest id present. **Default status filter is
-`todo,in-progress,blocked`** if `--status` isn't given — this is why a
-freshly-`draft`-captured quest doesn't show up until it's groomed past
-draft. `--status`/`--type` accept comma-separated lists; `--tag` currently
-takes one tag per invocation and matches quests where that tag is present
-among the quest's own (possibly multiple) tags.
+A dynamic filter/export engine rather than a fixed set of flags — this is
+the v2 rewrite that also answers `QST-vl9cq`'s open question about
+multi-log querying.
+
+- **`--where EXPR`** is repeatable (AND across repeats); each `EXPR` is one
+  of:
+  - `field=value` — equality; `value` may be a comma-list (`status=todo,
+    in-progress`), matched as OR; case-insensitive; a list-valued field
+    (like `tags`) matches if *any* of its own values are in the set.
+  - `field~value` — substring match on a scalar field, or membership match
+    on a list field (`tags~frontend`).
+  - `field:exists` — the field is present and non-blank/non-empty.
+  
+  **Default status filter is `todo,in-progress,blocked`** if no `--where`
+  clause targets `status` at all — same behavior as v1's default, just
+  reimplemented as a synthesized `--where` clause under the hood; a
+  freshly-`draft`-captured quest still doesn't show up until groomed past
+  draft. Override it with an explicit `--where "status=..."`, or use
+  `--where "status:exists"` as the "show every status" escape hatch.
+- **`--all`** aggregates quests from every log found by recursive descent
+  from `--root` (or `QST_ROOT`, or the git root, or cwd — see
+  [§10](#10-multi-zone-setup)), instead of resolving to just one log.
+  A `project` column (the log's configured `project:`, or its directory
+  name if unset) is appended automatically in this mode. A log whose
+  config fails to load (bad version, broken schema `extends`) is skipped
+  with a `[quest list] skipping ...` warning rather than aborting the
+  whole aggregation.
+- **`--format`**: `table` (default, human-readable, a header row plus the
+  resolved columns) · `json` (the full parsed frontmatter of every
+  matching quest, as a JSON array — ignores `--columns`, since `jq` users
+  want everything) · `csv` (spreadsheet-friendly, respects `--columns`,
+  list fields joined with `;`) · `prompt` (a compact per-quest text block
+  meant for pasting into an agent's context: id/status/priority/title,
+  then type/tags, then description, blank line between quests).
+- **`--columns a,b,c`** overrides the default column set (`id, status,
+  priority, title`, plus `project` when `--all`) for the `table`/`csv`
+  renderers — any frontmatter field works, including custom schema
+  fields (`--columns id,status,sprint,title`).
+- **`--sort field[:asc|desc]`** — stable string sort; quests missing the
+  sort field always sort last, regardless of direction.
+- **`--limit N` / `--offset N`** — applied after filtering and sorting.
+- **`--out FILE`** — the rendered output is still printed to stdout as
+  normal, *and* written to `FILE` (tee semantics, not a silent redirect).
 
 ```bash
-$ quest list --status completed --tag gdrive
-QST-15xxa  completed    medium    GDrive: Parse and Apply gdriveignore
-QST-4idp1  completed    medium    GDrive: Document and Sheet Ingress Compilation
+$ quest list --where "status=completed" --where "tags~gdrive"
+QST-15xxa  completed  medium  GDrive: Parse and Apply gdriveignore
+QST-4idp1  completed  medium  GDrive: Document and Sheet Ingress Compilation
 ...
+
+$ quest list --all --root .. --where "status:exists" --format json | jq '.[].title'
 ```
 
 ### `quest show <id> [--in DIR]`
 
 Prints the full raw file content (frontmatter and body, unmodified) for
-the quest matching `<id>`. Matching is by filename prefix — `QST-x7k2m` or
-the full `QST-x7k2m--fix-the-garage-door-sensor` both work, and matching is
-via `find_by_id()`'s glob (`{id}*.md`), not the `id:` frontmatter field, so
-it's correct even if frontmatter were ever hand-edited to disagree (which
-`quest validate` would also catch — [§12](#12-git-hooks-and-validation)).
+the quest matching `<id>`. `--in DIR` still means exactly what it always
+has — a precise, single-log override, with no fallback if the id isn't
+found there. Without it, resolution is: the nearest log (today's walk-up)
+first; if the id isn't there, every other log under `QST_ROOT` (or the git
+root, or cwd) is swept until it turns up somewhere (see
+[§10](#10-multi-zone-setup)). Matching within a log is by filename prefix
+— `QST-x7k2m` or the full `QST-x7k2m--fix-the-garage-door-sensor` both
+work — via `find_by_id()`'s glob (`{id}*.md`), not the `id:` frontmatter
+field, so it's correct even if frontmatter were ever hand-edited to
+disagree (which `quest validate` would also catch —
+[§12](#12-git-hooks-and-validation)).
 
 ### `quest set <id> field=value [field=value ...] [--in DIR]`
 
@@ -327,7 +392,10 @@ but there's nothing stopping `quest set QST-x priority=extremely-high`
 from being written (that's what `quest validate` is for, deliberately —
 see [§1](#1-purpose--design-philosophy) on why validation doesn't guess).
 Same `git: auto` behavior as `new`, with message
-`quest(<log-dir-name>): update <id>`.
+`quest(<log-dir-name>): update <id>`. Id resolution is the same
+nearest-then-sweep behavior as `quest show` (above) — this is what lets
+`quest set QST-x7k2m ...` work from anywhere without `--in`, as long as
+`QST_ROOT` (or a shared git root) covers the log the id actually lives in.
 
 ```bash
 $ quest set QST-x7k2m status=in-progress priority=high tags=home,urgent
@@ -337,7 +405,7 @@ $ quest set QST-x7k2m status=in-progress priority=high tags=home,urgent
 ### `quest done <id> [--in DIR]`
 
 Exactly `quest set <id> status=completed` — a two-character-shorter way to
-write the single most common transition.
+write the single most common transition. Same id resolution as `set`.
 
 ### `quest init [DIR] [options]`
 
@@ -389,6 +457,31 @@ hook checks a strict subset of it. Exits `0` with a summary line if clean,
 ```bash
 $ quest validate
 [quest validate] 26 quest(s) checked, no errors
+```
+
+### `quest schema quest [field] [--format json|table] [--in DIR]`
+
+Introspects the active, merged schema for a log — so an agent never has to
+guess or hallucinate a valid `status`/`type`/etc. value, or the shape of a
+custom field. `quest` is a literal, required first argument (the kind of
+thing being introspected — forward-compatible if a second kind is ever
+added; there's only ever `quest` today).
+
+- No `field`: dumps the whole merged schema — `types`, `statuses`, `tiers`,
+  `priorities`, `efforts` (each an array) plus `fields` (a map of custom
+  field name → `{type, required}`).
+- `field` given: `type`/`status`/`tier`/`priority`/`effort` (singular)
+  return just that vocabulary's array; any other name is looked up as a
+  custom field name, returning its `{type, required}` spec. An unknown
+  name is a clean one-line error, exit `1`.
+- `--format json` (default) or `table` (aligned plain text, same data).
+
+```bash
+$ quest schema quest status
+["draft", "todo", "in-progress", "blocked", "parked", "completed", "scrapped"]
+
+$ quest schema quest sprint
+{"type": "string", "required": true}
 ```
 
 ### Global error handling
@@ -469,6 +562,14 @@ block-style (one per line) at 2+ — see the README's "List field style"
 section for the mechanics; it happens automatically, there's no field-level
 control over it.
 
+**Custom fields** — beyond the closed set above, a log can declare its own
+fields via `schema.fields` in `.questkit.yaml` (see
+[§9](#9-questkityaml-configuration-reference)). `quest new` writes each as
+an explicit `null` with a stderr warning; `quest validate` fails if one
+marked `required: true` is still null or missing. This is the only
+schema-agnostic escape hatch — everything else in this table is a fixed,
+hardcoded vocabulary (itself overridable per-log — see the next section).
+
 ## 9. `.questkit.yaml` configuration reference
 
 Lives **inside** the `quests/` directory it governs — this is deliberate:
@@ -488,6 +589,16 @@ defaults:
   type: task
   status: draft
   priority: medium
+ignore:
+  - dist
+  - "#include ../../99-system/templates/dot-files/.stignore-code"
+schema:
+  extends: "../../.questkit.schema.yaml"
+  statuses: [draft, todo, in-progress, in-review, completed, scrapped]
+  fields:
+    sprint:
+      type: string
+      required: true
 ```
 
 | Key | Default | Effect |
@@ -499,11 +610,45 @@ defaults:
 | `git` | `manual` | `manual`: questkit never touches git; you (or your existing commit conventions/agent instructions) commit. `auto`: `new`/`set`/`done` commit their own change immediately, pathspec-limited to the one touched file, with message `quest(<log-dir-name>): <new\|update> ...`. If the log isn't inside a git repo at all, `auto` mode prints a warning and continues rather than erroring. See [§11](#11-versioning-syncthing--git) for when to choose which. |
 | `project` | *(absent)* | If set: `quest new` auto-stamps every new quest's `project:` field with this value (unless `--project` overrides it per-call), and `quest validate` flags any quest whose own `project:` disagrees. If absent (as in the central/catch-all log): no auto-stamping, no drift-checking — quests there can carry any `project:` value, or none, purely as free-form metadata. |
 | `defaults.type` / `.status` / `.priority` | `task` / `draft` / `medium` | Used by `quest new` whenever the corresponding `--type`/`--status`/`--priority` flag isn't given. Loading a config that doesn't specify one of these three falls back to the same hardcoded defaults — `defaults:` in the file only needs to list the ones you want to override. |
+| `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list --all`, cross-log id resolution) walks this log's own tree — see [§10](#10-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention `syncthing.yaml`/`scaffold_syncthing.py` uses elsewhere in the Realm, so a log inside the Realm can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
+| `schema` | *(absent)* | Overrides/extends the built-in `type`/`status`/`tier`/`priority`/`effort` vocabularies and/or declares custom fields, for this log only. See the dedicated subsection below — absent entirely, a log behaves exactly as if this key didn't exist at all (full backward compatibility). |
 
 Config values load through the exact same `ruamel.yaml` instance used for
 quest files (`preserve_quotes=True`, wide line width, `---` document-start
 marker on save) — so a hand-edited `.questkit.yaml` follows the same
 formatting conventions as quest files themselves.
+
+### The `schema` block: dynamic vocabularies and custom fields
+
+Absent this key, a log's valid `type`/`status`/`tier`/`priority`/`effort`
+values are exactly the hardcoded frozensets in `schema.py` (see
+[§8](#8-frontmatter-reference)) — nothing below changes anything for a log
+that doesn't opt in.
+
+- **`extends: <path>`**, if present, must be the *first* key read
+  conceptually (though YAML key order doesn't matter) — it names another
+  file, resolved relative to this `.questkit.yaml`'s own directory, that is
+  itself treated as a schema document (so it can chain its own `extends`,
+  arbitrarily deep — a circular or missing chain is a loud
+  `SchemaExtendsError`, not a silent fallback). Every **sibling key in this
+  block fully replaces** the corresponding key inherited from the parent —
+  there is no list-merging; a child's `statuses:` entirely overrides the
+  parent's, it doesn't union with it.
+- **`types` / `statuses` / `tiers` / `priorities` / `efforts`** — override
+  the corresponding vocabulary. Any one omitted (here or in every file up
+  the `extends` chain) falls back to the hardcoded default for that
+  vocabulary specifically — overriding `statuses` doesn't require also
+  restating `types`.
+- **`fields`** — a map of custom field name → `{type, required}`. `type`
+  is currently descriptive only (surfaced by `quest schema`, not enforced
+  at write time); `required: true` is enforced by `quest validate` and the
+  pre-commit hook — null or missing is a hard failure. `quest new`
+  null-initializes every declared field and warns on stderr (see
+  [§6](#6-cli-reference)).
+
+Use `quest schema quest [field]` (see [§6](#6-cli-reference)) to introspect
+the actual merged result for a log, rather than reading the YAML chain by
+hand.
 
 ## 10. Multi-zone setup
 
@@ -541,10 +686,78 @@ intentionally a catch-all for many unrelated things (this is exactly the
 central log's situation) — there, `project:` on individual quests is
 optional, free-form metadata with no log-level enforcement.
 
-**There is no cross-log query or write.** Each command's log resolution
-produces exactly one directory; nothing in questkit iterates over
-multiple logs. See [§15](#15-known-limitations-and-open-questions) for the
-current workarounds and the open question of whether that should change.
+### Global-id resolution: `set` / `show` / `done`
+
+Because ids are globally-unique random base36 strings, these three
+commands don't need `--in` to know *where* to write — they need it only as
+a precise override. Resolution:
+
+1. **`--in DIR`**, if given, is the only place searched — a miss there is
+   a miss, full stop. No fallback, no sweep past it. This preserves `--in`
+   as an unambiguous escape hatch for the rare case an id exists in more
+   than one log (shouldn't normally happen, given random ids, but `--in`
+   still lets you be exact).
+2. Otherwise: the **nearest log** (today's walk-up, see above) is checked
+   first.
+3. If the id isn't there: every other quest log found by recursive descent
+   from the **sweep root** is checked, in sorted-path order, until one
+   matches. The sweep root is: an explicit `--root`-equivalent (not
+   exposed on these three commands directly, but see `QST_ROOT` next) →
+   the `QST_ROOT` environment variable → the git root of cwd → cwd itself.
+4. No match anywhere: a clean `no quest matching id '<id>' found` message,
+   exit `1` — never a traceback, never a guess.
+
+This is a deliberate, narrow exception to "one log, one scope, per
+command" (§1): it only ever *finds* a file across logs, and only ever
+*mutates exactly one file* once found. It does not enable bulk multi-log
+writes, and there is still no cross-log reference concept — a
+`blocked_by`/wikilink still only resolves within its own log (see
+[§12](#12-git-hooks-and-validation)).
+
+### `QST_ROOT` and cross-log discovery
+
+`QST_ROOT` is the analogue of `QUEST_LOG` for *sweeps* rather than
+single-log resolution — it names the directory `quest list --all` and the
+id-resolution sweep above start descending from. Set it once, the same way
+`QUEST_LOG` is set today (`make setup-venv`'s Makefile default, or your own
+shell profile), to the Realm root (or any ancestor covering every log you
+care about). Without it, the git root is a reasonable fallback *if* your
+logs share one — they typically don't in The Realm, where `common`,
+`pensieve`, `99-system`, and `career-transition` are four unrelated git
+repos, which is exactly why `QST_ROOT` exists rather than relying on git
+alone.
+
+The sweep (`discovery.find_all_logs()`) walks the tree recursively looking
+for `.questkit.yaml`, pruning as it goes:
+
+- A small hardcoded default list is always pruned — `.git`, `.stversions`,
+  `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`,
+  `.ruff_cache` — this alone fixes the noise `QST-vl9cq`'s investigation
+  notes flagged (a stray `.stversions/` copy of a quest file showing up in
+  a naive `find`/`grep`).
+- Each log's own `ignore:` config (see
+  [§9](#9-questkityaml-configuration-reference)) extends that for its own
+  project — in practice, its parent directory's tree too, since the
+  common shape is `project/quests/.questkit.yaml` naming a sibling like
+  `project/dist`. A one-level lookahead means declaration order among
+  siblings (`dist` sorting before `quests`) doesn't matter.
+- A log whose config fails to load during the sweep (bad version, broken
+  `schema.extends`, broken `ignore` `#include`) doesn't abort the whole
+  sweep — it's skipped with a `[quest]`/`[quest list]` warning printed to
+  stderr, and everything else still gets discovered.
+
+### `quest list --all`
+
+The read-only, aggregating counterpart to the above — see
+[§6](#6-cli-reference) for the full `--where`/`--format`/`--columns`/
+`--sort` grammar. This is the v2 answer to `QST-vl9cq`'s open question:
+built-in, one process, unified sort/filter across logs, instead of the
+discovery-loop and plain-`grep` workarounds that quest previously
+documented here (both still work fine for a one-off, but no longer the
+only option).
+
+**Writes still don't aggregate.** `quest list --all` is read-only; there
+is still no command that mutates more than one file per invocation.
 
 ## 11. Versioning: Syncthing + Git
 
@@ -740,12 +953,13 @@ all.
 
 ### AI agents
 
-See [§14](#14-agentic-support) — the short version is: the CLI's output is
-plain, greppable text by design (no JSON mode yet, no need for one so
-far), every command's failure mode is a clean one-line message rather than
-a traceback, and the frontmatter schema itself carries the vocabulary
-(`agentic:`) for marking which quests are safe to hand to an agent
-unsupervised.
+See [§14](#14-agentic-support) — the short version is: `quest list
+--format json|csv|prompt` gives a structured or agent-tuned view when one
+helps, `quest schema quest` (see [§6](#6-cli-reference)) means an agent
+never has to guess a valid enum value, every command's failure mode is a
+clean one-line message rather than a traceback, and the frontmatter schema
+itself carries the vocabulary (`agentic:`) for marking which quests are
+safe to hand to an agent unsupervised.
 
 ## 14. Agentic support
 
@@ -825,22 +1039,28 @@ here specifically to learn *how* to act on it.
    token-efficiency guidance that applied to Beans applies here
    unchanged: `quest list` for an overview, `quest show <id>` for one
    file, `grep` across `quests/*.md` for a targeted content search, rather
-   than opening every file.
+   than opening every file. When the overview itself is what you want to
+   hand to another agent or paste into a prompt, `quest list --format
+   prompt` (or `--format json` for programmatic consumption) is usually a
+   better fit than reading raw files.
 
 ## 15. Known limitations and open questions
 
-- **No cross-log query.** Every command resolves to exactly one log; there
-  is no `quest list --all` spanning multiple logs. Two working
-  workarounds exist today (a discovery loop over every `.questkit.yaml`
-  found under a root, and plain `grep` across `quests/*.md` — both
-  demonstrated with real, tested output in `QST-vl9cq`, in questkit's own
-  log, along with three candidate designs for a real implementation and
-  the open question of whether one is even worth building given the
-  workarounds already work for free).
-- **No cross-log write, and no cross-log reference concept.** By design,
-  not yet-implemented — see §1 and `QST-vl9cq` for the reasoning. If this
-  ever changes, it should be a deliberate decision, not a side effect of
-  solving the query gap above.
+- **Cross-log query and global-id mutation resolution shipped in v2** —
+  `quest list --all` and the `set`/`show`/`done` sweep (see
+  [§10](#10-multi-zone-setup)) are the answer `QST-vl9cq` asked for; see
+  `QST-v0hnq` (questkit's own log) for the full design and the decision
+  record. What's still deliberately *not* here: **bulk multi-log writes**
+  (every command still only ever mutates one file per invocation) and a
+  **cross-log reference concept** (`blocked_by`/wikilinks still only
+  resolve within their own log — see [§12](#12-git-hooks-and-validation)).
+  If either of those ever changes, it should be its own deliberate
+  decision, not a side effect of the query/resolution work already done.
+- **`ignore:`/`schema.extends` failures during a sweep degrade per-log,
+  not silently** — a broken config anywhere in the swept tree is skipped
+  with a printed warning rather than aborting `quest list --all`, but it's
+  still worth actually reading those warnings when they show up; nothing
+  currently aggregates or de-duplicates them across a large sweep.
 - **Wikilinks cannot cross Obsidian vault boundaries.** Confirmed upstream
   behavior, not fixable by questkit or any Obsidian plugin — see
   [§13](#13-ide-and-tool-integration).

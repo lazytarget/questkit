@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ruamel.yaml import YAML
+
 from .utils import slugify
 
 TYPES = frozenset({"feature", "task", "bug", "epic", "milestone", "chore"})
@@ -13,12 +18,91 @@ PRIORITIES = frozenset({"critical", "high", "medium", "low", "deferred"})
 EFFORTS = frozenset({"xs", "s", "m", "l", "xl"})
 AGENTIC_MODES = frozenset({"afk", "hitl"})
 
+_yaml = YAML()
+
 # Checked for presence only; enum membership is checked separately below.
 _SCALAR_REQUIRED_FIELDS = ("id", "title", "created", "modified", "type", "status", "priority")
 
 DEFAULT_STATUS = "draft"
 DEFAULT_TYPE = "task"
 DEFAULT_PRIORITY = "medium"
+
+
+class SchemaExtendsError(Exception):
+    """Raised when a `schema.extends` chain is circular or points at a missing file."""
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    """A custom frontmatter field defined in a log's `.questkit.yaml` schema block."""
+
+    name: str
+    type: str = "string"
+    required: bool = False
+
+
+@dataclass(frozen=True)
+class SchemaConfig:
+    """The active, merged schema for one quest log: vocabularies plus custom fields."""
+
+    types: frozenset = TYPES
+    statuses: frozenset = STATUSES
+    tiers: frozenset = TIERS
+    priorities: frozenset = PRIORITIES
+    efforts: frozenset = EFFORTS
+    fields: dict = field(default_factory=dict)  # name -> FieldSpec, custom fields only
+
+    @classmethod
+    def default(cls) -> SchemaConfig:
+        """The schema in effect when a log has no `schema:` block at all."""
+        return cls()
+
+    @classmethod
+    def load(cls, quests_dir: Path, schema_block: dict | None) -> SchemaConfig:
+        merged = _resolve_schema_extends(quests_dir, dict(schema_block or {}))
+        fields = {
+            name: FieldSpec(
+                name=name,
+                type=(spec or {}).get("type", "string"),
+                required=bool((spec or {}).get("required", False)),
+            )
+            for name, spec in (merged.get("fields") or {}).items()
+        }
+        return cls(
+            types=frozenset(merged["types"]) if "types" in merged else TYPES,
+            statuses=frozenset(merged["statuses"]) if "statuses" in merged else STATUSES,
+            tiers=frozenset(merged["tiers"]) if "tiers" in merged else TIERS,
+            priorities=frozenset(merged["priorities"]) if "priorities" in merged else PRIORITIES,
+            efforts=frozenset(merged["efforts"]) if "efforts" in merged else EFFORTS,
+            fields=fields,
+        )
+
+
+def _resolve_schema_extends(
+    quests_dir: Path, schema_block: dict, _visited: frozenset = frozenset()
+) -> dict:
+    """Recursively resolve `extends`; sibling keys fully replace the parent's.
+
+    The file an `extends` points at (resolved relative to `quests_dir`) is
+    itself treated as a schema document -- it may declare its own `extends`,
+    chaining further. No deep-merging of lists: a child's `statuses` entirely
+    replaces the parent's, it doesn't union with it.
+    """
+    extends = schema_block.get("extends")
+    merged: dict = {}
+    if extends:
+        parent_path = (quests_dir / extends).expanduser().resolve()
+        if parent_path in _visited:
+            raise SchemaExtendsError(f"circular schema 'extends' chain at {parent_path}")
+        if not parent_path.is_file():
+            raise SchemaExtendsError(f"schema extends '{extends}' -> {parent_path} not found")
+        parent_data = _yaml.load(parent_path.read_text(encoding="utf-8")) or {}
+        merged = _resolve_schema_extends(parent_path.parent, parent_data, _visited | {parent_path})
+    for key, value in schema_block.items():
+        if key == "extends":
+            continue
+        merged[key] = value
+    return merged
 
 
 class ValidationError:
@@ -35,8 +119,14 @@ class ValidationError:
         return f"{self.path}: {self.message}"
 
 
-def validate_quest(quest) -> list[ValidationError]:
-    """Validate a Quest's frontmatter and body against the questkit schema."""
+def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[ValidationError]:
+    """Validate a Quest's frontmatter and body against the questkit schema.
+
+    `schema_config` defaults to `SchemaConfig.default()` (today's hardcoded
+    vocabularies, no custom fields) so existing callers that validate against
+    the built-in rules keep working unchanged.
+    """
+    schema_config = schema_config or SchemaConfig.default()
     errors: list[ValidationError] = []
     fm = quest.frontmatter
 
@@ -50,11 +140,17 @@ def validate_quest(quest) -> list[ValidationError]:
     if fm.get("status") != "draft" and _blank(fm.get("description")):
         errors.append(ValidationError(quest.path, "missing required field 'description'"))
 
-    errors.extend(_check_enum(quest.path, fm, "type", TYPES))
-    errors.extend(_check_enum(quest.path, fm, "tier", TIERS))
-    errors.extend(_check_enum(quest.path, fm, "status", STATUSES))
-    errors.extend(_check_enum(quest.path, fm, "priority", PRIORITIES))
-    errors.extend(_check_enum(quest.path, fm, "effort", EFFORTS))
+    errors.extend(_check_enum(quest.path, fm, "type", schema_config.types))
+    errors.extend(_check_enum(quest.path, fm, "tier", schema_config.tiers))
+    errors.extend(_check_enum(quest.path, fm, "status", schema_config.statuses))
+    errors.extend(_check_enum(quest.path, fm, "priority", schema_config.priorities))
+    errors.extend(_check_enum(quest.path, fm, "effort", schema_config.efforts))
+
+    for field_name, spec in schema_config.fields.items():
+        if spec.required and _blank(fm.get(field_name)):
+            errors.append(
+                ValidationError(quest.path, f"missing required custom field '{field_name}'")
+            )
 
     agentic = fm.get("agentic")
     if agentic is not None:

@@ -1,17 +1,42 @@
-"""Resolve which quest log a command should operate on."""
+"""Resolve which quest log(s) a command should operate on."""
 
 from __future__ import annotations
 
+import fnmatch
 import os
+import sys
 from pathlib import Path
 
-from .config import CONFIG_FILENAME
+from . import schema
+from .config import CONFIG_FILENAME, ConfigVersionError, IgnoreConfigError, QuestLogConfig
+from .gitutil import find_git_root
+from .quest import find_by_id
 
 QUEST_LOG_ENV = "QUEST_LOG"
+QST_ROOT_ENV = "QST_ROOT"
+
+# Baseline directory-name/glob patterns pruned during a cross-log sweep, mirroring
+# 99-system/metadata/frontmatter.schema.yaml's `skip_dirs` -- an explicit named
+# default list, not a dot-prefix heuristic. A log's own `.questkit.yaml` `ignore:`
+# entries (see QuestLogConfig.resolved_ignores) extend this for its own subtree.
+DEFAULT_IGNORE_DIRS = (
+    ".git",
+    ".stversions",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+)
 
 
 class QuestLogNotFoundError(Exception):
     """Raised when no quest log can be resolved from any source."""
+
+
+class AmbiguousDestinationError(QuestLogNotFoundError):
+    """Raised when `quest new` can't tell which of several sub-logs to target."""
 
 
 def resolve_log(explicit: str | None = None, start: Path | None = None) -> Path:
@@ -61,3 +86,152 @@ def _walk_up(start: Path) -> Path | None:
         if parent == current:
             return None
         current = parent
+
+
+def resolve_log_for_new(explicit: str | None = None, start: Path | None = None) -> Path:
+    """Like `resolve_log`, but guards against an ambiguous capture destination.
+
+    Only `new` needs this -- `init` already takes an explicit target (or
+    deterministically defaults to `./quests`), so it never relies on
+    discovery. If no ancestor log is found via walk-up and 2+ quest logs
+    exist somewhere downward from `start`, fail fast instead of silently
+    falling back to `QUEST_LOG`: that fallback is fine with zero or one
+    candidate, but silently picking one of several would be a real hazard.
+    """
+    if explicit is not None:
+        return resolve_log(explicit=explicit)
+
+    start = (start or Path.cwd()).resolve()
+    found = _walk_up(start)
+    if found is not None:
+        return found
+
+    siblings = find_all_logs(start)
+    if len(siblings) > 1:
+        raise AmbiguousDestinationError(
+            "Ambiguous destination. Multiple quest logs found in subdirectories. "
+            "Specify target with --in <DIR>."
+        )
+    return resolve_log(start=start)
+
+
+def resolve_sweep_root(explicit: str | None = None, start: Path | None = None) -> Path:
+    """The root a cross-log sweep starts from.
+
+    Explicit override, else `QST_ROOT`, else the git root, else `start`/cwd --
+    "sweeps downward from QST_ROOT (or the Git root)", with a cwd fallback so
+    standalone (non-Realm) use still works.
+    """
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    env_value = os.environ.get(QST_ROOT_ENV)
+    if env_value:
+        return Path(env_value).expanduser().resolve()
+    start = (start or Path.cwd()).resolve()
+    return find_git_root(start) or start
+
+
+def resolve_mutation_target(
+    quest_id: str, explicit_in: str | None = None, start: Path | None = None
+) -> tuple[Path, Path] | None:
+    """Find the (log dir, quest file) for a global quest id.
+
+    An explicit `--in` is a precise override, exactly as everywhere else in
+    questkit: it's the only place searched, and a miss there is a miss -- no
+    silent sweep past it. Otherwise, the nearest log (today's walk-up) is
+    checked first; if the id isn't there, every other log under
+    `resolve_sweep_root()` is swept until it turns up somewhere.
+    """
+    if explicit_in is not None:
+        quests_dir = resolve_log(explicit=explicit_in)
+        hit = find_by_id(quests_dir, quest_id)
+        return (quests_dir, hit) if hit is not None else None
+
+    start = (start or Path.cwd()).resolve()
+    nearest = _walk_up(start)
+    if nearest is not None:
+        hit = find_by_id(nearest, quest_id)
+        if hit is not None:
+            return nearest, hit
+
+    root = resolve_sweep_root(start=start)
+    for log in find_all_logs(root):
+        if log == nearest:
+            continue
+        hit = find_by_id(log, quest_id)
+        if hit is not None:
+            return log, hit
+    return None
+
+
+def find_all_logs(root: Path) -> list[Path]:
+    """Every directory containing `.questkit.yaml`, by recursive descent from root.
+
+    Pruning starts from `DEFAULT_IGNORE_DIRS`. A log's own `ignore:` config
+    extends the active prune set for its own project -- in practice that
+    means its *parent* directory's tree too (the common shape is
+    `project/quests/.questkit.yaml` declaring ignores for sibling dirs like
+    `project/dist`), not just descendants of the log directory itself. A
+    one-level lookahead at each directory catches a `quests`-shaped child's
+    config before deciding whether to prune its siblings, so declaration
+    order (e.g. `dist` sorting before `quests`) doesn't matter.
+    """
+    root = root.resolve()
+    logs: list[Path] = []
+    _find_logs(root, list(DEFAULT_IGNORE_DIRS), logs, {})
+    return sorted(logs)
+
+
+def _find_logs(
+    directory: Path, ignore_patterns: list[str], logs: list[Path], ignore_cache: dict
+) -> None:
+    if (directory / CONFIG_FILENAME).is_file():
+        logs.append(directory)
+        ignore_patterns = ignore_patterns + _cached_local_ignores(directory, ignore_cache)
+
+    try:
+        entries = sorted(e for e in directory.iterdir() if e.is_dir() and not e.is_symlink())
+    except OSError:
+        return
+
+    for entry in entries:
+        if (entry / CONFIG_FILENAME).is_file():
+            ignore_patterns = ignore_patterns + _cached_local_ignores(entry, ignore_cache)
+
+    for entry in entries:
+        if _is_ignored(entry.name, ignore_patterns):
+            continue
+        _find_logs(entry, ignore_patterns, logs, ignore_cache)
+
+
+def _cached_local_ignores(quests_dir: Path, cache: dict) -> list[str]:
+    if quests_dir not in cache:
+        cache[quests_dir] = _local_ignores(quests_dir)
+    return cache[quests_dir]
+
+
+def _local_ignores(quests_dir: Path) -> list[str]:
+    """Best-effort: a log's own extra ignore patterns for its own subtree.
+
+    A broken config *anywhere* encountered during a broad cross-log sweep
+    (future config version, broken schema `extends`, broken `ignore:`
+    `#include`) shouldn't abort the whole sweep -- that one log just
+    contributes no extra pruning. It's not swallowed silently, though: a
+    warning is printed so the misconfiguration stays visible.
+    """
+    try:
+        return QuestLogConfig.load(quests_dir).resolved_ignores(quests_dir)
+    except (OSError, ConfigVersionError, schema.SchemaExtendsError, IgnoreConfigError) as exc:
+        print(f"[quest] warning: {quests_dir}: {exc}", file=sys.stderr)
+        return []
+
+
+def _is_ignored(name: str, patterns: list[str]) -> bool:
+    for raw in patterns:
+        pattern = raw.strip()
+        if pattern.startswith("**/"):
+            pattern = pattern[3:]
+        pattern = pattern.rstrip("/")
+        if fnmatch.fnmatch(name, pattern):
+            return True
+    return False

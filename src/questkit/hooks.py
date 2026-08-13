@@ -6,8 +6,24 @@ import sys
 from pathlib import Path
 
 from . import schema
+from .config import ConfigVersionError, QuestLogConfig
 from .quest import Quest, QuestFileError
 from .timeutil import today
+
+
+def _schema_for(path: Path) -> schema.SchemaConfig:
+    """Best-effort: the schema for the log a staged quest file lives in.
+
+    A quest file always sits directly in its log directory (flat structure,
+    no active/archive subdirs), so `path.parent` is that log's `quests/` dir.
+    Falls back to the built-in defaults if it has no `.questkit.yaml` (or
+    that config can't be read) -- the hook should still validate something
+    sensible rather than crash on a stray input.
+    """
+    try:
+        return QuestLogConfig.load(path.parent).schema
+    except (OSError, ConfigVersionError, schema.SchemaExtendsError):
+        return schema.SchemaConfig.default()
 
 
 def validate_main(argv: list[str] | None = None) -> int:
@@ -22,7 +38,7 @@ def validate_main(argv: list[str] | None = None) -> int:
             print(f"[!] {exc}")
             total_errors += 1
             continue
-        errors = schema.validate_quest(quest)
+        errors = schema.validate_quest(quest, _schema_for(path))
         for error in errors:
             print(f"[!] {error}")
         total_errors += len(errors)

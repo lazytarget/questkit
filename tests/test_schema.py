@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from questkit import schema
 from questkit.quest import Quest
 from questkit.utils import slugify
@@ -154,3 +156,99 @@ def test_missing_self_alias_is_flagged():
 
 def test_consistent_identity_has_no_drift_errors():
     assert schema.validate_quest(_quest(_base_fm())) == []
+
+
+# --- Dynamic schema engine: SchemaConfig, extends, custom fields ---------------
+
+
+def test_schema_config_default_matches_hardcoded_vocabularies():
+    default = schema.SchemaConfig.default()
+    assert default.types == schema.TYPES
+    assert default.statuses == schema.STATUSES
+    assert default.fields == {}
+
+
+def test_schema_config_load_with_no_block_is_the_default(tmp_path):
+    loaded = schema.SchemaConfig.load(tmp_path, None)
+    assert loaded == schema.SchemaConfig.default()
+
+
+def test_schema_config_load_overrides_vocabularies_and_adds_fields(tmp_path):
+    block = {
+        "statuses": ["draft", "todo", "done"],
+        "fields": {"sprint": {"type": "string", "required": True}},
+    }
+    loaded = schema.SchemaConfig.load(tmp_path, block)
+
+    assert loaded.statuses == frozenset({"draft", "todo", "done"})
+    assert loaded.types == schema.TYPES  # untouched sibling key keeps the default
+    assert loaded.fields["sprint"] == schema.FieldSpec("sprint", type="string", required=True)
+
+
+def test_schema_config_extends_resolves_relative_to_quests_dir(tmp_path):
+    (tmp_path / "base-schema.yaml").write_text("statuses: [draft, todo, done]\n")
+
+    loaded = schema.SchemaConfig.load(tmp_path, {"extends": "base-schema.yaml"})
+
+    assert loaded.statuses == frozenset({"draft", "todo", "done"})
+
+
+def test_schema_config_extends_chains_through_a_schema_only_file(tmp_path):
+    (tmp_path / "grandparent.yaml").write_text("statuses: [draft, todo, done]\n")
+    (tmp_path / "parent.yaml").write_text("extends: grandparent.yaml\ntypes: [task, bug]\n")
+
+    loaded = schema.SchemaConfig.load(tmp_path, {"extends": "parent.yaml"})
+
+    assert loaded.statuses == frozenset({"draft", "todo", "done"})
+    assert loaded.types == frozenset({"task", "bug"})
+
+
+def test_schema_config_sibling_keys_fully_replace_not_merge(tmp_path):
+    (tmp_path / "base-schema.yaml").write_text("statuses: [draft, todo, done]\n")
+
+    loaded = schema.SchemaConfig.load(
+        tmp_path, {"extends": "base-schema.yaml", "statuses": ["only-this"]}
+    )
+
+    assert loaded.statuses == frozenset({"only-this"})
+
+
+def test_schema_config_extends_missing_file_raises(tmp_path):
+    with pytest.raises(schema.SchemaExtendsError):
+        schema.SchemaConfig.load(tmp_path, {"extends": "nope.yaml"})
+
+
+def test_schema_config_extends_circular_chain_raises(tmp_path):
+    (tmp_path / "a.yaml").write_text("extends: b.yaml\n")
+    (tmp_path / "b.yaml").write_text("extends: a.yaml\n")
+
+    with pytest.raises(schema.SchemaExtendsError):
+        schema.SchemaConfig.load(tmp_path, {"extends": "a.yaml"})
+
+
+def test_validate_quest_flags_missing_required_custom_field():
+    schema_config = schema.SchemaConfig.load(
+        Path("."), {"fields": {"sprint": {"type": "string", "required": True}}}
+    )
+    errors = schema.validate_quest(_quest(_base_fm()), schema_config)
+
+    messages = " ".join(e.message for e in errors)
+    assert "missing required custom field 'sprint'" in messages
+
+
+def test_validate_quest_passes_when_required_custom_field_is_set():
+    schema_config = schema.SchemaConfig.load(
+        Path("."), {"fields": {"sprint": {"type": "string", "required": True}}}
+    )
+    errors = schema.validate_quest(_quest(_base_fm(sprint="42")), schema_config)
+
+    assert errors == []
+
+
+def test_validate_quest_ignores_optional_unset_custom_field():
+    schema_config = schema.SchemaConfig.load(
+        Path("."), {"fields": {"nice_to_have": {"type": "string", "required": False}}}
+    )
+    errors = schema.validate_quest(_quest(_base_fm()), schema_config)
+
+    assert errors == []

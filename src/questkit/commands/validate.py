@@ -39,7 +39,7 @@ def run(args: argparse.Namespace) -> int:
             total_errors += 1
             continue
 
-        errors = schema.validate_quest(quest)
+        errors = schema.validate_quest(quest, config.schema)
         errors.extend(_project_drift(quest, config))
         errors.extend(_check_references(quest, quests_dir))
         errors.extend(schema.check_slug_drift(quest))
