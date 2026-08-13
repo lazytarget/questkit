@@ -1,0 +1,21 @@
+# Obsidian Bases view for this quest log. Bases is a fairly new Obsidian
+# file format -- treat this as a starting point and adjust once opened.
+views:
+  - type: table
+    name: Kanban
+    groupBy: status
+    order:
+      - status
+      - title
+      - priority
+      - type
+      - project
+  - type: table
+    name: By priority
+    order:
+      - priority
+      - title
+      - status
+      - type
+    sort:
+      - property: priority

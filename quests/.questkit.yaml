@@ -1,0 +1,11 @@
+---
+version: 1
+pattern: QST-*.md
+prefix: QST-
+id_length: 5
+git: manual
+defaults:
+  type: task
+  status: draft
+  priority: medium
+project: questkit
