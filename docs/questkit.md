@@ -316,15 +316,23 @@ A dynamic filter/export engine rather than a fixed set of flags — this is
 the v2 rewrite that also answers `QST-vl9cq`'s open question about
 multi-log querying.
 
-- **`--where EXPR`** is repeatable (AND across repeats); each `EXPR` is one
-  of:
-  - `field=value` — equality; `value` may be a comma-list (`status=todo,
-    in-progress`), matched as OR; case-insensitive; a list-valued field
-    (like `tags`) matches if *any* of its own values are in the set.
+- **`--where EXPR`** is repeatable; each `EXPR` is one of:
+  - `field=value` — equality; case-insensitive; a list-valued field (like
+    `tags`) matches if *any* of its own values are in the set.
   - `field~value` — substring match on a scalar field, or membership match
     on a list field (`tags~frontend`).
   - `field:exists` — the field is present and non-blank/non-empty.
-  
+
+  **`value` may be a comma-list for both `=` and `~`** — `status=todo,
+  in-progress` or `tags~frontend,backend` — matched as OR: any one of the
+  listed values satisfies that single clause. **Repeating `--where` for the
+  same field is AND instead**: `--where "tags~frontend" --where
+  "tags~urgent"` requires *both* tags present, whereas `--where
+  "tags~frontend,backend"` requires *either*. Across *different* fields,
+  every `--where` clause is always ANDed together regardless of repetition
+  (`--where "status=todo" --where "tags~frontend"` means status is todo
+  **and** tags contains frontend).
+
   **Default status filter is `todo,in-progress,blocked`** if no `--where`
   clause targets `status` at all — same behavior as v1's default, just
   reimplemented as a synthesized `--where` clause under the hood; a
@@ -361,6 +369,12 @@ $ quest list --where "status=completed" --where "tags~gdrive"
 QST-15xxa  completed  medium  GDrive: Parse and Apply gdriveignore
 QST-4idp1  completed  medium  GDrive: Document and Sheet Ingress Compilation
 ...
+
+# tags~frontend,backend -- OR within the clause: either tag qualifies
+$ quest list --where "tags~frontend,backend"
+
+# --where repeated on the same field -- AND instead: both tags required
+$ quest list --where "tags~frontend" --where "tags~urgent"
 
 $ quest list --all --root .. --where "status:exists" --format json | jq '.[].title'
 ```

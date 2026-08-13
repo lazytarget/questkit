@@ -46,6 +46,18 @@ def test_matches_contains_list_field():
     assert not list_cmd._matches(row, "tags", "contains", "backend")
 
 
+def test_matches_contains_comma_list_is_or_on_list_field():
+    assert list_cmd._matches({"tags": ["frontend"]}, "tags", "contains", "frontend,backend")
+    assert list_cmd._matches({"tags": ["backend"]}, "tags", "contains", "frontend,backend")
+    assert not list_cmd._matches({"tags": ["design"]}, "tags", "contains", "frontend,backend")
+
+
+def test_matches_contains_comma_list_is_or_on_scalar_field():
+    row = {"title": "Fix the frontend bug"}
+    assert list_cmd._matches(row, "title", "contains", "frontend,backend")
+    assert not list_cmd._matches(row, "title", "contains", "database,backend")
+
+
 def test_matches_exists():
     assert list_cmd._matches({"agentic": "afk"}, "agentic", "exists", None)
     assert not list_cmd._matches({"agentic": None}, "agentic", "exists", None)
@@ -113,6 +125,30 @@ def test_list_where_tag_contains(quest_log, capsys):
 
     assert frontend_id in out
     assert "Backend work" not in out
+
+
+def test_list_where_tag_contains_comma_list_is_or(quest_log, capsys):
+    frontend_id = _new(quest_log, "Frontend work", capsys, extra=["--tag", "frontend"])
+    backend_id = _new(quest_log, "Backend work", capsys, extra=["--tag", "backend"])
+    _new(quest_log, "Docs work", capsys, extra=["--tag", "docs"])
+
+    assert main(["list", "--where", "tags~frontend,backend"]) == 0
+    out = capsys.readouterr().out
+
+    assert frontend_id in out
+    assert backend_id in out
+    assert "Docs work" not in out
+
+
+def test_list_repeated_where_on_same_field_is_and(quest_log, capsys):
+    _new(quest_log, "Frontend only", capsys, extra=["--tag", "frontend"])
+    both_id = _new(quest_log, "Frontend and urgent", capsys, extra=["--tag", "frontend", "--tag", "urgent"])
+
+    assert main(["list", "--where", "tags~frontend", "--where", "tags~urgent"]) == 0
+    out = capsys.readouterr().out
+
+    assert both_id in out
+    assert "Frontend only" not in out
 
 
 def test_list_json_format_dumps_full_frontmatter(quest_log, capsys):

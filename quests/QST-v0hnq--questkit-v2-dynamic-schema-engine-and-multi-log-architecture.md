@@ -131,3 +131,11 @@ have to guess or hallucinate valid enum values.
   `docs/questkit.md` updated throughout (§1, §5, §6, §8, §9, §10, §13,
   §15); version bumped 0.1.0 -> 0.2.0. Not yet committed -- left for the
   user to review and commit.
+- 2026-08-13: fast-follow. `--where field~value` (contains) now accepts a
+  comma-list matched as OR, same convention `field=value` already had --
+  `tags~frontend,backend` means "either tag qualifies," repeating `--where`
+  on the same field means AND instead (`--where "tags~frontend" --where
+  "tags~urgent"` requires both). Implemented as a shared
+  `_split_candidates()` helper in `list_cmd.py`; `docs/questkit.md`'s
+  `--where` grammar section updated with the OR-vs-AND distinction spelled
+  out explicitly.

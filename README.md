@@ -57,6 +57,28 @@ bare `quests/` folder with no marker is just a folder. `quest init [DIR]`
 creates the marker (and the directory, if needed); it's idempotent and
 never overwrites an existing config.
 
+## Querying and mutating across logs
+
+`quest list` is a small filter/export engine, not a fixed set of flags:
+
+```bash
+quest list --where "status=todo,in-progress"                # comma = OR within a field
+quest list --where "tags~frontend" --where "tags~urgent"     # repeated --where = AND
+quest list --all --format json | jq '.[].title'              # every log under QST_ROOT
+quest list --format prompt                                   # compact, agent-friendly digest
+quest schema quest status                                    # valid values, so nothing's guessed
+```
+
+`--all` aggregates from every log found downward from `QST_ROOT` (an env
+var — the sweep-root analogue of `QUEST_LOG`), the git root, or the
+current directory. Because ids are globally unique, targeted mutations
+are location-independent too: `quest set`/`show`/`done <id>` check the
+nearest log first, then sweep every other log under that same root if the
+id isn't there — `--in` remains available to force a single log, but
+isn't required to reach one elsewhere. See
+**[docs/questkit.md](docs/questkit.md)** for the full `--where` grammar,
+column/sort/format options, and resolution order.
+
 ## Frontmatter
 
 ```yaml
@@ -153,6 +175,14 @@ defaults:
   type: task
   status: draft
   priority: medium
+ignore:                # directory names/globs pruned during a cross-log sweep
+  - dist
+schema:                 # override vocabularies and/or add custom fields — optional
+  statuses: [draft, todo, in-progress, in-review, completed, scrapped]
+  fields:
+    sprint:
+      type: string
+      required: true
 ```
 
 `git: manual` (the default) means questkit never touches git — committing
@@ -163,6 +193,23 @@ if the repo is in a state that blocks committing (mid-merge, mid-rebase,
 etc). It's a reasonable default for a log whose *only* content is quest
 files; riskier for a log living inside a code repo, where you usually want
 one commit pairing the code change with the ticket update.
+
+### Custom fields and per-log schema
+
+`schema:` is entirely optional — a log with no block behaves exactly like
+today's hardcoded vocabulary. When present, `types`/`statuses`/`tiers`/
+`priorities`/`efforts` override the built-in enums (an `extends: <path>`
+key can chain in a shared schema file first, with sibling keys fully
+replacing whatever it inherits), and `fields:` declares custom frontmatter
+fields with a `required` flag. `quest new` null-initializes every declared
+field and warns on stderr; `quest validate` fails if a `required: true`
+one is still null or missing. `ignore:` (optionally `#include <path>` to
+reuse a shared ignore-pattern file) extends the default prune list for
+cross-log sweeps, scoped to that log's own project.
+
+Use `quest schema quest [field] [--format json|table]` to introspect the
+active, merged schema for a log — the whole thing, or just one field's
+valid values/spec — instead of guessing or reading the YAML chain by hand.
 
 ## `quest init` flags
 
