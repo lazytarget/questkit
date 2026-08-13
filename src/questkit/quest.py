@@ -12,6 +12,8 @@ from ruamel.yaml.comments import CommentedMap
 _yaml = YAML()
 _yaml.preserve_quotes = True
 _yaml.indent(mapping=2, sequence=4, offset=2)
+_yaml.width = 4096  # keep fields like `description` on one line -- greppability matters more
+# than 80-column wrapping for a frontmatter file.
 
 
 class QuestFileError(Exception):

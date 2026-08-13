@@ -15,6 +15,7 @@ _DEFAULT_FIELD_DEFAULTS = {"type": "task", "status": "draft", "priority": "mediu
 _yaml = YAML()
 _yaml.preserve_quotes = True
 _yaml.indent(mapping=2, sequence=4, offset=2)
+_yaml.width = 4096
 
 
 class ConfigVersionError(Exception):
