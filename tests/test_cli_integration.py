@@ -75,3 +75,44 @@ def test_init_git_flag_sets_config_mode(tmp_path, monkeypatch):
     config_text = (tmp_path / "quests" / ".questkit.yaml").read_text()
     assert "git: auto" in config_text
     assert "project: common" in config_text
+
+
+def _new_quest_id(quest_log, title, capsys, extra=None):
+    assert main(["new", title, "--status", "todo", *(extra or [])]) == 0
+    return capsys.readouterr().out.strip().split("/")[-1].split("--")[0]
+
+
+def test_validate_flags_dangling_blocked_by(quest_log, capsys):
+    quest_id = _new_quest_id(quest_log, "Has a bad reference", capsys)
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+    path.write_text(path.read_text().replace("blocked_by: []", "blocked_by: [QST-zzzzz]"))
+
+    exit_code = main(["validate"])
+    err = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "blocked_by references 'QST-zzzzz', not found" in err
+
+
+def test_validate_flags_dangling_backlink(quest_log, capsys):
+    quest_id = _new_quest_id(quest_log, "Has a bad backlink", capsys)
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+    path.write_text(path.read_text() + "\nSee [[QST-zzzzz--nope]] for context.\n")
+
+    exit_code = main(["validate"])
+    err = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "backlink references 'QST-zzzzz', not found" in err
+
+
+def test_validate_accepts_real_blocked_by_and_backlink(quest_log, capsys):
+    target_id = _new_quest_id(quest_log, "Target quest", capsys)
+    source_id = _new_quest_id(quest_log, "Source quest", capsys)
+    path = next(quest_log.glob(f"{source_id}*.md"))
+    target_path = next(quest_log.glob(f"{target_id}*.md"))
+    text = path.read_text().replace("blocked_by: []", f"blocked_by: [{target_id}]")
+    text += f"\nSee [[{target_path.stem}]] for context.\n"
+    path.write_text(text)
+
+    assert main(["validate"]) == 0

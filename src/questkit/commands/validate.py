@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import re
+from pathlib import Path
 
 from .. import schema
 from ..config import CONFIG_FILENAME, ConfigVersionError, QuestLogConfig, config_exists
 from ..discovery import resolve_log
-from ..quest import Quest, QuestFileError
+from ..quest import Quest, QuestFileError, find_by_id
+
+_WIKILINK_ID_RE = re.compile(r"\[\[(QST-[0-9a-z]{5})")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -35,6 +39,7 @@ def run(args: argparse.Namespace) -> int:
 
         errors = schema.validate_quest(quest)
         errors.extend(_project_drift(quest, config))
+        errors.extend(_check_references(quest, quests_dir))
         if errors:
             print(f"[!] {path}")
             for error in errors:
@@ -62,3 +67,38 @@ def _project_drift(quest, config: QuestLogConfig) -> list[schema.ValidationError
             )
         ]
     return []
+
+
+def _check_references(quest, quests_dir: Path) -> list[schema.ValidationError]:
+    """`blocked_by` ids and body wikilinks must resolve within this log.
+
+    Scoped to this one log deliberately -- questkit has no notion of a
+    cross-log reference (see QST-whm2e's Log on the Obsidian vault-boundary
+    limitation); a reference to another zone's quest can't be checked here
+    and shouldn't be a wikilink in the first place.
+    """
+    errors: list[schema.ValidationError] = []
+    own_id = quest.get("id")
+
+    for ref_id in quest.frontmatter.get("blocked_by") or []:
+        if find_by_id(quests_dir, ref_id) is None:
+            errors.append(
+                schema.ValidationError(
+                    quest.path, f"blocked_by references '{ref_id}', not found in this log"
+                )
+            )
+
+    seen: set[str] = set()
+    for match in _WIKILINK_ID_RE.finditer(quest.body):
+        ref_id = match.group(1)
+        if ref_id == own_id or ref_id in seen:
+            continue
+        seen.add(ref_id)
+        if find_by_id(quests_dir, ref_id) is None:
+            errors.append(
+                schema.ValidationError(
+                    quest.path, f"backlink references '{ref_id}', not found in this log"
+                )
+            )
+
+    return errors

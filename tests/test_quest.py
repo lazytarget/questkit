@@ -30,6 +30,23 @@ def test_quest_round_trip_preserves_fields(tmp_path):
     assert "Some body text." in reloaded.body
 
 
+def test_save_normalizes_list_styles(tmp_path):
+    from ruamel.yaml.comments import CommentedMap
+
+    fm = CommentedMap()
+    fm["id"] = "QST-abcde"
+    fm["tags"] = ["a", "b", "c"]
+    fm["blocked_by"] = []
+    fm["aliases"] = ["QST-abcde"]
+    path = tmp_path / "QST-abcde--example.md"
+    Quest(path=path, frontmatter=fm, body="## Description\n").save()
+
+    text = path.read_text()
+    assert "tags:\n  - a\n  - b\n  - c\n" in text
+    assert "blocked_by: []" in text
+    assert "aliases: [QST-abcde]" in text
+
+
 def test_find_by_id_matches_full_filename(tmp_path):
     (tmp_path / "QST-abcde--example.md").write_text("---\nid: QST-abcde\n---\n\nbody\n")
     (tmp_path / "QST-fghij--other.md").write_text("---\nid: QST-fghij\n---\n\nbody\n")

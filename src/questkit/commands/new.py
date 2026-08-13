@@ -47,6 +47,7 @@ def run(args: argparse.Namespace) -> int:
     if project:
         frontmatter["project"] = project
     frontmatter["tags"] = list(args.tags or [])
+    frontmatter["blocked_by"] = []
     frontmatter["aliases"] = [quest_id]
 
     quest = Quest(path=path, frontmatter=frontmatter, body=render_body(created))

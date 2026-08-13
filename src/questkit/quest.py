@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
@@ -38,6 +38,7 @@ class Quest:
         return cls(path=path, frontmatter=frontmatter, body=body)
 
     def save(self) -> None:
+        _normalize_list_styles(self.frontmatter)
         buf = io.StringIO()
         _yaml.dump(self.frontmatter, buf)
         body = self.body.strip("\n")
@@ -67,6 +68,27 @@ def _split_frontmatter(text: str, path: Path) -> tuple[str, str]:
     raw_yaml = "".join(lines[1:end_index])
     body = "".join(lines[end_index + 1 :])
     return raw_yaml, body.lstrip("\n")
+
+
+def _normalize_list_styles(mapping: CommentedMap) -> None:
+    """Flow style (`[a, b]`) for 0-1 items, block style (one per line) for 2+.
+
+    Keeps short fields like `aliases`/empty `blocked_by` compact and lets
+    multi-item fields like `tags` diff one line at a time instead of the
+    whole array changing. Applied on every save, so hand-edited files
+    self-correct the next time any quest command (or the bump-modified
+    hook) touches them.
+    """
+    for key in list(mapping.keys()):
+        value = mapping[key]
+        if not isinstance(value, list):
+            continue
+        seq = value if isinstance(value, CommentedSeq) else CommentedSeq(value)
+        if len(seq) <= 1:
+            seq.fa.set_flow_style()
+        else:
+            seq.fa.set_block_style()
+        mapping[key] = seq
 
 
 def find_by_id(quests_dir: Path, quest_id: str) -> Path | None:

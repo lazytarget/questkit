@@ -4,10 +4,20 @@ from pathlib import Path
 
 from questkit import schema
 from questkit.quest import Quest
+from questkit.utils import slugify
 
 
-def _quest(frontmatter, body=""):
-    return Quest(path=Path("QST-test.md"), frontmatter=frontmatter, body=body)
+def _quest(frontmatter, body="", path=None):
+    """Build a Quest whose path/aliases self-consistently match frontmatter
+    by default, so tests targeting one rule don't incidentally trip the
+    identity-drift checks. Pass path= explicitly to test drift itself."""
+    fm = dict(frontmatter)
+    if "aliases" not in fm and fm.get("id"):
+        fm["aliases"] = [fm["id"]]
+    if path is None:
+        slug = slugify(fm["title"]) if fm.get("title") else "test"
+        path = Path(f"{fm.get('id', 'QST-abcde')}--{slug}.md")
+    return Quest(path=path, frontmatter=fm, body=body)
 
 
 def test_valid_quest_has_no_errors():
@@ -93,3 +103,47 @@ def test_afk_with_full_spec_passes():
         "## Acceptance Criteria\n\n- [ ] step one\n"
     )
     assert schema.validate_quest(_quest(fm, body=body)) == []
+
+
+def _base_fm(**overrides):
+    fm = {
+        "id": "QST-abcde",
+        "title": "Example",
+        "description": "A thing to do",
+        "created": "2026-08-13",
+        "modified": "2026-08-13",
+        "type": "task",
+        "status": "todo",
+        "priority": "medium",
+        "tags": [],
+    }
+    fm.update(overrides)
+    return fm
+
+
+def test_filename_id_disagreeing_with_frontmatter_id_is_flagged():
+    errors = schema.validate_quest(
+        _quest(_base_fm(), path=Path("QST-zzzzz--example.md"))
+    )
+    messages = " ".join(e.message for e in errors)
+    assert "filename id" in messages
+
+
+def test_filename_slug_disagreeing_with_title_is_flagged():
+    errors = schema.validate_quest(
+        _quest(_base_fm(title="A brand new title"), path=Path("QST-abcde--example.md"))
+    )
+    messages = " ".join(e.message for e in errors)
+    assert "filename slug" in messages
+    assert "a-brand-new-title" in messages
+
+
+def test_missing_self_alias_is_flagged():
+    fm = _base_fm(aliases=["QST-somebody-else"])
+    errors = schema.validate_quest(_quest(fm, path=Path("QST-abcde--example.md")))
+    messages = " ".join(e.message for e in errors)
+    assert "aliases does not include" in messages
+
+
+def test_consistent_identity_has_no_drift_errors():
+    assert schema.validate_quest(_quest(_base_fm())) == []
