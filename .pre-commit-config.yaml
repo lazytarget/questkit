@@ -1,6 +1,6 @@
 repos:
   - repo: /home/gitops/realm/02-projects/lazytarget/questkit
-    rev: 52d9c1df6d44e09bc2342fd2308b3aa8df039aca
+    rev: 08f7b9097a86146ad79d748c40359c77f29f39c7
     hooks:
       - id: quest-format
       - id: quest-validate
