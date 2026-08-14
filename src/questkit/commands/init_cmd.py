@@ -94,6 +94,7 @@ def _hook_repo_entry() -> str:
         f"  - repo: {repo_ref}\n"
         f"    rev: {rev}\n"
         "    hooks:\n"
+        "      - id: quest-format\n"
         "      - id: quest-validate\n"
         "      - id: quest-bump-modified\n"
     )

@@ -7,6 +7,7 @@ import sys
 
 from .commands import (
     done_cmd,
+    format_cmd,
     init_cmd,
     list_cmd,
     mv_cmd,
@@ -96,6 +97,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate = subparsers.add_parser("validate", help="validate quests against the schema")
     p_validate.add_argument("--in", dest="in_dir")
     p_validate.set_defaults(func=validate_cmd.run)
+
+    p_format = subparsers.add_parser(
+        "format", help="reformat quest frontmatter to match the current normalization rules"
+    )
+    p_format.add_argument("--in", dest="in_dir")
+    p_format.set_defaults(func=format_cmd.run)
 
     p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")
     p_schema.add_argument("kind", choices=["quest"])

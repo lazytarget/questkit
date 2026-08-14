@@ -24,8 +24,8 @@ pip install questkit
 ```
 
 This installs two identical entry points, `quest` and `qst` (pick whichever
-you'd rather type), plus `quest-validate` and `quest-bump-modified` for use
-as pre-commit hooks.
+you'd rather type), plus `quest-format`, `quest-validate`, and
+`quest-bump-modified` for use as pre-commit hooks.
 
 ## Quickstart
 
@@ -127,15 +127,27 @@ vault is open. For a genuinely cross-zone reference, prefer plain text
 (`QST-x7k2m`, greppable and `quest show`-able) over a wikilink that will
 silently fail to resolve in the common case.
 
-### List field style
+### Frontmatter formatting
 
-`Quest.save()` normalizes every list-valued field (`tags`, `blocked_by`,
-`aliases`, ...) to flow style (`[a, b]`) at 0-1 items and block style (one
-per line) at 2+ items — compact for the common single-item case, diff-
-friendly for multi-item lists. This happens on every save, so a
-hand-edited file that doesn't follow it self-corrects the next time any
-`quest` command (or the `quest-bump-modified` hook) touches it — no
-separate lint-and-fix step needed.
+`Quest.save()` normalizes every quest file the same way, deliberately
+matching Obsidian's own frontmatter writer instead of fighting it (a file
+that alternates between the CLI's and Obsidian's preferred style every
+time it changes hands is pure diff noise):
+
+- Every list-valued field (`tags`, `blocked_by`, `aliases`, ...) renders
+  flow style (`[]`) only when empty; any non-empty list — even a single
+  item — expands to block style (one per line).
+- `created`/`modified`/`due` become real `date` values, so they dump as a
+  bare `2026-08-13` instead of being auto-quoted for type safety.
+- Any single-quoted string converts to double-quoted.
+
+This happens on every save, so a hand-edited or Obsidian-touched file that
+doesn't follow it self-corrects the next time any `quest` command touches
+it — no separate lint-and-fix step needed in the common case. To normalize
+a whole log in one shot (after first adopting these rules, or a log with
+no git at all), run `quest format [--in DIR]`; the `quest-format`
+pre-commit hook does the same for staged files on every commit (see
+[docs/questkit.md §11](docs/questkit.md#11-git-hooks-and-validation)).
 
 `agentic: afk` is a claim, not a declaration — `quest validate` checks that
 an AFK quest actually carries a `## Spec`/`## Design` section and an
@@ -222,8 +234,9 @@ valid values/spec — instead of guessing or reading the YAML chain by hand.
   Skipped (not overwritten) if one already exists. Obsidian Bases is a
   fairly new file format; treat the generated file as a starting point, not
   a guarantee — check it opens the way you expect.
-- `--hooks` — wire questkit's own pre-commit hooks (`quest-validate`,
-  `quest-bump-modified`) into this repo's `.pre-commit-config.yaml`,
+- `--hooks` — wire questkit's own pre-commit hooks (`quest-format`,
+  `quest-validate`, `quest-bump-modified`, in that order) into this repo's
+  `.pre-commit-config.yaml`,
   creating the file if it doesn't exist, and run `pre-commit install`. A
   no-op (with a message) outside a git repo. Structural, not marker-based:
   re-running it never duplicates the entry. References questkit by local

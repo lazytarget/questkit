@@ -1,3 +1,11 @@
+- id: quest-format
+  name: quest-format
+  description: Normalize quest frontmatter formatting (arrays, date quoting, quote style).
+  entry: quest-format
+  language: python
+  files: (^|/)QST-[^/]+\.md$
+  pass_filenames: true
+
 - id: quest-validate
   name: quest-validate
   description: Validate quest frontmatter against the questkit schema.

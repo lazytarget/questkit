@@ -183,7 +183,7 @@ alone gets you a global `quest`/`qst`:
 
 ```bash
 $ uv tool install --editable /path/to/02-projects/lazytarget/questkit
-Installed 4 executables: qst, quest, quest-bump-modified, quest-validate
+Installed 5 executables: qst, quest, quest-bump-modified, quest-format, quest-validate
 
 $ cd anywhere/at/all && quest list
 QST-0grby  in-progress  high      Integrate kivra-sync
@@ -520,6 +520,26 @@ $ quest validate
 [quest validate] 26 quest(s) checked, no errors
 ```
 
+### `quest format [--in DIR]`
+
+Re-saves every file matching the log's `pattern`, applying `Quest.save()`'s
+normalization (list style, date-field quoting, quote style — see
+[§7](#7-frontmatter-reference) and the `quest-format` hook in
+[§11](#11-git-hooks-and-validation)) with no field-value changes: no
+`modified` bump, nothing content-wise touched. Prints one line per file
+that actually changed plus a summary; a file already in normalized form is
+silently a no-op. This is the bulk/standalone counterpart to the
+`quest-format` pre-commit hook — the hook only ever sees staged files on a
+commit, so reach for `quest format` to normalize an entire log in one shot
+(a log with no git at all, a first-time sweep after a normalization rule
+changes, or just checking a log without committing anything).
+
+```bash
+$ quest format
+[quest format] quests/QST-03dh4--syncthing-custom-folder-groups.md: reformatted
+[quest format] 26 quest(s) checked, 1 reformatted
+```
+
 ### `quest schema quest [field] [--format json|table] [--in DIR]`
 
 Introspects the active, merged schema for a log — so an agent never has to
@@ -560,7 +580,7 @@ you will never see a raw Python traceback from normal usage.
 | `title` | Yes | string | Human-readable. Editing this after creation does **not** rename the file — see [§11](#11-git-hooks-and-validation) on slug drift. |
 | `description` | Situational | string, ≤200 chars | Required unless `status: draft`. `quest new` defaults it to the title if `--description` isn't given (once status isn't draft). |
 | `created` | Yes | `YYYY-MM-DD` | Set once, at creation. |
-| `modified` | Yes | `YYYY-MM-DD` | Bumped by `quest set`/`done` and by the `quest-bump-modified` hook on every commit that touches the file. |
+| `modified` | Yes | `YYYY-MM-DD` | Bumped by `quest set`/`done`/`mv` and by the `quest-bump-modified` hook on every commit that touches the file. Normalizes to a real, unquoted `date` value on save. |
 | `type` | Yes | enum | `feature \| task \| bug \| epic \| milestone \| chore` |
 | `tier` | No | enum | `spark \| brief \| blueprint` — spec-workflow weight, inherited unchanged from the Realm's three-tier model. Sits directly after `type` by convention. |
 | `status` | Yes | enum | `draft \| todo \| in-progress \| blocked \| parked \| completed \| scrapped` |
@@ -575,10 +595,13 @@ you will never see a raw Python traceback from normal usage.
 | `aliases` | Yes (CLI-created) | list, always includes own `id` | Drives Obsidian search/quick-switcher/autocomplete. Does **not** make a bare `[[id]]` wikilink resolve on click — see [§12](#12-ide-and-tool-integration). `quest validate` (hard rule) flags a missing self-alias. |
 | `related_adrs` | No, not schema-enforced | list of ADR references | Not part of the closed schema at all — carried over from the Beans-era migration as free-form extra metadata. Any field not listed here is accepted without complaint; `quest validate` never rejects unknown keys. |
 
-List fields always render flow-style (`[a, b]`) at 0–1 items and
-block-style (one per line) at 2+ — see the README's "List field style"
-section for the mechanics; it happens automatically, there's no field-level
-control over it.
+List fields render flow-style (`[]`) only when empty; any non-empty list
+always expands to block style (one item per line, even a single item) —
+matching Obsidian's own frontmatter writer (see the README's "Frontmatter
+formatting" section and [§11](#11-git-hooks-and-validation)). `created`/
+`modified`/`due` normalize to real, unquoted `date` values the same way.
+This happens automatically on every save, there's no field-level control
+over it.
 
 **Custom fields** — beyond the closed set above, a log can declare its own
 fields via `schema.fields` in `.questkit.yaml` (see
@@ -831,22 +854,35 @@ interact in specific ways worth understanding:
 
 ### What ships
 
-`.pre-commit-hooks.yaml` (at the root of the questkit repo) defines two
-hooks, both `language: python`, both matching
+`.pre-commit-hooks.yaml` (at the root of the questkit repo) defines three
+hooks, all `language: python`, all matching
 `files: (^|/)QST-[^/]+\.md$` (deliberately *not* requiring a `quests/`
 path segment — the central log's own files sit at its repo root with no
 such segment in their git-relative path; an earlier version of this regex
-missed that and the hooks silently never ran there):
+missed that and the hooks silently never ran there). Order matters — a
+freshly-wired `.pre-commit-config.yaml` (see below) lists them in exactly
+this order, so each hook sees the previous one's output rather than
+re-litigating it:
 
+- **`quest-format`** → `hooks.format_main()`. Pure re-save of each staged
+  file — normalizes list style, date-field quoting, and quote style (see
+  [§7](#7-frontmatter-reference)) with no field-value changes. Runs
+  *first* so a file edited outside questkit (Obsidian, by hand) arrives at
+  `quest-validate`/`quest-bump-modified` already in normalized form,
+  instead of the three hooks disagreeing with each other about style on
+  successive commits. See also `quest format` ([§6](#6-cli-reference)) for
+  the same normalization run over a whole log outside of a commit.
 - **`quest-validate`** → `hooks.validate_main()`. Runs `schema.
   validate_quest()` — and *only* that — against each staged file passed to
   it. Fails (nonzero exit, blocking the commit) if any hard rule fails.
 - **`quest-bump-modified`** → `hooks.bump_modified_main()`. Rewrites
-  `modified:` to today's date (and, as a side effect of calling
-  `Quest.save()`, normalizes list styles) on each staged file, if it isn't
-  already today. Pre-commit's own behavior then applies: a hook that
-  modifies files fails that run so you can review/re-stage — this is
-  standard pre-commit UX, not something questkit does specially.
+  `modified:` to today's date on each staged file, if it isn't already
+  today (compared with `str()` on both sides, since `modified` is a real
+  `date` object once normalized — a naive `!=` against a plain string
+  would never match and rewrite every staged file on every commit). Pre-
+  commit's own behavior then applies: a hook that modifies files fails
+  that run so you can review/re-stage — this is standard pre-commit UX,
+  not something questkit does specially.
 
 ### Hard rules vs informational — the split that matters
 
@@ -921,6 +957,19 @@ Verify a bump actually works before trusting it:
 ```bash
 pre-commit run quest-validate --files quests/QST-something.md
 ```
+
+`pre-commit run <hook-id> --all-files` (or `--files <path>...` for a
+narrower set) isn't limited to what's staged — it's the bulk-normalization
+path for a log that already has hooks wired up, e.g. right after a
+`quest-format` normalization rule changes:
+
+```bash
+pre-commit run quest-format --all-files
+```
+
+For a log with no git repo at all (hooks can't run there, staged or not),
+use `quest format [--in DIR]` instead ([§6](#6-cli-reference)) — same
+normalization, no git or pre-commit dependency.
 
 ## 12. IDE and tool integration
 

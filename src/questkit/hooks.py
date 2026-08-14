@@ -1,4 +1,4 @@
-"""Entry points invoked by pre-commit: `quest-validate` and `quest-bump-modified`."""
+"""Entry points invoked by pre-commit: `quest-format`, `quest-validate`, `quest-bump-modified`."""
 
 from __future__ import annotations
 
@@ -24,6 +24,30 @@ def _schema_for(path: Path) -> schema.SchemaConfig:
         return QuestLogConfig.load(path.parent).schema
     except (OSError, ConfigVersionError, schema.SchemaExtendsError):
         return schema.SchemaConfig.default()
+
+
+def format_main(argv: list[str] | None = None) -> int:
+    """Pre-commit hook entry point: normalize each staged quest file's frontmatter formatting.
+
+    Pure re-save, no field-value changes -- runs first, before `quest-validate`/
+    `quest-bump-modified`, so those see already-normalized content (matching
+    Obsidian's own frontmatter writer -- see `quest.py`'s `_normalize_*`
+    functions) instead of re-litigating array/quote style on every commit.
+    """
+    paths = argv if argv is not None else sys.argv[1:]
+    for raw_path in paths:
+        path = Path(raw_path)
+        try:
+            before = path.read_text(encoding="utf-8")
+            quest = Quest.load(path)
+        except (OSError, QuestFileError) as exc:
+            print(f"[!] {exc}")
+            continue
+        quest.save()
+        after = path.read_text(encoding="utf-8")
+        if after != before:
+            print(f"[quest-format] {path}: reformatted")
+    return 0
 
 
 def validate_main(argv: list[str] | None = None) -> int:

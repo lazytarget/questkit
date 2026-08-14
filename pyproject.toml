@@ -24,6 +24,7 @@ dev = [
 [project.scripts]
 quest = "questkit.cli:main"
 qst = "questkit.cli:main"
+quest-format = "questkit.hooks:format_main"
 quest-validate = "questkit.hooks:validate_main"
 quest-bump-modified = "questkit.hooks:bump_modified_main"
 
