@@ -97,7 +97,7 @@ Inside The Realm specifically, though, it plays a defined role:
 - **Per-zone logs** opt in one at a time via `quest init`, inside whatever
   repo the work actually belongs to. As of this writing: `pensieve/quests/`
   (`project: pensieve`, 26 quests, migrated from the old shared `beans`
-  repo), `99-system/quests/` (`project: system`, migrated from
+  repo), `99-system/quests/` (`project: realm-system`, migrated from
   `TODOS.md`), `02-projects/peter/2026-career-transition/quests/`
   (`project: career-transition`, migrated from `career-todos.md`), and
   questkit's own `quests/` (`project: questkit` — questkit tracks its own
