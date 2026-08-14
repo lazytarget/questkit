@@ -109,7 +109,7 @@ Inside The Realm specifically, though, it plays a defined role:
 - **The Realm's root `AGENTS.md`** routes "bean"/"ticket"/"todo" — spoken
   synonyms from before this existed — to quest creation, so an agent
   primed on the Realm's conventions never has to be told twice.
-- **`QST-whm2e`**, in the central log, is the founding design document:
+- **`QST-whm2e`**, in questkit's own log, is the founding design document:
   every decision here, and every correction made discovering those
   decisions didn't quite survive contact with real data, is logged there
   with a date. Treat it as the historical record; treat this file as the
@@ -855,7 +855,7 @@ Because `rev:` is pinned, a fix landed in questkit's own `hooks.py`/
 `schema.py` does **not** retroactively apply to any repo that already ran
 `--hooks` — their hook still runs whatever code existed at the pinned
 commit. There is currently no automated "refresh the pin" command (that
-gap is exactly what `QST-d8nu7`, in the central log, proposes solving with
+gap is exactly what `QST-d8nu7`, in `99-system`'s log, proposes solving with
 a `make plan-git-hooks`/`make apply-git-hooks` pair); until that exists,
 bumping a pin is a manual edit:
 
@@ -1045,7 +1045,7 @@ here specifically to learn *how* to act on it.
   justice means not rushing it).
 - **No hook-pin refresh command yet.** Bumping a consuming repo's
   `rev:` after a questkit change is a manual edit today — tracked as
-  `QST-d8nu7` in the central log.
+  `QST-d8nu7` in `99-system`'s log.
 - **An unexplained Syncthing artifact.** A `.stversions/` version-archive
   copy of a quest file turned up once, in a Syncthing folder
   (`90-playground`) that shouldn't have any relationship to the quest logs
