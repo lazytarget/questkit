@@ -236,7 +236,7 @@ Notes for anyone changing questkit itself:
   legitimate reason to fire on correct, intentional data (see
   `check_slug_drift`'s reasoning), it does not belong in
   `validate_quest()` — add it as a separate function, call it from
-  `commands/validate.py`'s CLI loop, and leave `hooks.py`'s
+  `commands/validate_cmd.py`'s CLI loop, and leave `hooks.py`'s
   `validate_main()` (which only calls `validate_quest()`) alone. Otherwise
   you will make the pre-commit hook block commits on things that were
   never bugs.
@@ -868,14 +868,14 @@ from the hook, even though `quest validate` (the CLI) reports them:
   way: running the check for the first time against the whole Realm's
   migrated corpus produced ~30 such findings, none of them bugs.
 - **Cross-reference resolution** (`blocked_by`/backlink checking, in
-  `commands/validate.py`, not `schema.py`) — needs the log's directory to
+  `commands/validate_cmd.py`, not `schema.py`) — needs the log's directory to
   resolve against, which the hook's per-file invocation doesn't have
   cleanly available, and conceptually belongs with the CLI's full-log
   view rather than a per-file hook check.
 
 If you're adding a new validation rule and unsure which bucket it belongs
 in, ask: *"can this fire on data that is completely correct and
-intentional?"* If yes, it's CLI-only, called from `commands/validate.py`,
+intentional?"* If yes, it's CLI-only, called from `commands/validate_cmd.py`,
 never from `hooks.py`.
 
 ### Wiring hooks into a repo

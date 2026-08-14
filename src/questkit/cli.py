@@ -5,7 +5,17 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .commands import done, init, list_cmd, mv, new, schema_cmd, set_cmd, show, validate
+from .commands import (
+    done_cmd,
+    init_cmd,
+    list_cmd,
+    mv_cmd,
+    new_cmd,
+    schema_cmd,
+    set_cmd,
+    show_cmd,
+    validate_cmd,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_new.add_argument("--tag", dest="tags", action="append")
     p_new.add_argument("--in", dest="in_dir")
     p_new.add_argument("--edit", action="store_true")
-    p_new.set_defaults(func=new.run)
+    p_new.set_defaults(func=new_cmd.run)
 
     p_list = subparsers.add_parser("list", help="list quests")
     p_list.add_argument(
@@ -56,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_show = subparsers.add_parser("show", help="show a quest by id")
     p_show.add_argument("id")
     p_show.add_argument("--in", dest="in_dir")
-    p_show.set_defaults(func=show.run)
+    p_show.set_defaults(func=show_cmd.run)
 
     p_set = subparsers.add_parser("set", help="set one or more fields on a quest")
     p_set.add_argument("id")
@@ -67,13 +77,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_done = subparsers.add_parser("done", help="mark a quest completed")
     p_done.add_argument("id")
     p_done.add_argument("--in", dest="in_dir")
-    p_done.set_defaults(func=done.run)
+    p_done.set_defaults(func=done_cmd.run)
 
     p_mv = subparsers.add_parser("mv", help="move a quest to a different quest log")
     p_mv.add_argument("id")
     p_mv.add_argument("dest", help="destination quests/ directory (must already be a quest log)")
     p_mv.add_argument("--in", dest="in_dir", help="restrict source lookup to this quest log")
-    p_mv.set_defaults(func=mv.run)
+    p_mv.set_defaults(func=mv_cmd.run)
 
     p_init = subparsers.add_parser("init", help="opt a directory into a quest log")
     p_init.add_argument("dir", nargs="?", default=None)
@@ -81,11 +91,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--hooks", action="store_true")
     p_init.add_argument("--project", dest="project")
     p_init.add_argument("--git", dest="git", choices=["auto", "manual"], default=None)
-    p_init.set_defaults(func=init.run)
+    p_init.set_defaults(func=init_cmd.run)
 
     p_validate = subparsers.add_parser("validate", help="validate quests against the schema")
     p_validate.add_argument("--in", dest="in_dir")
-    p_validate.set_defaults(func=validate.run)
+    p_validate.set_defaults(func=validate_cmd.run)
 
     p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")
     p_schema.add_argument("kind", choices=["quest"])

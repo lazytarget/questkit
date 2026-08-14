@@ -204,7 +204,7 @@ def test_mv_unknown_destination_log_errors(tmp_path):
 
 
 def test_mv_bumps_modified(tmp_path, monkeypatch):
-    monkeypatch.setattr("questkit.commands.mv.today", lambda: "2099-01-01")
+    monkeypatch.setattr("questkit.commands.mv_cmd.today", lambda: "2099-01-01")
     src = tmp_path / "a" / "quests"
     dest = tmp_path / "b" / "quests"
     _make_log(src, project="a")
