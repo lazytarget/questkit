@@ -56,7 +56,11 @@ def bump_modified_main(argv: list[str] | None = None) -> int:
         except QuestFileError as exc:
             print(f"[!] {exc}")
             continue
-        if quest.frontmatter.get("modified") != today_str:
+        # str()-compare: `modified` normalizes to a real `date` object on save
+        # (see quest._normalize_date_fields), so a straight `!=` against the
+        # plain ISO string here would always be true and rewrite -- and
+        # re-save -- every staged file on every commit, changed or not.
+        if str(quest.frontmatter.get("modified")) != today_str:
             quest.frontmatter["modified"] = today_str
             quest.save()
     return 0

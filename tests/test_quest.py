@@ -44,7 +44,50 @@ def test_save_normalizes_list_styles(tmp_path):
     text = path.read_text()
     assert "tags:\n  - a\n  - b\n  - c\n" in text
     assert "blocked_by: []" in text
-    assert "aliases: [QST-abcde]" in text
+    # A single-item list still expands to block style -- matches how
+    # Obsidian always writes a non-empty array, even with one item.
+    assert "aliases:\n  - QST-abcde\n" in text
+
+
+def test_save_normalizes_date_fields_unquoted(tmp_path):
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text(
+        "---\n"
+        "id: QST-abcde\n"
+        "created: '2026-05-25'\n"
+        "modified: 2026-08-13\n"
+        "due: '2026-09-01'\n"
+        "---\n\n"
+        "## Description\n"
+    )
+
+    Quest.load(path).save()
+
+    text = path.read_text()
+    assert "created: 2026-05-25\n" in text
+    assert "modified: 2026-08-13\n" in text
+    assert "due: 2026-09-01\n" in text
+    assert "'" not in text
+
+
+def test_save_converts_single_quotes_to_double(tmp_path):
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text(
+        "---\n"
+        "id: QST-abcde\n"
+        "title: 'Some: Title'\n"
+        "tags:\n"
+        "  - 'a: b'\n"
+        "---\n\n"
+        "## Description\n"
+    )
+
+    Quest.load(path).save()
+
+    text = path.read_text()
+    assert 'title: "Some: Title"' in text
+    assert '- "a: b"' in text
+    assert "'" not in text
 
 
 def test_find_by_id_matches_full_filename(tmp_path):

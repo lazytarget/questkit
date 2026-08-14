@@ -142,7 +142,10 @@ def _render(rows: list[dict], columns: list[str], fmt: str) -> str:
     # json/prompt always show the full frontmatter -- --columns only curates
     # the fixed-width renderers (table, csv) that need a rectangular shape.
     if fmt == "json":
-        return json.dumps(rows, indent=2, ensure_ascii=False)
+        # default=str: date fields (created/modified/due) normalize to real
+        # `date` objects on save (see quest._normalize_date_fields), which
+        # json.dumps can't serialize on its own -- str(date) is its ISO form.
+        return json.dumps(rows, indent=2, ensure_ascii=False, default=str)
     if fmt == "csv":
         return _render_csv(rows, columns)
     if fmt == "prompt":
