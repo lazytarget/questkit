@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .commands import done, init, list_cmd, new, schema_cmd, set_cmd, show, validate
+from .commands import done, init, list_cmd, mv, new, schema_cmd, set_cmd, show, validate
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_done.add_argument("id")
     p_done.add_argument("--in", dest="in_dir")
     p_done.set_defaults(func=done.run)
+
+    p_mv = subparsers.add_parser("mv", help="move a quest to a different quest log")
+    p_mv.add_argument("id")
+    p_mv.add_argument("dest", help="destination quests/ directory (must already be a quest log)")
+    p_mv.add_argument("--in", dest="in_dir", help="restrict source lookup to this quest log")
+    p_mv.set_defaults(func=mv.run)
 
     p_init = subparsers.add_parser("init", help="opt a directory into a quest log")
     p_init.add_argument("dir", nargs="?", default=None)

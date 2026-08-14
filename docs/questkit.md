@@ -420,6 +420,54 @@ $ quest set QST-x7k2m status=in-progress priority=high tags=home,urgent
 Exactly `quest set <id> status=completed` — a two-character-shorter way to
 write the single most common transition. Same id resolution as `set`.
 
+### `quest mv <id> <dest> [--in DIR]`
+
+Moves a quest from whichever log it's currently in to `<dest>` — an
+already-`quest init`'d `quests/` directory (a raw path with no
+`.questkit.yaml` errors the same way `--in` does everywhere else, pointing
+at `quest init`). Id resolution for the source is the same
+nearest-then-sweep behavior as `set`/`show`/`done` (see
+[§9](#9-multi-zone-setup)); `--in` restricts that lookup, it doesn't affect
+where the file ends up.
+
+What it does, in order:
+
+1. **Moves the file.** If the source and destination logs share a single
+   git repo, it's a plain `git mv` — a real rename, not a delete+add, so
+   `git log --follow` and blame keep working across the move. If they're in
+   different repos (or either isn't a git repo at all), it's a filesystem
+   move plus a `git add`/removal on whichever side(s) are actually tracked.
+   Neither side in git — a plain move, no git involved.
+2. **Updates `project:`** to the destination log's configured `project`
+   (from its `.questkit.yaml`), if it has one, and bumps `modified`. A
+   destination log with no `project:` configured leaves the field alone
+   and prints a note — it's not `mv`'s call to guess or clear an existing
+   value.
+3. **Commits, if `git: auto`** — per log, independently. A same-repo move
+   commits once (rename + field updates together, so the rename doesn't
+   silently split into an uncommitted delete). A cross-repo move commits
+   once per side that has `git: auto`, each in its own repo, with its own
+   message. `git: manual` on either side leaves that side's changes staged
+   (already `git add`-ed, thanks to step 1) for a human or the pre-commit
+   hooks to review and commit.
+
+What it deliberately does **not** do: rewrite the quest's own custom
+fields for the new log's schema, fix up hyperlinks/wikilinks elsewhere in
+the Realm that pointed at the old path, or resolve a filename/title slug
+disagreement (see [§1](#1-purpose--design-philosophy) and
+[§11](#11-git-hooks-and-validation) on `quest validate`'s slug-drift
+check). The filename itself never changes — moving and renaming are two
+separate decisions. Run `quest validate` after a move (in both logs, if
+they differ) to see what it flags; a pre-commit hook does the same
+automatically if one's wired up on the destination.
+
+```bash
+$ quest mv QST-x7k2m ../../lazytarget/some-project/quests
+[quest mv] project: 'common' -> 'some-project'
+[quest mv] /path/to/common/quests/QST-x7k2m--fix-the-garage-door-sensor.md -> /path/to/some-project/quests/QST-x7k2m--fix-the-garage-door-sensor.md
+[quest mv] run 'quest validate' to catch any custom-field drift or now-broken hyperlinks/paths
+```
+
 ### `quest init [DIR] [options]`
 
 ```
@@ -659,11 +707,14 @@ intentionally a catch-all for many unrelated things (this is exactly the
 central log's situation) — there, `project:` on individual quests is
 optional, free-form metadata with no log-level enforcement.
 
-### Global-id resolution: `set` / `show` / `done`
+### Global-id resolution: `set` / `show` / `done` / `mv`
 
-Because ids are globally-unique random base36 strings, these three
-commands don't need `--in` to know *where* to write — they need it only as
-a precise override. Resolution:
+Because ids are globally-unique random base36 strings, these four
+commands don't need `--in` to know *where* to find the quest — they need
+it only as a precise override. (`mv` is the odd one out in that it also
+takes a second, explicit path — the destination — which follows the
+regular `--in`-style resolution instead, i.e. must already be a log.)
+Resolution for the id itself:
 
 1. **`--in DIR`**, if given, is the only place searched — a miss there is
    a miss, full stop. No fallback, no sweep past it. This preserves `--in`
