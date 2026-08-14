@@ -1,6 +1,6 @@
 repos:
-  - repo: /home/gitops/realm/02-projects/lazytarget/questkit
-    rev: 08f7b9097a86146ad79d748c40359c77f29f39c7
+  - repo: ssh://git@gitea.lab.peteraslund.me:2222/peter/questkit.git
+    rev: 63f6a4c58f0b4ecfd7d4732c846907fc42f1ba76
     hooks:
       - id: quest-format
       - id: quest-validate
