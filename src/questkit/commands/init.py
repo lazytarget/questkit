@@ -37,12 +37,12 @@ def _resolve_target(dir_arg: str | None) -> Path:
     return base if base.name == "quests" else base / "quests"
 
 
+_BASE_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "templates" / "quests.base"
+
+
 def _init_base(target: Path) -> None:
     base_path = target / "quests.base"
-    if base_path.exists():
-        print(f"[quest init] {base_path}: already exists, skipping --base")
-        return
-    base_path.write_text(_BASE_TEMPLATE, encoding="utf-8")
+    base_path.write_text(_BASE_TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     print(f"[quest init] {base_path}: wrote Obsidian Bases view")
 
 
@@ -117,28 +117,3 @@ def _git_head(repo_root: Path) -> str | None:
     except subprocess.CalledProcessError:
         return None
     return result.stdout.strip()
-
-
-_BASE_TEMPLATE = """\
-# Obsidian Bases view for this quest log. Bases is a fairly new Obsidian
-# file format -- treat this as a starting point and adjust once opened.
-views:
-  - type: table
-    name: Kanban
-    groupBy: status
-    order:
-      - status
-      - title
-      - priority
-      - type
-      - project
-  - type: table
-    name: By priority
-    order:
-      - priority
-      - title
-      - status
-      - type
-    sort:
-      - property: priority
-"""

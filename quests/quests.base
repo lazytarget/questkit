@@ -3,19 +3,56 @@
 views:
   - type: table
     name: Kanban
-    groupBy: status
+    filters:
+      and:
+        - file.ext == "md"
+        - file.name.startsWith("QST-")
+    groupBy:
+      property: status
+      direction: ASC
     order:
-      - status
-      - title
-      - priority
-      - type
       - project
+      - status
+      - id
+      - title
+      - type
+      - priority
+      - effort
+      - tier
+      - modified
+      - tags
+    sort:
+      - property: status
+        direction: ASC
+      - property: title
+        direction: ASC
+      - property: priority
+        direction: ASC
+      - property: type
+        direction: ASC
+      - property: project
+        direction: ASC
   - type: table
     name: By priority
+    filters:
+      and:
+        - file.ext == "md"
+        - file.name.startsWith("QST-")
     order:
       - priority
+      - id
       - title
       - status
       - type
+      - project
     sort:
       - property: priority
+        direction: ASC
+      - property: title
+        direction: ASC
+      - property: priority
+        direction: ASC
+      - property: type
+        direction: ASC
+      - property: project
+        direction: ASC
