@@ -1,6 +1,6 @@
 repos:
   - repo: ssh://git@gitea.lab.peteraslund.me:2222/peter/questkit.git
-    rev: 63f6a4c58f0b4ecfd7d4732c846907fc42f1ba76
+    rev: 19540f174a88f707a40fea361b5338ba490d11f2
     hooks:
       - id: quest-format
       - id: quest-validate
