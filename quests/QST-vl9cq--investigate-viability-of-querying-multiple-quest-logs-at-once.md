@@ -2,8 +2,8 @@
 id: QST-vl9cq
 title: Investigate viability of querying multiple quest logs at once
 description: Decide whether a real cross-log query command is worth building, and if so, what it should look like.
-created: '2026-08-13'
-modified: '2026-08-13'
+created: 2026-08-13
+modified: 2026-08-14
 type: feature
 tier: brief
 status: completed
@@ -13,7 +13,8 @@ tags:
   - cli
   - dx
 blocked_by: []
-aliases: [QST-vl9cq]
+aliases:
+  - QST-vl9cq
 ---
 
 ## Description
