@@ -18,7 +18,7 @@ from ..discovery import resolve_log_for_new
 from ..gitutil import auto_commit
 from ..ids import generate_id
 from ..quest import Quest
-from ..template import render_body
+from ..templates import render_body
 from ..timeutil import today
 from ..utils import slugify
 
@@ -186,7 +186,7 @@ def _create_quest(quests_dir: Path, config: QuestLogConfig, spec: _NewSpec) -> P
     frontmatter["blocked_by"] = []
     frontmatter["aliases"] = [quest_id]
 
-    body = spec.body if spec.body is not None else render_body(created)
+    body = spec.body if spec.body is not None else render_body(created, quests_dir / "_template.md")
     quest = Quest(path=path, frontmatter=frontmatter, body=body)
 
     # One evaluation point for macros: after id generation, before first save.

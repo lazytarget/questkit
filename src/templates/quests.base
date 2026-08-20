@@ -56,3 +56,18 @@ views:
         direction: ASC
       - property: project
         direction: ASC
+  - type: table
+    name: Needs attention
+    filters:
+      and:
+        - file.ext == "md"
+        - file.name.startsWith("QST-")
+        - status == "draft"
+        - description == null
+    order:
+      - title
+      - project
+      - created
+    sort:
+      - property: created
+        direction: ASC

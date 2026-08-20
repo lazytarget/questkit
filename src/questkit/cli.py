@@ -238,6 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("dir", nargs="?", default=None)
     p_init.add_argument("--base", action="store_true")
     p_init.add_argument("--hooks", action="store_true")
+    p_init.add_argument(
+        "--template",
+        action="store_true",
+        help="write/regenerate _template.md from this log's merged schema",
+    )
     p_init.add_argument("--project", dest="project")
     p_init.add_argument("--git", dest="git", choices=["auto", "manual"], default=None)
     p_init.set_defaults(func=init_cmd.run)

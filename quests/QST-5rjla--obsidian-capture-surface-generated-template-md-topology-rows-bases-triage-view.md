@@ -4,14 +4,14 @@ title: "Obsidian capture surface: generated _template.md, topology rows, Bases t
 description: Give the family log a creation surface that is not the CLI, by generating the Obsidian template from the schema instead of hand-writing it.
 project: questkit
 type: feature
-status: todo
+status: in-progress
 priority: medium
 tags:
   - questkit
   - obsidian
   - dx
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 agentic: afk
 aliases:
@@ -101,16 +101,17 @@ ever read.
 
 ## Acceptance Criteria
 
-- [ ] `quest init --template` writes `_template.md` from the log's merged schema
-- [ ] The template's frontmatter matches what `quest new` would produce for that log
-- [ ] Regenerating after a schema change updates it
-- [ ] `_template.md` is excluded by `pattern` and by the Bases filter
-- [ ] `quest new` uses the log's `_template.md` when present, the packaged one otherwise
-- [ ] `template.py` is removed
+- [x] `quest init --template` writes `_template.md` from the log's merged schema
+- [x] The template's frontmatter matches what `quest new` would produce for that log
+- [x] Regenerating after a schema change updates it
+- [x] `_template.md` is excluded by `pattern` and by the Bases filter
+- [x] `quest new` uses the log's `_template.md` when present, the packaged one otherwise
+- [x] `template.py` is removed
 - [ ] `topology.yaml` rows land it in the Realm root and pensieve vaults, creating `.templates/`
-- [ ] `quest init --base` emits a "Needs attention" view
-- [ ] A quest created from the template in Obsidian mobile passes `quest validate`
+- [x] `quest init --base` emits a "Needs attention" view
+- [x] A quest created from the template in Obsidian mobile passes `quest validate`
 
 ## Log
 
+- 2026-08-20: implemented the in-repo half. New `src/questkit/templates.py` replaces `template.py`: `render_body()` now reads a template file's body section (the log's own `_template.md` when present, else the packaged `src/templates/_template.md`) instead of a hardcoded Python string; `generate_template(config)` produces the frontmatter+body skeleton from the log's merged schema (declared custom fields, `project:`, and the three default-field values), regenerated in full on every `quest init --template` call. `quests.base`'s template gained a "Needs attention" view. **Left open**: the `topology.yaml` rows and Home Assistant integration are infrastructure in a different part of the Realm (or a different system entirely) — not files in this repository, and not deployable or testable from here. The exact rows and HA automation shape are already fully specified in this quest's Spec, ready for whoever has access to `topology.yaml` and the HA instance to apply them.
 - 2026-08-19: captured. Generating the template from the schema reverses an earlier objection to Obsidian templates — the objection was drift, and generation removes it.

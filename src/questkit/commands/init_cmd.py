@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ..config import CONFIG_FILENAME, QuestLogConfig, config_exists
 from ..gitutil import find_git_root
+from ..templates import generate_template
 
 
 def run(args: argparse.Namespace) -> int:
@@ -30,8 +31,19 @@ def run(args: argparse.Namespace) -> int:
         _init_base(target)
     if args.hooks:
         _init_hooks(target)
+    if getattr(args, "template", False):
+        _init_template(target)
 
     return 0
+
+
+def _init_template(target: Path) -> None:
+    """Regenerated every call -- a build artifact, like `quests.base`, not a
+    hand-maintained file someone edits and then loses on the next `--template`."""
+    config = QuestLogConfig.load(target)
+    template_path = target / "_template.md"
+    template_path.write_text(generate_template(config), encoding="utf-8")
+    print(f"[quest init] {template_path}: wrote Obsidian capture template")
 
 
 def _ensure_gitignore(target: Path) -> None:

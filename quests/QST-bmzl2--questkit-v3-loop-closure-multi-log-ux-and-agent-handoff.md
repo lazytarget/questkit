@@ -142,17 +142,18 @@ against machinery that does not exist.
 - [ ] Every quest in the Scope table is completed or explicitly scrapped
 - [x] `quest next` answers "what should I do here" in one command, and never proposes a quest with an open dependency
 - [x] `quest stale` survives a full-corpus `quest format --fill-defaults` run without being reset (`idle` is computed, never stored, so there is nothing for `format` to reset)
-- [ ] A cross-device query states its own scope, so a partial answer is never mistaken for a complete one
-- [ ] `quest brief <id>` output is sufficient to execute a groomed quest with no further discovery commands
-- [ ] The family log has a working creation path that is not the CLI
+- [x] A cross-device query states its own scope, so a partial answer is never mistaken for a complete one
+- [x] `quest brief <id>` output is sufficient to execute a groomed quest with no further discovery commands
+- [ ] The family log has a working creation path that is not the CLI (software half done -- `quest init --template`; the `topology.yaml` distribution that gets it onto family devices is deferred, see [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]])
 - [ ] `quest validate` on every Realm log reports clean, or reports something real
 - [x] A finished project's log can stop appearing in sweeps without any file moving
-- [ ] A `household` log's `quest brief` applies no software-shaped readiness rule
+- [x] A `household` log's `quest brief` applies no software-shaped readiness rule
 - [x] `--sort priority:asc` returns critical-first, and honors a second sort key
 - [ ] Every `milestone: 0.3.0` quest is done or scrapped before `pyproject.toml` reads `0.3.0`
 
 ## Log
 
+- 2026-08-20: batch B7 shipped: [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] (grouped `--help`), [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] (`quest brief`, `quest new --body -`/`--batch -`), [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] (`quest commit`, `tracked:`, `quest validate --report`, `quest init`'s `.gitignore` handling -- `git: auto` unification and the realm-01 timer itself deliberately left open), [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] (schema-generated `_template.md`, Bases "Needs attention" view -- `topology.yaml` distribution and Home Assistant integration deliberately left open, both being infrastructure outside this repository). B0-B7's in-repo scope is now complete; what remains against this epic's own acceptance criteria is genuinely operational (deploying the realm-01 timer, wiring `topology.yaml`, running `quest validate` across every real Realm log) rather than more code.
 - 2026-08-20: batch B6 (archival) shipped: [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] — core `archived:` field's write surface (`archive`/`unarchive`/`archive-log`/`unarchive-log`) and query axis (`--archived exclude|include|only`). B0-B6 now complete (15 quests); remaining: B7 (brief/commit/capture-surface/help grouping).
 - 2026-08-20: batch B5 (loop closure) shipped: [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] (blocked/blocks/idle/age), [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] (qualified `blocked_by` refs), [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] (`quest next`/`stale`/`blocked`/`deps`, schema `views:`). B0-B5 now complete (14 quests); remaining: B6 (archival, [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]) and B7 (brief/commit/capture-surface/help grouping).
 - 2026-08-19: captured after a design grilling session covering positioning, multi-log friction, schema defaults, the agent handoff format, and the git/Syncthing boundary. Plan file written the same day.

@@ -862,6 +862,18 @@ design** — safe to run any number of times; never overwrites an existing
   if it does and doesn't already have it. Several real logs are their own
   git repo with no `.gitignore` at all; without this, `quest validate
   --report`'s note sits untracked forever, waiting for the first `git add -A`.
+- **`--template` writes (or regenerates) `<log>/_template.md`** from this
+  log's merged schema — a real Obsidian capture surface for someone whose
+  device is Obsidian, not a terminal. `.md`, not `.tmpl`: a `.tmpl` is
+  invisible to Obsidian (no rendering, no mobile editing), while a `.md`
+  with `{{ }}` placeholders in real frontmatter renders as what it produces.
+  Unlike `.questkit.yaml`/`quests.base`, this **overwrites** on every call —
+  it's a generated build artifact tracking the schema, not a file a human
+  hand-edits and expects to survive. `quest new` prefers a log's own
+  `_template.md` for the new quest's **body** when present, falling back to
+  the packaged default (`src/templates/_template.md`) otherwise; `_template.md`
+  itself is excluded from every sweep by `pattern` (`QST-*.md` never matches
+  it) and from the Bases view's own `file.name.startsWith("QST-")` filter.
 
 ```bash
 $ quest init --project pensieve --git manual --hooks --base
@@ -1641,9 +1653,15 @@ normalization, no git or pre-commit dependency.
 
 - **Bases** (core plugin, no install needed on any reasonably current
   Obsidian) renders `quests/quests.base` (written by `quest init --base`)
-  as a kanban/table view grouped by `status`. Treat the generated file as
-  a starting point — Bases is a new-ish format and worth checking it opens
-  the way you expect.
+  as a kanban/table view grouped by `status`, plus a **Needs attention**
+  view (`status == "draft" and description == null`) — grooming as a tap on
+  a surface that already exists, rather than a terminal command. Treat the
+  generated file as a starting point — Bases is a new-ish format and worth
+  checking it opens the way you expect.
+- **`quest init --template`** writes `quests/_template.md`, generated from
+  the log's merged schema — a creation surface for someone whose device is
+  Obsidian, not the CLI. See [§6](#6-cli-reference) for what it contains and
+  why it overwrites on every call.
 - **Cross-reference links must use the full filename, no pipe** —
   `[[QST-x7k2m--fix-the-garage-door-sensor]]`, not a bare `[[QST-x7k2m]]`
   and not the piped `[[QST-x7k2m--fix-the-garage-door-sensor|QST-x7k2m]]`
