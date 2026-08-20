@@ -161,10 +161,11 @@ def test_list_json_format_dumps_full_frontmatter(quest_log, capsys):
     assert "created" in rows[0]
 
 
-def test_list_columns_overrides_table_headers(quest_log, capsys):
+def test_list_select_overrides_table_headers(quest_log, capsys):
+    """`--columns` is retired outright in favor of `--select` (QST-8hjjk)."""
     _new(quest_log, "Columns test", capsys)
 
-    assert main(["list", "--columns", "id,title"]) == 0
+    assert main(["list", "--select", "id,title"]) == 0
     out = capsys.readouterr().out
 
     assert "STATUS" not in out

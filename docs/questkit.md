@@ -349,7 +349,8 @@ $ quest new "Fix the garage door sensor" --type task --priority high --tag home
 
 ```
 quest list [--where EXPR ...] [--all] [--root DIR] [--in DIR]
-           [--format table|json|csv|prompt] [--columns a,b,c]
+           [--format table|json|csv|prompt]
+           [--select a,b,c] [--distinct] [--count]
            [--sort field[:asc|desc][,field[:asc|desc] ...]]
            [--limit N] [--offset N] [--out FILE]
 ```
@@ -387,12 +388,14 @@ multi-log querying.
   (`--where "status=todo" --where "tags~frontend"` means status is todo
   **and** tags contains frontend).
 
-  **Default status filter is `todo,in-progress,blocked`** if no `--where`
-  clause targets `status` at all — same behavior as v1's default, just
-  reimplemented as a synthesized `--where` clause under the hood; a
+  **Default status filter is `todo,in-progress`** if no `--where` clause
+  targets `status` at all — a synthesized `--where` clause under the hood; a
   freshly-`draft`-captured quest still doesn't show up until groomed past
-  draft. Override it with an explicit `--where "status=..."`, or use
-  `--where "status:exists"` as the "show every status" escape hatch.
+  draft. (`blocked` left the core status enum in v0.3 — see
+  [§4](#7-frontmatter-reference) — so it can no longer appear in this list; a
+  quest with an open dependency is marked in the table instead once computed
+  fields land.) Override the filter with an explicit `--where "status=..."`,
+  or use `--where "status:exists"` as the "show every status" escape hatch.
 - **`--all`** aggregates quests from every log found by recursive descent
   from `--root` (or `QST_ROOT`, or the git root, or cwd — see
   [§9](#9-multi-zone-setup)), instead of resolving to just one log.
@@ -402,16 +405,35 @@ multi-log querying.
   with a `[quest list] skipping ...` warning rather than aborting the
   whole aggregation.
 - **`--format`**: `table` (default, human-readable, a header row plus the
-  resolved columns) · `json` (the full parsed frontmatter of every
-  matching quest, as a JSON array — ignores `--columns`, since `jq` users
-  want everything) · `csv` (spreadsheet-friendly, respects `--columns`,
-  list fields joined with `;`) · `prompt` (a compact per-quest text block
-  meant for pasting into an agent's context: id/status/priority/title,
-  then type/tags, then description, blank line between quests).
-- **`--columns a,b,c`** overrides the default column set (`id, status,
-  priority, title`, plus `project` when `--all`) for the `table`/`csv`
-  renderers — any frontmatter field works, including custom schema
-  fields (`--columns id,status,sprint,title`).
+  resolved columns) · `json` (a JSON array — the full parsed frontmatter of
+  every matching quest, unless `--select` narrows it) · `csv`
+  (spreadsheet-friendly, list fields joined with `;`) · `prompt` (a compact
+  per-quest text block meant for pasting into an agent's context:
+  id/status/priority/title, then type/tags, then description, blank line
+  between quests).
+- **`--select a,b,c`** restricts output to the named fields, **in the given
+  order**, and applies to **every** `--format` — table, csv, json and prompt
+  alike. This is a **widened contract**, not a rename of the old `--columns`
+  (which is gone outright, not aliased): rows are projected to the selected
+  fields exactly once, before any renderer sees them, so `json`/`prompt`
+  respect it too rather than always dumping the full frontmatter. Naming an
+  unknown field is a hard error listing the valid fields (core fields plus
+  every declared custom field across the logs in scope).
+- **`--distinct`** collapses rows identical across the `--select`'d fields,
+  preserving first-seen order. Requires `--select` — without a set of fields
+  to compare, "distinct" has nothing to mean, so it errors rather than
+  silently doing nothing.
+- **`--count`** prints a bare integer to stdout, suitable for `$( )`. Honors
+  `--where`, `--select` and `--distinct`; **ignores** `--limit`/`--offset` —
+  "how many are there" and "show me the first ten" are different questions,
+  and a `--count` that respected `--limit` could only ever return
+  `min(n, limit)`.
+
+  ```bash
+  quest list --all --select project --distinct              # which projects have open quests
+  quest list --all --select id,title --format prompt        # minimal agent digest
+  quest list --all --where status=todo --count               # 86
+  ```
 - **`--sort field[:asc|desc][,field[:asc|desc] ...]`** — multi-key, stable,
   and ranked by each field's **declared vocabulary order** rather than
   alphabetically. Quests missing the *first* key always sort last, regardless
@@ -1066,7 +1088,7 @@ for `.questkit.yaml`, pruning as it goes:
 ### `quest list --all`
 
 The read-only, aggregating counterpart to the above — see
-[§6](#6-cli-reference) for the full `--where`/`--format`/`--columns`/
+[§6](#6-cli-reference) for the full `--where`/`--format`/`--select`/
 `--sort` grammar. This is the v2 answer to `QST-vl9cq`'s open question:
 built-in, one process, unified sort/filter across logs, instead of the
 discovery-loop and plain-`grep` workarounds that quest previously

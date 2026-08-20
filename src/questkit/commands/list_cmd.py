@@ -37,8 +37,44 @@ def run(args: argparse.Namespace) -> int:
     if not any(field == "status" for field, _, _ in wheres):
         wheres.append(("status", "eq", ",".join(DEFAULT_STATUSES)))
 
-    rows, sort_schema = _collect_rows(args)
+    rows, sort_schema, valid_fields = _collect_rows(args)
     rows = [row for row in rows if all(_matches(row, f, op, v) for f, op, v in wheres)]
+
+    select = getattr(args, "select", None)
+    distinct = getattr(args, "distinct", False)
+    count = getattr(args, "count", False)
+
+    if distinct and not select:
+        print("[quest list] error: --distinct requires --select", file=sys.stderr)
+        return 1
+
+    select_fields: list[str] | None = None
+    if select:
+        select_fields = [f.strip() for f in select.split(",") if f.strip()]
+        unknown = [f for f in select_fields if f not in valid_fields]
+        if unknown:
+            print(
+                f"[quest list] error: --select names unknown field(s) {unknown}; "
+                f"valid fields: {sorted(valid_fields)}",
+                file=sys.stderr,
+            )
+            return 1
+        # Projected exactly once, up front -- every renderer downstream (table,
+        # csv, json, prompt) then sees the same restricted shape, rather than
+        # each one needing its own "did the caller select?" branch. This is
+        # what makes --select a widened contract rather than a --columns rename.
+        rows = [_project(row, select_fields) for row in rows]
+
+    if distinct:
+        rows = _dedupe_rows(rows)
+
+    if count:
+        # Honors --where/--select/--distinct above; ignores --limit/--offset
+        # below on purpose -- "how many are there" and "show me the first ten"
+        # are different questions, and a --count that respected --limit could
+        # only ever return min(n, limit).
+        print(len(rows))
+        return 0
 
     if args.sort:
         rows = _apply_sort(rows, args.sort, sort_schema)
@@ -48,7 +84,7 @@ def run(args: argparse.Namespace) -> int:
     if args.limit is not None:
         rows = rows[: args.limit]
 
-    columns = _resolve_columns(args)
+    columns = select_fields if select_fields is not None else _resolve_columns(args)
     output = _render(rows, columns, args.format)
 
     print(output)
@@ -61,8 +97,32 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _collect_rows(args: argparse.Namespace) -> tuple[list[dict], schema.SchemaConfig | None]:
-    """The rows in scope, plus the schema `--sort` should rank against.
+def _project(row: dict, fields: list[str]) -> dict:
+    return {f: row.get(f) for f in fields}
+
+
+def _dedupe_rows(rows: list[dict]) -> list[dict]:
+    """Collapse rows identical across their (already-projected) fields.
+
+    Preserves first-seen order -- a stable dedupe reads as "which values
+    occur", not "which values sorted".
+    """
+    seen: set[tuple] = set()
+    unique: list[dict] = []
+    for row in rows:
+        key = tuple(tuple(v) if isinstance(v, list) else v for v in row.values())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(row)
+    return unique
+
+
+def _collect_rows(
+    args: argparse.Namespace,
+) -> tuple[list[dict], schema.SchemaConfig | None, frozenset]:
+    """The rows in scope, the schema `--sort` should rank against, and the
+    union of field names `--select` may legally name.
 
     The returned schema is the **first** resolved log's. For a single log --
     the overwhelmingly common case -- that is exactly right. Across `-A` with
@@ -72,6 +132,10 @@ def _collect_rows(args: argparse.Namespace) -> tuple[list[dict], schema.SchemaCo
     vocabularies": there is no correct way to interleave two independently
     declared orderings, and inventing one would be a wrong answer delivered
     confidently.
+
+    `valid_fields` is a union across every resolved log's schema, since
+    `--select` spans whatever logs are in scope -- a field declared by only
+    one of several swept logs is still a legal thing to ask for.
     """
     if args.all_logs:
         root = resolve_sweep_root(explicit=args.root)
@@ -81,6 +145,7 @@ def _collect_rows(args: argparse.Namespace) -> tuple[list[dict], schema.SchemaCo
 
     rows: list[dict] = []
     sort_schema: schema.SchemaConfig | None = None
+    valid_fields: set[str] = set(schema.CORE_FIELDS)
     for quests_dir in logs:
         try:
             config = QuestLogConfig.load(quests_dir)
@@ -91,13 +156,14 @@ def _collect_rows(args: argparse.Namespace) -> tuple[list[dict], schema.SchemaCo
             continue
         if sort_schema is None:
             sort_schema = config.schema
+        valid_fields |= set(config.schema.fields)
         project = config.project or quests_dir.name
         for path in sorted(quests_dir.glob(config.pattern)):
             quest = Quest.load(path)
             row = _to_plain(quest.frontmatter)
             row.setdefault("project", project)
             rows.append(row)
-    return rows, sort_schema
+    return rows, sort_schema, frozenset(valid_fields)
 
 
 def _to_plain(frontmatter) -> dict:
@@ -163,8 +229,12 @@ def _sort_key(row: dict, field_name: str, schema_config) -> Any:
 
 
 def _resolve_columns(args: argparse.Namespace) -> list[str]:
-    if args.columns:
-        return [c.strip() for c in args.columns.split(",") if c.strip()]
+    """The table/csv column set when `--select` was not given.
+
+    `--columns` is gone outright (not aliased) -- `--select` is the one
+    projection mechanism now, and it is a widened contract (every format, not
+    just the fixed-width renderers), not a rename.
+    """
     columns = list(DEFAULT_COLUMNS)
     if args.all_logs:
         columns.append("project")

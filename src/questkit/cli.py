@@ -64,7 +64,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument(
         "--format", dest="format", choices=["table", "json", "csv", "prompt"], default="table"
     )
-    p_list.add_argument("--columns", dest="columns", help="comma-separated columns (table/csv only)")
+    p_list.add_argument(
+        "--select",
+        dest="select",
+        metavar="a,b,c",
+        help="restrict output to these fields, in order -- applies to every --format",
+    )
+    p_list.add_argument(
+        "--distinct",
+        action="store_true",
+        help="collapse rows identical across the --select'd fields (requires --select)",
+    )
+    p_list.add_argument(
+        "--count",
+        action="store_true",
+        help="print a bare integer; honors --where/--select/--distinct, ignores --limit/--offset",
+    )
     p_list.add_argument("--sort", dest="sort", metavar="FIELD[:asc|desc]")
     p_list.add_argument("--limit", dest="limit", type=int)
     p_list.add_argument("--offset", dest="offset", type=int)
