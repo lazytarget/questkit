@@ -35,6 +35,7 @@ def run(args: argparse.Namespace) -> int:
                 "title": fm.get("title"),
                 "status": fm.get("status"),
                 "project": project,
+                "archived": bool(fm.get("archived")),
                 "blocked_by": list(fm.get("blocked_by") or []),
             }
 
@@ -62,7 +63,8 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _label(node_id: str, node: dict) -> str:
-    return f"{node_id} [{node['project']}] {node['title']} ({node['status']})"
+    archived = " [archived]" if node["archived"] else ""
+    return f"{node_id} [{node['project']}] {node['title']} ({node['status']}){archived}"
 
 
 def _render(node_id: str, nodes: dict, edges: dict, visited: set, depth: int) -> list[str]:

@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from .commands import (
+    archive_cmd,
     deps_cmd,
     done_cmd,
     format_cmd,
@@ -82,6 +83,13 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
         dest="view",
         metavar="NAME",
         help="a named view from the schema's views: map (default: 'default')",
+    )
+    parser.add_argument(
+        "--archived",
+        dest="archived",
+        choices=["exclude", "include", "only"],
+        default="exclude",
+        help="whether archived quests are in scope (default: exclude)",
     )
 
 
@@ -169,6 +177,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_scrap.add_argument("id")
     p_scrap.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_scrap.set_defaults(func=done_cmd.run_scrap)
+
+    p_archive = subparsers.add_parser("archive", help="archive a quest (retention, not status)")
+    p_archive.add_argument("id")
+    p_archive.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
+    p_archive.set_defaults(func=archive_cmd.run_archive)
+
+    p_unarchive = subparsers.add_parser("unarchive", help="un-archive a quest")
+    p_unarchive.add_argument("id")
+    p_unarchive.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
+    p_unarchive.set_defaults(func=archive_cmd.run_unarchive)
+
+    p_archive_log = subparsers.add_parser(
+        "archive-log", help="archive every quest in a whole log (bulk quest archive)"
+    )
+    p_archive_log.add_argument("log", metavar="LOG", help="name or path")
+    p_archive_log.set_defaults(func=archive_cmd.run_archive_log)
+
+    p_unarchive_log = subparsers.add_parser(
+        "unarchive-log", help="un-archive every quest in a whole log"
+    )
+    p_unarchive_log.add_argument("log", metavar="LOG", help="name or path")
+    p_unarchive_log.set_defaults(func=archive_cmd.run_unarchive_log)
 
     p_mv = subparsers.add_parser("mv", help="move a quest to a different quest log")
     p_mv.add_argument("id")

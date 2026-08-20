@@ -349,10 +349,11 @@ $ quest new "Fix the garage door sensor" --type task --priority high --tag home
 
 ```
 quest list [--where EXPR ...] [-A|--all-logs] [--root DIR ...] [--in LOG ...]
-           [--format table|json|csv|prompt]
+           [--format table|json|csv|prompt] [--view NAME]
            [--select a,b,c] [--distinct] [--count]
            [--sort field[:asc|desc][,field[:asc|desc] ...]]
            [--limit N] [--offset N] [--out FILE] [--quiet|-q]
+           [--archived exclude|include|only]
 ```
 
 A dynamic filter/export engine rather than a fixed set of flags — this is
@@ -502,6 +503,12 @@ multi-log querying.
   is an approximation until per-log grouping lands (`QST-iqwjm`). Merging two
   independently declared orderings has no correct answer, so questkit does not
   invent one.
+- **`--archived exclude|include|only`** (default `exclude`) — one flag for
+  the one axis, rather than an `--include-archived` plus a separate
+  `--archived-only`. Applies uniformly across every view (`next`/`stale`/
+  `blocked` all exclude archived quests too) and every log in an `-A` sweep.
+  Once in scope (`include`/`only`), `archived` is an ordinary field for
+  `--where`/`--select` like any other.
 - **`--limit N` / `--offset N`** — applied after filtering and sorting.
 - **`--out FILE`** — the rendered output is still printed to stdout as
   normal, *and* written to `FILE` (tee semantics, not a silent redirect).
@@ -668,6 +675,39 @@ Under the default vocabulary that is `done` and `scrapped`.
 
 Otherwise exactly `quest set <id> status=...` — a shorter way to
 write the single most common transition. Same id resolution as `set`.
+
+### `quest archive <id>` / `quest unarchive <id>` / `quest archive-log LOG` / `quest unarchive-log LOG`
+
+`archive`/`unarchive` are sugar for `quest set <id> archived=true|false`,
+exactly like `done` is sugar for a status transition — same `--in` scoping,
+same id resolution. They change neither `status` nor `status_changed`;
+`modified` still bumps, since it's a real edit.
+
+`archive-log`/`unarchive-log` take a log by name or path (the same
+name-or-path resolution as `--in`) and bulk-apply `archive`/`unarchive` to
+every quest inside it. **They set no log-level config at all** — "how many
+are archived" is always derived by counting the files (`quest logs`'
+`ARCHIVED` column), so it can never drift from a stored flag, and `quest new
+--in <that log>` needs no special case: a freshly captured quest is
+unarchived, so the log is correctly no longer *fully* archived. The separate
+verb is deliberate — a flag typo can't archive an entire log when the
+whole-log operation requires typing a different command.
+
+```bash
+quest archive QST-9x2kf
+quest archive-log career-transition   # every non-archived quest in that log
+```
+
+Archival is **orthogonal to `status`**: a `done` quest in a wound-up project
+is archived and not scrapped. It **affects listing, never id resolution** —
+`quest show`/`set`/`done`/`mv` and a `blocked_by` reference all still find an
+archived quest exactly as they find any other, just with a note (`show`) or
+warning (`set` and everything sugared over it) on stderr. `quest list` (and
+every view built on it — `next`/`stale`/`blocked`, and `-A` sweeps) excludes
+archived quests by default; see `--archived` below. `blocks`
+([§6](#6-cli-reference)) does not count an archived quest as a live
+dependent, for the same reason `blocked`/`blocks` already exclude terminal
+ones — nothing is really waiting on it.
 
 ### `quest mv <id> <dest> [--in DIR]`
 
@@ -900,9 +940,10 @@ never writes, creates, or migrates. Sorted by project name:
 
 ```
 $ quest logs
-PROJECT              QUESTS   OPEN  GIT     PATH
-family                    0      0  auto    02-projects/family/quests
-questkit                 23     12  manual  02-projects/lazytarget/questkit/quests
+PROJECT              QUESTS   OPEN ARCHIVED  GIT     PATH
+career-transition        13      0       13  manual  02-projects/peter/2026-career-transition/quests
+family                    0      0        0  auto    02-projects/family/quests
+questkit                 24     13        0  manual  02-projects/lazytarget/questkit/quests
 ...
 
 7 logs, 145 quests (132 open), swept from /home/gitops/realm
@@ -910,6 +951,7 @@ questkit                 23     12  manual  02-projects/lazytarget/questkit/ques
 
 - **PROJECT** — the config's `project:`, or `-` for a catch-all log with none.
 - **QUESTS** — files matching that log's own `pattern`.
+- **ARCHIVED** — quests with `archived: true`, derived by counting the files.
 - **OPEN** — quests not in a terminal status, per that log's own
   `terminal_statuses` (see [§8](#8-questkityaml-configuration-reference)) —
   never a hardcoded pair, so a log with a renamed vocabulary still reports

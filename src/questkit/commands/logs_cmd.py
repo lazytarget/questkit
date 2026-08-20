@@ -134,7 +134,7 @@ def _relative_path(quests_dir: Path, roots: list[Path]) -> str:
 
 
 def _print_table(entries: list[LogEntry], roots: list[Path], *, verbose: bool) -> None:
-    header = f"{'PROJECT':<20} {'QUESTS':>6} {'OPEN':>6}  {'GIT':<7} PATH"
+    header = f"{'PROJECT':<20} {'QUESTS':>6} {'OPEN':>6} {'ARCHIVED':>8}  {'GIT':<7} PATH"
     print(header)
 
     total_quests = 0
@@ -143,9 +143,12 @@ def _print_table(entries: list[LogEntry], roots: list[Path], *, verbose: bool) -
         project = entry.project or "-"
         path = _relative_path(entry.quests_dir, roots)
         if entry.error:
-            print(f"{project:<20} {'?':>6} {'?':>6}  {'?':<7} {path}  [error: {entry.error}]")
+            print(f"{project:<20} {'?':>6} {'?':>6} {'?':>8}  {'?':<7} {path}  [error: {entry.error}]")
             continue
-        print(f"{project:<20} {entry.quests:>6} {entry.open:>6}  {entry.git:<7} {path}")
+        print(
+            f"{project:<20} {entry.quests:>6} {entry.open:>6} {entry.archived:>8}  "
+            f"{entry.git:<7} {path}"
+        )
         if verbose:
             fields_desc = ", ".join(entry.fields) or "(none)"
             print(

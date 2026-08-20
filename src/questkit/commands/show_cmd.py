@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from ..discovery import resolve_mutation_target
+from ..quest import Quest
 
 
 def run(args: argparse.Namespace) -> int:
@@ -14,4 +16,9 @@ def run(args: argparse.Namespace) -> int:
         return 1
     _quests_dir, path = found
     print(path.read_text(encoding="utf-8"))
+    # Archival affects listing, never id resolution -- `show` finds an
+    # archived quest exactly as it finds any other, just noted on stderr so a
+    # human reading a piped stdout still learns why it wasn't in `list`.
+    if Quest.load(path).get("archived"):
+        print(f"[quest show] note: {args.id} is archived", file=sys.stderr)
     return 0

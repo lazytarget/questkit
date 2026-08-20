@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from .. import computed
 from ..config import QuestLogConfig
@@ -32,6 +33,14 @@ def run(args: argparse.Namespace) -> int:
     quests_dir, path = found
 
     quest = Quest.load(path)
+    # Archival affects listing, never id resolution or mutation -- `set`
+    # (and everything sugared over it: `done`, `scrap`, `archive`,
+    # `unarchive`) still finds and writes an archived quest, just with a
+    # warning so a stale reference into a wound-up project doesn't silently
+    # resurrect it.
+    if quest.get("archived"):
+        print(f"[quest] warning: {args.id} is archived", file=sys.stderr)
+
     changed: list[str] = []
     for assignment in args.assignments:
         if "=" not in assignment:
@@ -98,4 +107,6 @@ def _same(current, new_value) -> bool:
 def _coerce(key, value):
     if key == "tags":
         return [v.strip() for v in value.split(",") if v.strip()]
+    if key == "archived":
+        return value.strip().lower() in ("true", "1", "yes")
     return value

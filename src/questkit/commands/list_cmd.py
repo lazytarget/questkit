@@ -56,6 +56,17 @@ def run(args: argparse.Namespace) -> int:
 
     rows, sort_schema, valid_fields, logs_info, schemas_by_log = _collect_rows(args)
 
+    # `--archived` is its own axis, orthogonal to views/status: a finished
+    # project's quests should vanish from every view (`next`, `stale`,
+    # `blocked`) and the default listing alike, not just this one. Excluded
+    # by default; `only` is what makes "just the dead project" expressible
+    # without a second flag for the opposite of `include`.
+    archived_mode = getattr(args, "archived", "exclude")
+    if archived_mode == "exclude":
+        rows = [row for row in rows if not row.get("archived")]
+    elif archived_mode == "only":
+        rows = [row for row in rows if row.get("archived")]
+
     # A view's own `where` is a *default*, applied per row against that row's
     # own log's view definition -- not the querying log's -- so a schema
     # overriding `statuses:` (and its own `views.default`) lists correctly

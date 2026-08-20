@@ -146,12 +146,13 @@ against machinery that does not exist.
 - [ ] `quest brief <id>` output is sufficient to execute a groomed quest with no further discovery commands
 - [ ] The family log has a working creation path that is not the CLI
 - [ ] `quest validate` on every Realm log reports clean, or reports something real
-- [ ] A finished project's log can stop appearing in sweeps without any file moving
+- [x] A finished project's log can stop appearing in sweeps without any file moving
 - [ ] A `household` log's `quest brief` applies no software-shaped readiness rule
 - [x] `--sort priority:asc` returns critical-first, and honors a second sort key
 - [ ] Every `milestone: 0.3.0` quest is done or scrapped before `pyproject.toml` reads `0.3.0`
 
 ## Log
 
+- 2026-08-20: batch B6 (archival) shipped: [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] — core `archived:` field's write surface (`archive`/`unarchive`/`archive-log`/`unarchive-log`) and query axis (`--archived exclude|include|only`). B0-B6 now complete (15 quests); remaining: B7 (brief/commit/capture-surface/help grouping).
 - 2026-08-20: batch B5 (loop closure) shipped: [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] (blocked/blocks/idle/age), [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] (qualified `blocked_by` refs), [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] (`quest next`/`stale`/`blocked`/`deps`, schema `views:`). B0-B5 now complete (14 quests); remaining: B6 (archival, [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]) and B7 (brief/commit/capture-surface/help grouping).
 - 2026-08-19: captured after a design grilling session covering positioning, multi-log friction, schema defaults, the agent handoff format, and the git/Syncthing boundary. Plan file written the same day.
