@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .. import schema
 from ..config import CONFIG_FILENAME, ConfigVersionError, QuestLogConfig, config_exists
-from ..discovery import resolve_log
+from ..discovery import QuestLogNotFoundError, resolve_by_name_or_path, resolve_log
 from ..quest import Quest, QuestFileError, find_by_id
 
 _WIKILINK_ID_RE = re.compile(r"\[\[(QST-[0-9a-z]{5})")
@@ -45,13 +45,14 @@ def run(args: argparse.Namespace) -> int:
 
         errors = schema.validate_quest(quest, config.schema)
         errors.extend(_project_drift(quest, config))
-        errors.extend(_check_references(quest, quests_dir))
+        ref_errors, ref_notes = _check_references(quest, quests_dir)
+        errors.extend(ref_errors)
         # Notes are a separate channel, not a severity flag on an error: they
         # never count toward the exit code, so anything routed here is
-        # something a commit must not be blocked on. Slug drift is the first
-        # such check; project-drift heuristics and orphan detection are the
-        # obvious next ones.
-        notes = schema.check_slug_drift(quest)
+        # something a commit must not be blocked on. Slug drift is one such
+        # check; a qualified `blocked_by` reference to a log absent from this
+        # device is another -- see `_check_qualified_ref`.
+        notes = schema.check_slug_drift(quest) + ref_notes
 
         total_errors += len(errors)
         total_notes += len(notes)
@@ -114,22 +115,34 @@ def _project_drift(quest, config: QuestLogConfig) -> list[schema.ValidationError
     return []
 
 
-def _check_references(quest, quests_dir: Path) -> list[schema.ValidationError]:
-    """`blocked_by` ids and body wikilinks must resolve within this log.
+def _check_references(
+    quest, quests_dir: Path
+) -> tuple[list[schema.ValidationError], list[schema.ValidationError]]:
+    """`blocked_by` ids and body wikilinks must resolve; qualified ids may resolve elsewhere.
 
-    Scoped to this one log deliberately -- questkit has no notion of a
-    cross-log reference (see QST-whm2e's Log on the Obsidian vault-boundary
-    limitation); a reference to another zone's quest can't be checked here
-    and shouldn't be a wikilink in the first place.
+    A bare id always means "this log" and is checked here unchanged. A
+    `project/QST-xxxxx` id declares its own scope -- see
+    `_check_qualified_ref`. Body wikilinks stay local-only: a cross-log
+    `[[QST-...]]` cannot resolve across Obsidian vault boundaries, so a
+    cross-log body reference is written as prose instead, which
+    `_WIKILINK_ID_RE` does not match.
     """
     errors: list[schema.ValidationError] = []
+    notes: list[schema.ValidationError] = []
     own_id = quest.get("id")
 
-    for ref_id in quest.frontmatter.get("blocked_by") or []:
-        if find_by_id(quests_dir, ref_id) is None:
+    for ref in quest.frontmatter.get("blocked_by") or []:
+        if "/" in ref:
+            error, note = _check_qualified_ref(quest, quests_dir, ref)
+            if error:
+                errors.append(error)
+            if note:
+                notes.append(note)
+            continue
+        if find_by_id(quests_dir, ref) is None:
             errors.append(
                 schema.ValidationError(
-                    quest.path, f"blocked_by references '{ref_id}', not found in this log"
+                    quest.path, f"blocked_by references '{ref}', not found in this log"
                 )
             )
 
@@ -150,4 +163,33 @@ def _check_references(quest, quests_dir: Path) -> list[schema.ValidationError]:
                 )
             )
 
-    return errors
+    return errors, notes
+
+
+def _check_qualified_ref(
+    quest, quests_dir: Path, ref: str
+) -> tuple[schema.ValidationError | None, schema.ValidationError | None]:
+    """Resolve one `project/QST-xxxxx` reference: (error, note), at most one set.
+
+    Whether the named log is missing because it genuinely doesn't exist or
+    because this device simply hasn't synced it is indistinguishable from
+    here -- both look like "the sweep found nothing named that" -- so both
+    downgrade to a note rather than a hard error. That is the whole point of
+    a qualified reference declaring its own scope: the same file must
+    validate identically on every device.
+    """
+    project, _, ref_id = ref.rpartition("/")
+    try:
+        logs = resolve_by_name_or_path(project, start=quests_dir)
+    except QuestLogNotFoundError as exc:
+        return None, schema.ValidationError(
+            quest.path, f"blocked_by references '{ref}', but {exc}"
+        )
+    if find_by_id(logs[0], ref_id) is None:
+        return (
+            schema.ValidationError(
+                quest.path, f"blocked_by references '{ref}', not found in log '{project}'"
+            ),
+            None,
+        )
+    return None, None

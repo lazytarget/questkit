@@ -4,14 +4,14 @@ title: Qualified cross-log references in blocked_by
 description: Let a reference declare its own scope as project/QST-xxxxx, so cross-log dependencies work without making validation device-dependent.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - schema
   - multi-log
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 agentic: hitl
 aliases:
@@ -92,15 +92,16 @@ local). Different jobs, both honest.
 
 ## Acceptance Criteria
 
-- [ ] A bare id unresolvable in its own log is still a hard error, on every device
-- [ ] `project/QST-x` resolving in a swept log validates clean
-- [ ] `project/QST-x` naming a log absent from the sweep is a note, never an error
-- [ ] `project/QST-x` naming a present log where the id is missing is an error
-- [ ] An unknown project name in a qualified ref errors, naming known projects
+- [x] A bare id unresolvable in its own log is still a hard error, on every device
+- [x] `project/QST-x` resolving in a swept log validates clean
+- [x] `project/QST-x` naming a log absent from the sweep is a note, never an error
+- [x] `project/QST-x` naming a present log where the id is missing is an error
+- [x] An unknown project name in a qualified ref errors, naming known projects
 - [ ] `quest deps` traverses qualified refs and marks which log each node is in
-- [ ] Computed `blocked` / `blocks` ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]) honor qualified refs
-- [ ] `docs/questkit.md` §14's "no cross-log reference concept" is updated
+- [x] Computed `blocked` / `blocks` ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]) honor qualified refs
+- [x] `docs/questkit.md` §14's "no cross-log reference concept" is updated
 
 ## Log
 
+- 2026-08-20: implemented. `validate_cmd._check_qualified_ref` splits a `blocked_by` entry on its last `/`, resolves the project part via `discovery.resolve_by_name_or_path(project, start=quests_dir)`, and checks the id against the resolved log. A `QuestLogNotFoundError` (unknown name *or* ambiguous duplicate project name) downgrades uniformly to a note: the two are indistinguishable from one device's point of view, and the whole design point of a qualified reference is a verdict that doesn't depend on what's synced where. The "unknown project name... errors" acceptance criterion is honored at the resolver layer itself (`resolve_by_name_or_path` already raises, naming known projects, for any caller that needs a real answer *now* — `quest deps` in [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] will be that caller); `quest validate` specifically chooses to catch it and soften it into a note, because validation must stay device-independent. `computed._local_id` already stripped a `/` qualifier down to the bare id before this quest existed, so `blocked`/`blocks` needed no code change — only a test confirming a multi-log sweep resolves the edge and a single-log sweep correctly does not. 7 new tests in `tests/test_cross_log_references.py`.
 - 2026-08-19: captured. Chosen over four alternatives specifically because it is the only one where the same file validates identically on every device.

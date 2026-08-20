@@ -918,7 +918,7 @@ you will never see a raw Python traceback from normal usage.
 | `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§8](#8-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
 | `due` | No | `YYYY-MM-DD` | Rarely used in practice — most quests never need a hard date. |
 | `tags` | Yes | list of strings | Presence of the *key* is required (an empty list is fine); lowercase kebab-case by convention. |
-| `blocked_by` | No | list of `QST-xxxxx` | One direction only — there is no `blocks` field. The reverse relationship ("what does this block") is always computable from the full set of quests in a log (and is exactly what Obsidian backlinks do automatically); storing both directions invites drift when only one side gets updated. `quest validate` resolves every id here against the current log. |
+| `blocked_by` | No | list of `QST-xxxxx` or `project/QST-xxxxx` | Stored as one direction only — `blocks` is a *computed* field (see [§6](#quest-list-options)), not stored here, and storing both directions invites drift when only one side gets updated. A bare id always means "this log"; a qualified `project/QST-xxxxx` id declares a reference into another log by its `project:` name. `quest validate` resolves a bare id against the current log (hard error if missing) and a qualified id against the named log **if it is present in the sweep** (hard error if the log resolves but the id doesn't); if the named log simply isn't present on this device, that's a note, never an error — the same file must validate identically everywhere, synced or not. |
 | `aliases` | Yes (CLI-created) | list, always includes own `id` | Drives Obsidian search/quick-switcher/autocomplete. Does **not** make a bare `[[id]]` wikilink resolve on click — see [§12](#12-ide-and-tool-integration). `quest validate` (hard rule) flags a missing self-alias. |
 | `related_adrs` | No, not schema-enforced | list of ADR references | Not part of the closed schema at all — carried over from the Beans-era migration as free-form extra metadata. Any field not listed here is accepted without complaint; `quest validate` never rejects unknown keys. |
 
@@ -1170,9 +1170,11 @@ Resolution for the id itself:
 This is a deliberate, narrow exception to "one log, one scope, per
 command" (§1): it only ever *finds* a file across logs, and only ever
 *mutates exactly one file* once found. It does not enable bulk multi-log
-writes, and there is still no cross-log reference concept — a
-`blocked_by`/wikilink still only resolves within its own log (see
-[§11](#11-git-hooks-and-validation)).
+writes. `blocked_by` does have a cross-log reference concept now — see
+below — but a body wikilink still only resolves within its own log (see
+[§11](#11-git-hooks-and-validation)): a cross-log `[[QST-...]]` cannot
+resolve across Obsidian vault boundaries, so a cross-log reference in prose
+is written as plain text instead.
 
 ### `QST_ROOT` and cross-log discovery
 
