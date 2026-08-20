@@ -33,7 +33,8 @@ you'd rather type), plus `quest-format`, `quest-validate`, and
 cd some-project
 quest init                     # creates quests/.questkit.yaml here
 quest new "Fix the garage door sensor"
-quest list                     # defaults to todo, in-progress, blocked
+quest list                     # defaults to todo, in-progress
+quest next                     # the single best quest to work on right now
 quest set QST-x7k2m priority=high
 quest done QST-x7k2m
 quest validate
@@ -64,8 +65,11 @@ never overwrites an existing config.
 ```bash
 quest list --where "status=todo,in-progress"                # comma = OR within a field
 quest list --where "tags~frontend" --where "tags~urgent"     # repeated --where = AND
-quest list --all --format json | jq '.[].title'              # every log under QST_ROOT
+quest list -A --format json | jq '.[].title'                 # every log under QST_ROOT
 quest list --format prompt                                   # compact, agent-friendly digest
+quest stale                                                   # untouched status for 2+ weeks
+quest blocked                                                 # open dependency, ranked by blocks
+quest deps QST-x7k2m                                          # walk its dependency graph
 quest schema quest status                                    # valid values, so nothing's guessed
 ```
 

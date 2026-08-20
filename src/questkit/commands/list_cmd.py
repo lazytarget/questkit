@@ -19,9 +19,9 @@ from ..quest import Quest
 # `blocked` is gone: it left the status enum (a status value and a computed
 # field cannot share a name), and derived-blocked quests stay visible through
 # the `todo [blocked]` marking instead of a status nobody maintained by hand.
-# QST-37n0t moves this into `views.default`, removing the last hardcoded
-# status list rather than replacing it with a config key.
-DEFAULT_STATUSES = ("todo", "in-progress")
+# The old hardcoded default-status list is gone too -- it's `schema.DEFAULT_VIEWS
+# ["default"]` now, so a log overriding `statuses:` overrides its filter in
+# the same file rather than a second config key that could disagree with it.
 DEFAULT_COLUMNS = ("id", "status", "priority", "title")
 
 # Internal bookkeeping key carrying each row's resolved log, kept out of every
@@ -49,14 +49,46 @@ class LogInfo:
 
 
 def run(args: argparse.Namespace) -> int:
+    view_name = getattr(args, "view", None) or "default"
     user_wheres = list(args.where or [])
     wheres = [_parse_where(expr) for expr in user_wheres]
-    default_status_injected = not any(field == "status" for field, _, _ in wheres)
-    if default_status_injected:
-        wheres.append(("status", "eq", ",".join(DEFAULT_STATUSES)))
+    user_where_fields = {field_name for field_name, _, _ in wheres}
 
-    rows, sort_schema, valid_fields, logs_info = _collect_rows(args)
-    rows = [row for row in rows if all(_matches(row, f, op, v) for f, op, v in wheres)]
+    rows, sort_schema, valid_fields, logs_info, schemas_by_log = _collect_rows(args)
+
+    # A view's own `where` is a *default*, applied per row against that row's
+    # own log's view definition -- not the querying log's -- so a schema
+    # overriding `statuses:` (and its own `views.default`) lists correctly
+    # even under -A alongside logs that never touched the default vocabulary.
+    # A field the caller already targeted explicitly drops out of every log's
+    # view clause: "every field a view sets is a default, not a lock." Kept
+    # as (raw expr, parsed tuple) pairs -- the raw string is what the summary
+    # prints, unreconstructed.
+    view_wheres_by_log: dict[str, list[tuple[str, tuple]]] = {}
+    for info in logs_info:
+        view = schemas_by_log[info.project].views.get(view_name) or schema.View()
+        view_wheres_by_log[info.project] = [
+            (expr, parsed)
+            for expr, parsed in ((e, _parse_where(e)) for e in view.where)
+            if parsed[0] not in user_where_fields
+        ]
+    rows = [
+        row
+        for row in rows
+        if all(
+            _matches(row, f, op, v)
+            for _, (f, op, v) in view_wheres_by_log.get(row.get(_LOG_KEY) or "", [])
+        )
+        and all(_matches(row, f, op, v) for f, op, v in wheres)
+    ]
+    # For the stderr summary: the *first* resolved log's view stands in for
+    # all of them, the same approximation `_apply_sort`'s ranking already
+    # makes -- exact for the overwhelmingly common single-log case, and
+    # merely a display nicety (not a correctness issue -- filtering above
+    # already used each row's own log) when logs disagree.
+    first_view_wheres = view_wheres_by_log.get(logs_info[0].project, []) if logs_info else []
+    default_view_injected = view_name == "default" and bool(first_view_wheres)
+    injected_where_parts = [expr for expr, _ in first_view_wheres]
 
     quiet = getattr(args, "quiet", False)
     select = getattr(args, "select", None)
@@ -102,12 +134,25 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     if args.sort:
+        # An explicit --sort is a global override, ranked against the first
+        # resolved log's vocabulary -- the same approximation `_collect_rows`
+        # already documents for cross-log sorting.
         rows = _apply_sort(rows, args.sort, sort_schema)
+    else:
+        # No explicit --sort: each log's own view sort applies independently,
+        # ranked against *that log's own* schema -- exact per log, not an
+        # approximation, since the view and its vocabulary come from the same
+        # file.
+        rows = _apply_view_sort(rows, view_name, schemas_by_log, logs_info)
 
     if args.offset:
         rows = rows[args.offset :]
     if args.limit is not None:
         rows = rows[: args.limit]
+    else:
+        # No explicit --limit: each log's own view limit applies
+        # independently ("next" defaults to 1 *per log*, not one overall).
+        rows = _apply_view_limits(rows, view_name, schemas_by_log, logs_info)
 
     columns = select_fields if select_fields is not None else _resolve_columns(args)
     grouped = len(logs_info) > 1
@@ -121,14 +166,42 @@ def run(args: argparse.Namespace) -> int:
                 handle.write("\n")
 
     if not quiet:
-        _print_summary(user_wheres, default_status_injected, args, logs_info, summary)
+        _print_summary(
+            user_wheres, default_view_injected, injected_where_parts, view_name, args, logs_info, summary
+        )
 
     return 0
 
 
+def _apply_view_sort(
+    rows: list[dict], view_name: str, schemas_by_log: dict, logs_info: list[LogInfo]
+) -> list[dict]:
+    ordered: list[dict] = []
+    for info in logs_info:
+        view = schemas_by_log[info.project].views.get(view_name)
+        group = [row for row in rows if row.get(_LOG_KEY) == info.project]
+        if view and view.sort:
+            group = _apply_sort(group, view.sort, schemas_by_log[info.project])
+        ordered.extend(group)
+    return ordered
+
+
+def _apply_view_limits(
+    rows: list[dict], view_name: str, schemas_by_log: dict, logs_info: list[LogInfo]
+) -> list[dict]:
+    limited: list[dict] = []
+    for info in logs_info:
+        view = schemas_by_log[info.project].views.get(view_name)
+        group = [row for row in rows if row.get(_LOG_KEY) == info.project]
+        limited.extend(group[: view.limit] if view and view.limit is not None else group)
+    return limited
+
+
 def _print_summary(
     user_wheres: list[str],
-    default_status_injected: bool,
+    default_view_injected: bool,
+    injected_where_parts: list[str],
+    view_name: str,
     args: argparse.Namespace,
     logs_info: list[LogInfo],
     notes: list[str],
@@ -139,19 +212,19 @@ def _print_summary(
     "what did this query actually mean", which a query whose answer depends
     on cwd or an implicit default filter must always be able to say.
     """
-    where_parts = list(user_wheres)
-    if default_status_injected:
-        where_parts.append(f"status={','.join(DEFAULT_STATUSES)}")
+    where_parts = list(user_wheres) + injected_where_parts
     print(
         f"[quest list] where  {'  ·  '.join(where_parts) if where_parts else '(none)'}",
         file=sys.stderr,
     )
-    if default_status_injected:
+    if default_view_injected:
         print(
-            "[quest list]        (status filter is a default -- override with "
+            "[quest list]        ('default' view filter is a default -- override with "
             "--where status:exists)",
             file=sys.stderr,
         )
+    elif view_name != "default":
+        print(f"[quest list]        (view '{view_name}')", file=sys.stderr)
     for note in notes:
         print(f"[quest list] {note}", file=sys.stderr)
     if args.sort:
@@ -190,7 +263,7 @@ def _dedupe_rows(rows: list[dict]) -> list[dict]:
 
 def _collect_rows(
     args: argparse.Namespace,
-) -> tuple[list[dict], schema.SchemaConfig | None, frozenset, list[LogInfo]]:
+) -> tuple[list[dict], schema.SchemaConfig | None, frozenset, list[LogInfo], dict[str, schema.SchemaConfig]]:
     """The rows in scope, the schema `--sort` should rank against, the union
     of field names `--select` may legally name, and per-log metadata.
 
@@ -198,13 +271,12 @@ def _collect_rows(
     `--in` (repeatable, names or paths), else `-A`/`--all-logs` sweeping
     `--root` (repeatable), else the default walk-up to a single log.
 
-    The returned schema is the **first** resolved log's. For a single log --
-    the overwhelmingly common case -- that is exactly right. Across multiple
-    logs with *different* vocabularies it is an approximation; the honest fix
-    is each log evaluating its own view definition (QST-37n0t), not
-    attempted here. Deliberately not "merge the vocabularies": there is no
-    correct way to interleave two independently declared orderings, and
-    inventing one would be a wrong answer delivered confidently.
+    The returned sort schema is the **first** resolved log's -- exact for a
+    single log, an approximation across logs with *different* vocabularies
+    (there is no correct way to interleave two independently declared
+    orderings). `schemas_by_log` carries every log's own full `SchemaConfig`,
+    which is what lets view filtering/sorting/limiting be exact per log
+    rather than sharing that same approximation.
     """
     logs = resolve_log_set(in_dirs=args.in_dirs, all_logs=args.all_logs, root=args.root)
     multi = len(logs) > 1 or args.all_logs
@@ -214,6 +286,7 @@ def _collect_rows(
     valid_fields: set[str] = set(schema.CORE_FIELDS) | set(computed.DERIVED_FIELD_NAMES)
     logs_info: list[LogInfo] = []
     terminal_by_log: dict[str, tuple] = {}
+    schemas_by_log: dict[str, schema.SchemaConfig] = {}
     for quests_dir in logs:
         try:
             config = QuestLogConfig.load(quests_dir)
@@ -227,6 +300,7 @@ def _collect_rows(
         valid_fields |= set(config.schema.fields)
         project = config.project or quests_dir.name
         terminal_by_log[project] = config.schema.terminal_statuses
+        schemas_by_log[project] = config.schema
         logs_info.append(
             LogInfo(
                 quests_dir=quests_dir,
@@ -241,7 +315,7 @@ def _collect_rows(
             row[_LOG_KEY] = project
             rows.append(row)
     computed.annotate_rows(rows, terminal_by_log, _LOG_KEY)
-    return rows, sort_schema, frozenset(valid_fields), logs_info
+    return rows, sort_schema, frozenset(valid_fields), logs_info, schemas_by_log
 
 
 def _to_plain(frontmatter) -> dict:

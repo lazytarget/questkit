@@ -4,14 +4,14 @@ title: Built-in views (next, stale, blocked) and quest deps
 description: Ship the loop-closing views as schema-defined prefills exposed as subcommands, plus a real dependency-graph walk.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: high
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 agentic: afk
 aliases:
@@ -105,21 +105,22 @@ print it ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-lo
 
 ## Acceptance Criteria
 
-- [ ] `views.default` drives `quest list`'s implicit filter, and a schema can override it
-- [ ] A log overriding `statuses:` with its own `views.default` lists correctly
-- [ ] `quest next` ranks by the schema's declared priority/effort order, not alphabetically
-- [ ] `quest next` honors every key in a multi-key `sort:`
-- [ ] `quest next` returns one quest and never one with an open dependency
-- [ ] `quest next` accepts `--in`, `--where`, `--sort`, `--limit` on top of the view
-- [ ] `quest stale` ranks by `idle` and its threshold is configurable
-- [ ] `quest blocked` lists quests with an open dependency, ranked by `blocks`
-- [ ] A log's `views:` override changes a built-in's definition, not its name
-- [ ] A user-defined view is reachable via `quest list --view NAME`
-- [ ] Views resolve from the named schema, with per-log override
-- [ ] `quest deps <id>` renders the graph and marks revisited nodes
-- [ ] `quest deps <id> --blocks` walks the reverse direction
-- [ ] Under `-A`, views group per log ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]]) and each log uses its own definition
+- [x] `views.default` drives `quest list`'s implicit filter, and a schema can override it
+- [x] A log overriding `statuses:` with its own `views.default` lists correctly
+- [x] `quest next` ranks by the schema's declared priority/effort order, not alphabetically
+- [x] `quest next` honors every key in a multi-key `sort:`
+- [x] `quest next` returns one quest and never one with an open dependency
+- [x] `quest next` accepts `--in`, `--where`, `--sort`, `--limit` on top of the view
+- [x] `quest stale` ranks by `idle` and its threshold is configurable
+- [x] `quest blocked` lists quests with an open dependency, ranked by `blocks`
+- [x] A log's `views:` override changes a built-in's definition, not its name
+- [x] A user-defined view is reachable via `quest list --view NAME`
+- [x] Views resolve from the named schema, with per-log override
+- [x] `quest deps <id>` renders the graph and marks revisited nodes
+- [x] `quest deps <id> --blocks` walks the reverse direction
+- [x] Under `-A`, views group per log ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]]) and each log uses its own definition
 
 ## Log
 
+- 2026-08-20: implemented. `schema.View`/`schema.DEFAULT_VIEWS` added, resolved per log in `SchemaConfig.load` with full-replacement semantics (matching `readiness:`). `list_cmd.run` resolves `args.view` (default `"default"`), builds a per-log `view_wheres_by_log` map (each row filtered against *its own* log's view, not the first resolved log's — an explicit `--where` on a field drops that field from every log's view clause first), then `_apply_view_sort`/`_apply_view_limits` apply each log's own `sort`/`limit` independently when the caller didn't override them with `--sort`/`--limit`. `cli._add_list_options` factors the full `list` flag set so `next`/`stale`/`blocked` are the same parser with `set_defaults(view=...)` — an explicit `--view` on the command line still wins, since argparse always prefers a given value over any default. `quest deps` is a new command (`commands/deps_cmd.py`): sweeps every log in scope by default (needed to traverse qualified cross-log refs from [[QST-yiep7--qualified-cross-log-references-in-blocked-by]]), builds a global adjacency map, and renders depth-first with a global `visited` set so a diamond dependency prints the shared ancestor twice but expands its own children only once, marked `(see above)`. 16 new tests in `tests/test_views_and_deps.py`.
 - 2026-08-19: captured. `quest blocked` was not in the original list — the corpus check that added it found 0 uses of `status: blocked` against 8 genuinely blocked quests.

@@ -181,6 +181,37 @@ DEFAULT_READINESS = (
 )
 
 
+@dataclass(frozen=True)
+class View:
+    """One entry in a schema's `views:` map -- a prefill over `quest list`.
+
+    Every field a view sets is a **default**, not a lock: `run()` in
+    `list_cmd` drops a view's own `where` clause for any field the caller
+    already targeted explicitly, and an explicit `--sort`/`--limit` overrides
+    the view's outright. `where` holds raw `--where` expression strings (the
+    same grammar everywhere else), not pre-parsed tuples, so a view is just
+    data until something applies it.
+    """
+
+    where: tuple = ()
+    sort: str | None = None
+    limit: int | None = None
+
+
+# The four views every fresh `pip install questkit` ships with, exposed as
+# bare subcommands (`quest next`, `quest stale`, `quest blocked`) plus the one
+# every plain `quest list` uses implicitly (`default`). `views.default` is
+# what finally removes list_cmd's own hardcoded status list: a schema that
+# overrides `statuses:` declares its own `views.default` in the same file,
+# rather than a second config key that could disagree with the first.
+DEFAULT_VIEWS = {
+    "default": View(where=("status=todo,in-progress",)),
+    "next": View(where=("blocked=false",), sort="priority:asc,effort:asc,idle:desc", limit=1),
+    "stale": View(where=("idle>14",), sort="idle:desc"),
+    "blocked": View(where=("blocked=true",), sort="blocks:desc"),
+}
+
+
 class SchemaConfigError(Exception):
     """Raised when a `schema:` block is internally inconsistent.
 
@@ -225,6 +256,7 @@ class SchemaConfig:
     field_order: tuple = FIELD_ORDER
     strict: bool = True
     readiness: tuple = DEFAULT_READINESS
+    views: dict = field(default_factory=lambda: dict(DEFAULT_VIEWS))
     fields: dict = field(default_factory=dict)  # name -> FieldSpec, custom fields only
 
     @property
@@ -284,6 +316,7 @@ class SchemaConfig:
             field_order=_as_tuple(merged, "field_order", FIELD_ORDER),
             strict=bool(merged.get("strict", True)),
             readiness=_resolve_readiness(merged),
+            views=_resolve_views(merged),
             fields=fields,
         )
 
@@ -376,6 +409,24 @@ def _resolve_readiness(merged: dict) -> tuple:
             )
         rules.append(ReadinessRule(require=require, message=message, when=entry.get("when")))
     return tuple(rules)
+
+
+def _resolve_views(merged: dict) -> dict:
+    """`views:` fully replaces the default map, like `readiness:` and every
+    other sibling key -- a schema overriding `statuses:` declares its own
+    `views.default` in the same file rather than leaving three built-ins
+    silently stale."""
+    if "views" not in merged:
+        return dict(DEFAULT_VIEWS)
+    views = {}
+    for name, spec in (merged["views"] or {}).items():
+        spec = spec or {}
+        views[name] = View(
+            where=tuple(str(w) for w in (spec.get("where") or ())),
+            sort=spec.get("sort"),
+            limit=spec.get("limit"),
+        )
+    return views
 
 
 def evaluate_readiness(quest, schema_config: SchemaConfig) -> list[str]:

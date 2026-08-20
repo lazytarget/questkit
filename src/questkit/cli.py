@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from .commands import (
+    deps_cmd,
     done_cmd,
     format_cmd,
     init_cmd,
@@ -19,6 +20,69 @@ from .commands import (
     show_cmd,
     validate_cmd,
 )
+
+
+def _add_list_options(parser: argparse.ArgumentParser) -> None:
+    """Every flag `list` and its built-in-view aliases (`next`/`stale`/`blocked`)
+    share -- a view is just a prefill over exactly this option set, so `quest
+    next --where priority=high` composes rather than needing its own grammar.
+    """
+    parser.add_argument(
+        "--where",
+        dest="where",
+        action="append",
+        metavar="EXPR",
+        help="repeatable filter: field=value / field~value / field:exists",
+    )
+    parser.add_argument(
+        "-A", "--all-logs",
+        dest="all_logs",
+        action="store_true",
+        help="aggregate quests from every log found downward from --root",
+    )
+    parser.add_argument(
+        "--root",
+        dest="root",
+        action="append",
+        help="repeatable; starting directory for -A (default: QST_ROOT, git root, or cwd)",
+    )
+    parser.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help="silence the summary block on stderr",
+    )
+    parser.add_argument(
+        "--format", dest="format", choices=["table", "json", "csv", "prompt"], default="table"
+    )
+    parser.add_argument(
+        "--select",
+        dest="select",
+        metavar="a,b,c",
+        help="restrict output to these fields, in order -- applies to every --format",
+    )
+    parser.add_argument(
+        "--distinct",
+        action="store_true",
+        help="collapse rows identical across the --select'd fields (requires --select)",
+    )
+    parser.add_argument(
+        "--count",
+        action="store_true",
+        help="print a bare integer; honors --where/--select/--distinct, ignores --limit/--offset",
+    )
+    parser.add_argument("--sort", dest="sort", metavar="FIELD[:asc|desc]")
+    parser.add_argument("--limit", dest="limit", type=int)
+    parser.add_argument("--offset", dest="offset", type=int)
+    parser.add_argument("--out", dest="out", metavar="FILE", help="also write rendered output to FILE")
+    parser.add_argument(
+        "--in", dest="in_dirs", action="append", metavar="LOG", help="repeatable; name or path"
+    )
+    parser.add_argument(
+        "--view",
+        dest="view",
+        metavar="NAME",
+        help="a named view from the schema's views: map (default: 'default')",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,57 +110,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_new.set_defaults(func=new_cmd.run)
 
     p_list = subparsers.add_parser("list", help="list quests")
-    p_list.add_argument(
-        "--where",
-        dest="where",
-        action="append",
-        metavar="EXPR",
-        help="repeatable filter: field=value / field~value / field:exists",
-    )
-    p_list.add_argument(
-        "-A", "--all-logs",
-        dest="all_logs",
-        action="store_true",
-        help="aggregate quests from every log found downward from --root",
-    )
-    p_list.add_argument(
-        "--root",
-        dest="root",
-        action="append",
-        help="repeatable; starting directory for -A (default: QST_ROOT, git root, or cwd)",
-    )
-    p_list.add_argument(
-        "--quiet", "-q",
-        action="store_true",
-        help="silence the summary block on stderr",
-    )
-    p_list.add_argument(
-        "--format", dest="format", choices=["table", "json", "csv", "prompt"], default="table"
-    )
-    p_list.add_argument(
-        "--select",
-        dest="select",
-        metavar="a,b,c",
-        help="restrict output to these fields, in order -- applies to every --format",
-    )
-    p_list.add_argument(
-        "--distinct",
-        action="store_true",
-        help="collapse rows identical across the --select'd fields (requires --select)",
-    )
-    p_list.add_argument(
-        "--count",
-        action="store_true",
-        help="print a bare integer; honors --where/--select/--distinct, ignores --limit/--offset",
-    )
-    p_list.add_argument("--sort", dest="sort", metavar="FIELD[:asc|desc]")
-    p_list.add_argument("--limit", dest="limit", type=int)
-    p_list.add_argument("--offset", dest="offset", type=int)
-    p_list.add_argument("--out", dest="out", metavar="FILE", help="also write rendered output to FILE")
-    p_list.add_argument(
-        "--in", dest="in_dirs", action="append", metavar="LOG", help="repeatable; name or path"
-    )
+    _add_list_options(p_list)
     p_list.set_defaults(func=list_cmd.run)
+
+    # Built-in views as bare subcommands: each is `list` with its own view
+    # preset via set_defaults, called *after* _add_list_options so it wins
+    # over --view's own None default -- an explicit `--view NAME` on the
+    # command line still overrides it, since argparse always prefers a value
+    # actually given over any default. Config can override a built-in's
+    # *definition* (schema.SchemaConfig.views), never its command name --
+    # argparse is built before any log resolves, so the CLI's command list
+    # can't depend on cwd.
+    p_next = subparsers.add_parser("next", help="the single best quest to do next")
+    _add_list_options(p_next)
+    p_next.set_defaults(func=list_cmd.run, view="next")
+
+    p_stale = subparsers.add_parser("stale", help="quests whose status has gone untouched")
+    _add_list_options(p_stale)
+    p_stale.set_defaults(func=list_cmd.run, view="stale")
+
+    p_blocked = subparsers.add_parser("blocked", help="quests with an open dependency")
+    _add_list_options(p_blocked)
+    p_blocked.set_defaults(func=list_cmd.run, view="blocked")
 
     p_show = subparsers.add_parser("show", help="show a quest by id")
     p_show.add_argument("id")
@@ -222,6 +257,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="table only: an extra line per log naming schema overrides and strict mode",
     )
     p_logs.set_defaults(func=logs_cmd.run)
+
+    p_deps = subparsers.add_parser("deps", help="show a quest's dependency graph")
+    p_deps.add_argument("id")
+    p_deps.add_argument(
+        "--blocks",
+        action="store_true",
+        help="walk the reverse direction: what this quest blocks, not what blocks it",
+    )
+    p_deps.add_argument(
+        "--in", dest="in_dirs", action="append", metavar="LOG", help="repeatable; bounds the sweep"
+    )
+    p_deps.add_argument("--root", dest="root", action="append", help="repeatable")
+    p_deps.set_defaults(func=deps_cmd.run)
 
     p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")
     p_schema.add_argument("kind", choices=["quest"])

@@ -102,8 +102,8 @@ def test_completed_is_no_longer_a_valid_status(isolated, make_log, write_quest, 
 
 
 def test_list_default_filter_no_longer_mentions_blocked(quest_log, run):
-    """`blocked` left the enum, so the default filter cannot name it."""
-    from questkit.commands.list_cmd import DEFAULT_STATUSES
+    """`blocked` left the enum, so the default filter cannot name it -- it now
+    lives in `schema.DEFAULT_VIEWS["default"]` (QST-37n0t)."""
+    from questkit.schema import DEFAULT_VIEWS
 
-    assert "blocked" not in DEFAULT_STATUSES
-    assert DEFAULT_STATUSES == ("todo", "in-progress")
+    assert DEFAULT_VIEWS["default"].where == ("status=todo,in-progress",)

@@ -530,20 +530,95 @@ by `--quiet`/`-q`. Rows go to stdout, so `| jq` and `--out FILE` stay clean:
 $ quest list --in questkit --in realm-system
 ...rows on stdout...
 [quest list] where  status=todo,in-progress
-[quest list]        (status filter is a default -- override with --where status:exists)
+[quest list]        ('default' view filter is a default -- override with --where status:exists)
 [quest list] sort   priority:asc
 [quest list] logs   2 logs swept
 ```
 
-It always states the *injected default status filter* and how to override it
+It always states the *injected default view filter* and how to override it
 — a query whose answer depends on an implicit default must say so, not leave
-the reader to infer it from a suspiciously short result. When `--select`
-spans logs with different declared fields, a `note` line names which logs
-lack a selected field before the field-set (name-only, once) and enum-count
-lines. Deferred to later quests: a `view` line (no named views exist until
-`quest next`/`stale`/`blocked` ship) and an `--archived` scope line (no
-`archived` query flag exists until archival ships) — both will extend this
-same block rather than inventing a second one.
+the reader to infer it from a suspiciously short result. Running a named view
+other than `default` (`quest next`, `quest stale --view custom`, ...) prints
+`(view 'NAME')` in its place instead. When `--select` spans logs with
+different declared fields, a `note` line names which logs lack a selected
+field before the field-set (name-only, once) and enum-count lines. Deferred to
+a later quest: an `--archived` scope line (no `archived` query flag exists
+until archival ships) — it will extend this same block rather than inventing
+a second one.
+
+### Views: `next`, `stale`, `blocked`, and `--view NAME`
+
+A **view** is a named prefill over `quest list` — a default `where`/`sort`/
+`limit`, declared once in a schema and shared by every log using it, rather
+than re-typing the same query by hand. Four ship built in, each reachable as
+its own bare subcommand as well as via `quest list --view NAME`:
+
+```yaml
+views:
+  default: { where: ["status=todo,in-progress"] }
+  next:    { where: ["blocked=false"], sort: "priority:asc,effort:asc,idle:desc", limit: 1 }
+  stale:   { where: ["idle>14"], sort: "idle:desc" }
+  blocked: { where: ["blocked=true"], sort: "blocks:desc" }
+```
+
+- **`quest next`** — the single best quest to work on: unblocked, ranked by
+  the schema's own declared priority/effort order, then by how long it's sat
+  untouched.
+- **`quest stale`** — quests whose `status` hasn't changed in a while
+  (`idle`, [§6](#6-cli-reference)), ranked most-idle first. The `idle>14`
+  threshold is just that log's `views.stale.where` — override it like any
+  other field.
+- **`quest blocked`** — quests with an open dependency, ranked by how many
+  other quests they're in turn blocking (`blocks`).
+- **`quest list --view NAME`** reaches a view that isn't one of the three
+  built-in bare subcommands — a log- or schema-specific view with no command
+  of its own.
+
+Every field a view sets is a **default, not a lock**: `quest next --where
+priority=high`, `--sort`, `--limit`, `--in`, `-A` and every other `list` flag
+apply on top, and a field the caller already targeted via `--where` drops out
+of the view's own clause for that field entirely (two-layer precedence, same
+rule the schema's field defaults already follow). `views.default` is what
+finally removes the last hardcoded status list from `quest list` itself — a
+schema overriding `statuses:` declares its own `views.default` in the same
+file, so a `household` schema with `waiting`/`doing` lists correctly with no
+second config key to keep in sync.
+
+**Config overrides a built-in's *definition*, never its command name.**
+argparse builds the CLI before any log resolves, so the command list can't
+depend on cwd; a log's `views:` block (full replacement, like `readiness:`)
+changes what `next` *means* there, not what it's called.
+
+**Under `-A`/multi-log `--in`, each log evaluates its own view.** A view's
+`where` is judged against each row using *that row's own log's* definition —
+not the first resolved log's, the same approximation `--sort`/`rank_of` fall
+back to elsewhere. `quest next -A` returns each log's own next quest
+(respecting each log's own `limit`), grouped exactly like any other multi-log
+table.
+
+### `quest deps <id> [--blocks] [--in LOG ...] [--root DIR ...]`
+
+Walks the dependency graph — a real graph walk, not a `list` prefill, so
+unlike the views above it stays its own command. `blocked_by` is
+many-to-many, so this is rendered as a **DAG, not a tree**: a node reached a
+second time is marked `(see above)` and not re-expanded, rather than either
+duplicating it forever or silently dropping the edge.
+
+```
+$ quest deps QST-ddddd
+QST-ddddd [questkit] Ship the thing (todo)
+  QST-bbbbb [questkit] Write the schema (todo)
+    QST-aaaaa [questkit] Design the API (done)
+  QST-ccccc [questkit] Wire the CLI (todo)
+    QST-aaaaa [questkit] Design the API (done) (see above)
+```
+
+`--blocks` walks the reverse direction (what this quest blocks, instead of
+what blocks it). Without an explicit `--in`, `deps` sweeps every log under
+`--root`/`QST_ROOT` by default — it needs to see the whole graph to traverse
+qualified `project/QST-xxxxx` cross-log references (see the `blocked_by` row
+in [§7](#7-frontmatter-reference)) and label which log each node lives in
+(`[project]` in the output above).
 
 ### `quest show <id> [--in DIR]`
 
@@ -918,7 +993,7 @@ you will never see a raw Python traceback from normal usage.
 | `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§8](#8-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
 | `due` | No | `YYYY-MM-DD` | Rarely used in practice — most quests never need a hard date. |
 | `tags` | Yes | list of strings | Presence of the *key* is required (an empty list is fine); lowercase kebab-case by convention. |
-| `blocked_by` | No | list of `QST-xxxxx` or `project/QST-xxxxx` | Stored as one direction only — `blocks` is a *computed* field (see [§6](#quest-list-options)), not stored here, and storing both directions invites drift when only one side gets updated. A bare id always means "this log"; a qualified `project/QST-xxxxx` id declares a reference into another log by its `project:` name. `quest validate` resolves a bare id against the current log (hard error if missing) and a qualified id against the named log **if it is present in the sweep** (hard error if the log resolves but the id doesn't); if the named log simply isn't present on this device, that's a note, never an error — the same file must validate identically everywhere, synced or not. |
+| `blocked_by` | No | list of `QST-xxxxx` or `project/QST-xxxxx` | Stored as one direction only — `blocks` is a *computed* field (see [§6](#6-cli-reference)), not stored here, and storing both directions invites drift when only one side gets updated. A bare id always means "this log"; a qualified `project/QST-xxxxx` id declares a reference into another log by its `project:` name. `quest validate` resolves a bare id against the current log (hard error if missing) and a qualified id against the named log **if it is present in the sweep** (hard error if the log resolves but the id doesn't); if the named log simply isn't present on this device, that's a note, never an error — the same file must validate identically everywhere, synced or not. |
 | `aliases` | Yes (CLI-created) | list, always includes own `id` | Drives Obsidian search/quick-switcher/autocomplete. Does **not** make a bare `[[id]]` wikilink resolve on click — see [§12](#12-ide-and-tool-integration). `quest validate` (hard rule) flags a missing self-alias. |
 | `related_adrs` | No, not schema-enforced | list of ADR references | Not part of the closed schema at all — carried over from the Beans-era migration as free-form extra metadata. Any field not listed here is accepted without complaint; `quest validate` never rejects unknown keys. |
 

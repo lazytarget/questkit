@@ -97,11 +97,12 @@ local). Different jobs, both honest.
 - [x] `project/QST-x` naming a log absent from the sweep is a note, never an error
 - [x] `project/QST-x` naming a present log where the id is missing is an error
 - [x] An unknown project name in a qualified ref errors, naming known projects
-- [ ] `quest deps` traverses qualified refs and marks which log each node is in
+- [x] `quest deps` traverses qualified refs and marks which log each node is in
 - [x] Computed `blocked` / `blocks` ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]) honor qualified refs
 - [x] `docs/questkit.md` §14's "no cross-log reference concept" is updated
 
 ## Log
 
+- 2026-08-20: `quest deps` shipped in [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]], traversing qualified refs and labeling each node's log via the same `ref.rsplit("/", 1)[-1]` id-stripping `computed._local_id` already used. AC checked off.
 - 2026-08-20: implemented. `validate_cmd._check_qualified_ref` splits a `blocked_by` entry on its last `/`, resolves the project part via `discovery.resolve_by_name_or_path(project, start=quests_dir)`, and checks the id against the resolved log. A `QuestLogNotFoundError` (unknown name *or* ambiguous duplicate project name) downgrades uniformly to a note: the two are indistinguishable from one device's point of view, and the whole design point of a qualified reference is a verdict that doesn't depend on what's synced where. The "unknown project name... errors" acceptance criterion is honored at the resolver layer itself (`resolve_by_name_or_path` already raises, naming known projects, for any caller that needs a real answer *now* — `quest deps` in [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] will be that caller); `quest validate` specifically chooses to catch it and soften it into a note, because validation must stay device-independent. `computed._local_id` already stripped a `/` qualifier down to the bare id before this quest existed, so `blocked`/`blocks` needed no code change — only a test confirming a multi-log sweep resolves the edge and a single-log sweep correctly does not. 7 new tests in `tests/test_cross_log_references.py`.
 - 2026-08-19: captured. Chosen over four alternatives specifically because it is the only one where the same file validates identically on every device.
