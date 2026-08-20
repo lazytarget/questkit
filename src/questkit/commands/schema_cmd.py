@@ -37,6 +37,8 @@ def run(args: argparse.Namespace) -> int:
         "terminal_statuses": list(schema_config.terminal_statuses),
         "fields": {name: _spec_dict(spec) for name, spec in sorted(schema_config.fields.items())},
         "field_order": list(schema_config.field_order),
+        "strict": schema_config.strict,
+        "obsidian_reserved_fields": list(schema.OBSIDIAN_RESERVED_FIELDS),
         # Core fields are part of the schema an agent has to satisfy, so they
         # belong in the introspection output alongside the enums -- listing
         # only the *custom* fields implied the rest were guessable.

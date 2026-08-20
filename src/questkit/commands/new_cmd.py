@@ -42,7 +42,23 @@ def run(args: argparse.Namespace) -> int:
     # schema or `defaults:` naming `project` explicitly is a deliberate override.
     if config.project:
         defaults.setdefault("project", config.project)
-    explicit = _explicit_assignments(args)
+    try:
+        explicit = _explicit_assignments(args)
+    except ValueError as exc:
+        print(f"[quest] error: {exc}", file=sys.stderr)
+        return 1
+
+    undeclared = _undeclared_set_names(args, config.schema)
+    if undeclared:
+        valid = ", ".join(sorted(config.schema.declared_field_names))
+        message = (
+            f"--set names undeclared field(s) {sorted(undeclared)}; declared fields: {valid}"
+        )
+        if config.schema.strict:
+            print(f"[quest] error: {message}", file=sys.stderr)
+            return 1
+        print(f"[quest] warning: {message}", file=sys.stderr)
+
     status = explicit.get("status") or defaults.get("status") or schema.DEFAULT_STATUS
 
     frontmatter = CommentedMap()
@@ -81,6 +97,23 @@ def run(args: argparse.Namespace) -> int:
         _open_editor(path)
 
     return 0
+
+
+def _undeclared_set_names(args: argparse.Namespace, schema_config) -> set[str]:
+    """Which `--set` names (not shorthand flags) the schema does not know about.
+
+    Only `--set` is checked -- the shorthand flags (`--type`/`--status`/etc.)
+    always name core fields, so there is nothing for strict mode to catch
+    there. Under `strict: true` this is a hard error naming the valid fields;
+    under `strict: false` it is a warning, because a field that appears in no
+    filter, fails no validation, and is only ever found by grep months later
+    is exactly the failure mode `strict` exists to make loud.
+    """
+    names = set()
+    for assignment in getattr(args, "sets", None) or []:
+        key, _, _ = assignment.partition("=")
+        names.add(key.strip())
+    return names - schema_config.declared_field_names
 
 
 def _explicit_assignments(args: argparse.Namespace) -> dict:

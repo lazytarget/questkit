@@ -218,7 +218,8 @@ Notes for anyone changing questkit itself:
   writing) covers config load/save, discovery/resolution (including the
   cross-log sweep, the ambiguity guard, and `ignore:`/`#include`
   resolution), id generation, the Quest round-trip and list-style
-  normalization, schema validation (including AFK-readiness, the
+  normalization, schema validation (undeclared-field checks under
+  `strict: true`, the
   identity/slug-drift split, the dynamic schema engine's `extends` merge
   and custom-field validation), `quest list`'s `--where` filter grammar and
   output formats, `quest schema`'s introspection output, slugify's Unicode
@@ -277,6 +278,13 @@ The asymmetry has a cause: `new` has a positional title, so
 `quest new "fix thing" type=bug` is genuinely ambiguous, while `set`'s id plus
 `nargs="*"` is not. Passing `--set` to `quest set` is an error naming the right
 form rather than a second grammar.
+
+**`--set` naming a field the schema does not declare is checked against
+`strict`** (see [§8](#8-questkityaml-configuration-reference)): under the
+default `strict: true` it is a hard error listing the log's declared fields
+(core plus custom); under `strict: false` it is a warning on stderr and the
+field is written anyway. The shorthand flags are never subject to this check —
+they always name core fields.
 
 ```
 quest new "title" [--type X] [--tier X] [--status X] [--priority X]
@@ -1133,8 +1141,10 @@ re-litigating it:
 `schema.validate_quest()` — used by **both** `quest validate` and the
 `quest-validate` hook — contains only rules where a failure means
 something is *actually wrong*: missing required fields, an enum value
-outside its allowed set, an AFK quest missing the substance to hand off,
-a filename/frontmatter id mismatch, a missing self-alias.
+outside its allowed set, an undeclared field under `strict: true`, a
+filename/frontmatter id mismatch, a missing self-alias. Readiness (is this
+quest *good enough to hand off*, not just well-formed) is a separate,
+advisory check — see [§13](#13-agentic-support).
 
 Two checks are deliberately **excluded** from `validate_quest()` and thus
 from the hook, even though `quest validate` (the CLI) reports them:
@@ -1283,47 +1293,57 @@ safe to hand to an agent unsupervised.
 Two frontmatter fields exist specifically for human/agent collaboration,
 deliberately **not conflated into one**:
 
-- **`owner`** — human accountability. Whose quest is this, in the sense of
-  who's answerable for it. Free text (§8) — not "who's currently running
-  it."
-- **`agentic: afk | hitl`** — execution mode. Can (and should) an agent run
-  this without a human in the loop, or does it need one? Absent means "not
-  yet triaged for handoff" — this is a deliberate third state, distinct
-  from both `afk` and `hitl`: a quest doesn't have to declare its
-  agent-readiness at creation time, only once it's actually been groomed
-  for it.
+- **`owner`** — human accountability, in the core schema. Whose quest is this,
+  in the sense of who's answerable for it. Free text (§8) — not "who's
+  currently running it."
+- **`agentic: afk | hitl`** — execution mode, declared by the **`development`**
+  schema, not the core. Can (and should) an agent run this without a human in
+  the loop, or does it need one? Absent means "not yet triaged for handoff" —
+  a deliberate third state, distinct from both `afk` and `hitl`: a quest
+  doesn't have to declare its agent-readiness at creation time, only once it's
+  actually been groomed for it.
 
 This split — and the specific `afk`/`hitl` vocabulary — is adapted from
 Matt Pocock's `skills`/`sandcastle` framing: **HITL** work is "worked
 *with* a human who speaks for themselves"; **AFK** work is "driven by the
-agent alone." Critically, in that framing (and here), AFK-readiness is a
-*triage outcome you earn*, not a property you declare at capture time —
-which is exactly what `quest validate`'s AFK-readiness rule enforces
-mechanically:
+agent alone."
 
-> A quest with `agentic: afk` **must** carry a body with both a `##
-> Acceptance Criteria` section containing at least one checklist item
-> (`- [ ]` or `- [x]`) and a `## Spec` or `## Design` section. Missing
-> either is a hard validation failure — it's caught by both `quest
-> validate` and the pre-commit hook, because a quest without that
-> substance is not something an agent can actually execute unsupervised,
-> regardless of what its `agentic:` field claims.
+**`agentic` is not universal, so it is not core.** Household work has no
+unsupervised-agent axis, and shipping this vocabulary in the core would be
+questkit having an opinion about what kind of work its users do. A log adopts
+it by declaring `schema: development` (see [§8](#8-questkityaml-configuration-reference)),
+and under `strict: true` (the default) `--set agentic=afk` in a log that
+hasn't is a hard error naming the fields that *are* declared.
+
+**AFK-readiness moved from a hardcoded validation rule into `readiness:`, a
+schema-driven, advisory check.** The old rule was a category error: it turned
+a *grooming judgment* ("is this good enough to hand off?") into a
+*commit-blocking contract* — the same job `quest validate` does for "is this
+file well-formed at all". `quest validate` enforces **none** of this now and
+cannot fail on it. The `development` schema declares the equivalent as a
+conditional rule:
 
 ```yaml
-agentic: afk
+readiness:
+  - require: { where: "description:exists" }
+    message: "no description"
+  - require: { where: "status!=draft" }
+    message: "still a draft — not groomed"
+  - require: { sections: ["## Spec", "## Design"] }
+    message: "no spec or design section"
+  - require: { checklist: "## Acceptance Criteria", min: 1 }
+    message: "no acceptance criteria"
+  - when: "agentic=afk"
+    require: { where: "owner:exists" }
+    message: "AFK work needs an accountable owner"
 ```
-```markdown
-## Description
-...
-## Spec
-1. Do the specific thing.
-2. In this specific way.
-## Acceptance Criteria
-- [ ] The specific thing is verifiably done.
-```
-passes. The same frontmatter with only a `## Description` and no `## Spec`
-or `## Acceptance Criteria` fails with a message naming exactly which
-section is missing.
+
+The core ships the first four rules (universal — "a spec and acceptance
+criteria make work handoff-ready" is not an opinion about a domain); a
+`household`-style schema can override the list down to as few as it needs.
+`schema.evaluate_readiness(quest, schema_config)` returns every failing rule's
+own `message`, in declared order — this is what the future `quest brief`
+command's READY verdict reads from, once it ships.
 
 ### Routing spoken language to quest creation
 
@@ -1349,8 +1369,11 @@ here specifically to learn *how* to act on it.
    of these transitions.
 3. **Before marking something `agentic: afk`** for a *future* agent to
    pick up unsupervised, make sure the body actually has a `## Spec`
-   section and real acceptance criteria — then `quest validate` confirms
-   it, rather than trusting your own judgment that it's ready.
+   section and real acceptance criteria. `quest validate` no longer checks
+   this — it is a `readiness:` rule now, advisory rather than
+   commit-blocking; use `schema.evaluate_readiness()` (or the future
+   `quest brief`) to confirm it mechanically rather than trusting your own
+   judgment.
 4. **Prefer `quest show`/`grep` over reading a whole log's directory** when
    you only need one quest's content or a targeted search — the same
    token-efficiency guidance that applied to Beans applies here

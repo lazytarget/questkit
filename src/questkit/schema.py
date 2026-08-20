@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
-from . import macros
+from . import macros, query
 from .utils import slugify
 
 # Vocabularies are **ordered tuples, not sets**, and that is load-bearing.
@@ -26,7 +26,13 @@ TERMINAL_STATUSES = ("done", "scrapped")
 
 PRIORITIES = ("critical", "high", "medium", "low", "deferred")
 EFFORTS = ("xs", "s", "m", "l", "xl")
-AGENTIC_MODES = ("afk", "hitl")
+
+# Property names Obsidian's own Properties panel adds without asking --
+# `cssclasses`/`cssclass`, `permalink`, `publish`, `cover`, `image`. In the
+# family log, where nobody can read a terminal, a stray one of these would
+# otherwise be a permanent strict-mode validation error. Permitted but
+# unmanaged: `quest schema quest` lists them so their status is discoverable.
+OBSIDIAN_RESERVED_FIELDS = ("cssclasses", "cssclass", "permalink", "publish", "cover", "image")
 
 # A schema may not declare an enum value or custom field colliding with one of
 # these. `--where blocked=true` and `--where status=blocked` would otherwise be
@@ -93,7 +99,6 @@ CORE_FIELDS = (
     "due",
     "blocked_by",
     "aliases",
-    "agentic",
     "archived",
 )
 
@@ -140,6 +145,42 @@ class SchemaExtendsError(Exception):
     """Raised when a `schema.extends` chain is circular or points at a missing file."""
 
 
+@dataclass(frozen=True)
+class ReadinessRule:
+    """One entry in a schema's `readiness:` list.
+
+    `require` is one of three shapes: `{"where": "<expr>"}` (the `--where`
+    grammar verbatim -- one expression language, not two), `{"sections":
+    [...]}` (any-of a set of body headings), or `{"checklist": "<heading>",
+    "min": N}` (count of checked/unchecked items under a heading). `when`, if
+    present, is a `--where` expression gating whether the rule applies at all
+    -- it is how "AFK implies spec + criteria" becomes configuration instead
+    of a hardcoded branch.
+    """
+
+    require: dict
+    message: str
+    when: str | None = None
+
+
+# The four rules every fresh `pip install questkit` ships with. The inverse
+# (minimal core, rigor opted into) was rejected: it would print a checkmark
+# for a quest with no spec and no criteria, making the flagship command look
+# useless on day one. "A spec and acceptance criteria make work handoff-ready"
+# is not an opinion about a domain -- it is what handoff-ready means.
+DEFAULT_READINESS = (
+    ReadinessRule(require={"where": "description:exists"}, message="no description"),
+    ReadinessRule(require={"where": "status!=draft"}, message="still a draft -- not groomed"),
+    ReadinessRule(
+        require={"sections": ["## Spec", "## Design"]}, message="no spec or design section"
+    ),
+    ReadinessRule(
+        require={"checklist": "## Acceptance Criteria", "min": 1},
+        message="no acceptance criteria",
+    ),
+)
+
+
 class SchemaConfigError(Exception):
     """Raised when a `schema:` block is internally inconsistent.
 
@@ -182,7 +223,20 @@ class SchemaConfig:
     efforts: tuple = EFFORTS
     terminal_statuses: tuple = TERMINAL_STATUSES
     field_order: tuple = FIELD_ORDER
+    strict: bool = True
+    readiness: tuple = DEFAULT_READINESS
     fields: dict = field(default_factory=dict)  # name -> FieldSpec, custom fields only
+
+    @property
+    def declared_field_names(self) -> frozenset:
+        """Every field name the CLI write path considers "real" under strict.
+
+        Core fields plus this log's declared custom fields. Does **not**
+        include the Obsidian allowlist -- that allowlist exists for files
+        Obsidian wrote, not for the CLI to hand out as if they were ordinary
+        fields to `--set`.
+        """
+        return frozenset(CORE_FIELDS) | frozenset(self.fields)
 
     @classmethod
     def default(cls) -> SchemaConfig:
@@ -228,6 +282,8 @@ class SchemaConfig:
             **vocabularies,
             terminal_statuses=_resolve_terminal_statuses(merged, vocabularies["statuses"]),
             field_order=_as_tuple(merged, "field_order", FIELD_ORDER),
+            strict=bool(merged.get("strict", True)),
+            readiness=_resolve_readiness(merged),
             fields=fields,
         )
 
@@ -298,6 +354,82 @@ def _reject_computed_field_collisions(vocabularies: dict, fields: dict) -> None:
                 f"custom field '{name}' collides with the computed field '{name}'. "
                 f"Computed field names are reserved ({', '.join(COMPUTED_FIELD_NAMES)})."
             )
+
+
+def _resolve_readiness(merged: dict) -> tuple:
+    """`readiness:` fully replaces the default list, like every other sibling key.
+
+    A merge-by-key scheme would need a name-based identity for rules that
+    have none; full replacement is what the rest of this file already does
+    for `statuses`/`fields`/etc., so a `household` schema overriding the list
+    down to one rule is one YAML list, not a diff against four unwritten ones.
+    """
+    if "readiness" not in merged:
+        return DEFAULT_READINESS
+    rules = []
+    for entry in merged["readiness"] or []:
+        require = entry.get("require")
+        message = entry.get("message")
+        if not require or not message:
+            raise SchemaConfigError(
+                f"readiness rule {entry!r} needs both 'require' and 'message'"
+            )
+        rules.append(ReadinessRule(require=require, message=message, when=entry.get("when")))
+    return tuple(rules)
+
+
+def evaluate_readiness(quest, schema_config: SchemaConfig) -> list[str]:
+    """Every readiness rule this quest fails, in declared order.
+
+    Advisory by design: this is what makes it safe for *configuration* to
+    define these rules at all. `quest validate` never calls this -- it
+    answers "is this file well-formed and are its references real", a
+    different question from "is this good enough to hand to someone".
+    """
+    failures = []
+    for rule in schema_config.readiness:
+        if rule.when is not None and not _readiness_where(quest, rule.when):
+            continue
+        if not _readiness_satisfied(quest, rule.require):
+            failures.append(rule.message)
+    return failures
+
+
+def _readiness_where(quest, expr: str) -> bool:
+    field_name, op, value = query.parse_where(expr)
+    return query.matches(quest.frontmatter, field_name, op, value)
+
+
+def _readiness_satisfied(quest, require: dict) -> bool:
+    if "where" in require:
+        return _readiness_where(quest, require["where"])
+    if "sections" in require:
+        body_lower = quest.body.lower()
+        return any(section.lower() in body_lower for section in require["sections"])
+    if "checklist" in require:
+        heading = require["checklist"]
+        minimum = require.get("min", 1)
+        return _count_checklist_items(quest.body, heading) >= minimum
+    raise SchemaConfigError(f"readiness rule has an unrecognized require: {require}")
+
+
+def _count_checklist_items(body: str, heading: str) -> int:
+    """Checked/unchecked list items under one heading, stopping at the next `## `."""
+    heading_lower = heading.strip().lower()
+    counting = False
+    count = 0
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.lower() == heading_lower:
+            counting = True
+            continue
+        if not counting:
+            continue
+        if stripped.startswith("## "):
+            break
+        if stripped[:5].lower() in ("- [ ]", "- [x]"):
+            count += 1
+    return count
 
 
 def _resolve_terminal_statuses(merged: dict, statuses: tuple) -> tuple:
@@ -476,18 +608,30 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
         if spec.type == "enum":
             errors.extend(_check_enum(quest.path, fm, field_name, spec.values))
 
-    agentic = fm.get("agentic")
-    if agentic is not None:
-        if agentic not in AGENTIC_MODES:
-            errors.append(
-                ValidationError(quest.path, f"agentic '{agentic}' not in {list(AGENTIC_MODES)}")
-            )
-        elif agentic == "afk":
-            errors.extend(_check_afk_readiness(quest))
-
+    errors.extend(_check_undeclared_fields(quest, schema_config))
     errors.extend(_check_identity(quest))
 
     return errors
+
+
+def _check_undeclared_fields(quest, schema_config: SchemaConfig) -> list[ValidationError]:
+    """Under `strict: true`, a field this schema does not know about is an error.
+
+    Extended from the original CLI-write-path-only scope: `agentic` leaving
+    core (and `milestone` joining `development`) only means something if a
+    stray field is ever actually caught, and `quest validate` under
+    `strict: true` is that check. Under `strict: false` this reports nothing
+    -- the write-path warning (`quest new --set`) is where that case is
+    surfaced instead.
+    """
+    if not schema_config.strict:
+        return []
+    allowed = schema_config.declared_field_names | frozenset(OBSIDIAN_RESERVED_FIELDS)
+    return [
+        ValidationError(quest.path, f"undeclared field '{key}' (strict schema)")
+        for key in quest.frontmatter
+        if key not in allowed
+    ]
 
 
 def _check_identity(quest) -> list[ValidationError]:
@@ -561,28 +705,3 @@ def _check_enum(path, fm, name, allowed) -> list[ValidationError]:
     return [ValidationError(path, f"{name} '{value}' not in {list(allowed)}")]
 
 
-def _check_afk_readiness(quest) -> list[ValidationError]:
-    """AFK quests must carry enough substance to hand off without a live human."""
-    errors: list[ValidationError] = []
-    body_lower = quest.body.lower()
-
-    has_acceptance = "## acceptance criteria" in body_lower and (
-        "- [ ]" in quest.body or "- [x]" in body_lower
-    )
-    has_spec = "## spec" in body_lower or "## design" in body_lower
-
-    if not has_acceptance:
-        errors.append(
-            ValidationError(
-                quest.path,
-                "agentic: afk requires a '## Acceptance Criteria' section with checklist items",
-            )
-        )
-    if not has_spec:
-        errors.append(
-            ValidationError(
-                quest.path,
-                "agentic: afk requires a '## Spec' or '## Design' section",
-            )
-        )
-    return errors

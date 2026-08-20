@@ -1,4 +1,12 @@
-"""Tests for frontmatter validation, including the AFK-readiness rule."""
+"""Tests for frontmatter validation.
+
+The AFK-readiness rule that used to live here (spec + acceptance criteria
+required when `agentic: afk`) moved to the schema-driven `readiness:` engine
+-- see test_readiness.py. `quest validate` enforces none of it now; these
+tests instead cover what `agentic` leaving the core schema means for
+`validate_quest` directly: undeclared by default, fine once a schema declares
+it, and no longer coupled to the shape of the body at all.
+"""
 
 from pathlib import Path
 
@@ -69,7 +77,8 @@ def test_unknown_status_is_flagged():
     assert any("status" in e.message for e in errors)
 
 
-def test_afk_without_acceptance_criteria_is_flagged():
+def test_agentic_is_undeclared_by_default_under_strict():
+    """`agentic` left the core schema; a bare default schema does not know it."""
     fm = {
         "id": "QST-abcde",
         "title": "Example",
@@ -83,12 +92,14 @@ def test_afk_without_acceptance_criteria_is_flagged():
         "agentic": "afk",
     }
     errors = schema.validate_quest(_quest(fm, body="## Description\n\nNothing else here.\n"))
-    messages = " ".join(e.message for e in errors)
-    assert "Acceptance Criteria" in messages
-    assert "Spec" in messages
+    assert any("agentic" in e.message and "undeclared" in e.message for e in errors)
 
 
-def test_afk_with_full_spec_passes():
+def test_agentic_afk_no_longer_requires_a_spec_or_criteria_once_declared():
+    """The relocated rule: a schema-declared `agentic` needs no body shape at all."""
+    development = schema.SchemaConfig(
+        fields={"agentic": schema.FieldSpec("agentic", type="enum", values=("afk", "hitl"))}
+    )
     fm = {
         "id": "QST-abcde",
         "title": "Example",
@@ -101,12 +112,10 @@ def test_afk_with_full_spec_passes():
         "tags": [],
         "agentic": "afk",
     }
-    body = (
-        "## Description\n\nDo the thing.\n\n"
-        "## Spec\n\nDetails here.\n\n"
-        "## Acceptance Criteria\n\n- [ ] step one\n"
+    errors = schema.validate_quest(
+        _quest(fm, body="## Description\n\nNothing else here.\n"), development
     )
-    assert schema.validate_quest(_quest(fm, body=body)) == []
+    assert errors == []
 
 
 def _base_fm(**overrides):

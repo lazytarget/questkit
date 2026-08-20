@@ -4,7 +4,7 @@ title: "Schema engine: field order, defaults, macros, typed fields, strict write
 description: field_order normalization, schema.fields defaults with macros, --fill-defaults, enum-typed custom fields, generic --set, and strict CLI writes.
 project: questkit
 type: feature
-status: in-progress
+status: done
 priority: high
 tags:
   - questkit
@@ -372,48 +372,51 @@ each was load-bearing in more than one place:
 
 ## Acceptance Criteria
 
-- [ ] `field_order` drives both `quest new` and `quest format`
-- [ ] Fields absent from `field_order` sort alphabetically after those present
-- [ ] A log or named schema can override `field_order`
-- [ ] `{{ project }}`, `{{ today }}`, `{{ id }}`, `{{ env.USER }}` expand in defaults at creation
-- [ ] `type: enum` + `values:` rejects an out-of-vocabulary value for a custom field
-- [ ] `quest new --set <undeclared>=x` errors under strict, naming the valid fields
-- [ ] `strict: false` warns on stderr for the same case
-- [ ] `strict` is inherited through an `extends:` chain
-- [ ] `quest set <id> --set f=v` errors with a message naming the positional form
-- [ ] `quest format --fill-defaults` backfills declared defaults and is idempotent
-- [ ] `required: true` with a static default emits a warning; with a macro default it does not
-- [ ] `schema: development` resolves from `99-system/questkit/schemas/`
-- [ ] `statuses`/`priorities`/`efforts`/`tiers`/`types` are ordered sequences, and `--sort <field>` uses declaration order
-- [ ] `--sort "priority:asc,effort:desc"` sorts by both keys, in order
-- [ ] `quest schema quest status` prints the declared order, not a sorted one
-- [ ] `terminal_statuses` defaults to `[done, scrapped]` intersected with the declared statuses
-- [ ] Overriding `statuses:` with no surviving default and no `terminal_statuses` is a hard schema error
-- [ ] `quest done` writes `terminal_statuses[0]`; `quest scrap` writes `scrapped`
-- [ ] `status: completed` is gone; `done` replaces it and `quest done` writes it
-- [ ] `blocked` is gone from the core status enum and `quest list` defaults to `todo, in-progress`
-- [ ] Declaring an enum value named `blocked`/`blocks`/`idle`/`age`/`archived` is a schema error naming the collision
-- [ ] `agentic` is gone from `schema.py` — no enum, no AFK rule, no epic rule
-- [ ] `--set agentic=afk` errors under strict in a log that has not declared it
-- [ ] `readiness:` rules are read from the schema and drive `quest brief`'s READY verdict
-- [ ] A `when:` guard makes a rule conditional on a `--where` expression
-- [ ] `sections:` matches any-of; `checklist:` counts items under a heading
-- [ ] The core ships all four universal readiness rules; a schema can override the list to fewer
-- [ ] `quest validate` enforces no readiness rule and cannot fail on one
-- [ ] Under `strict: true`, an undeclared field found in a file is a validation error
-- [ ] Obsidian-reserved property names are allowlisted and listed by `quest schema quest`
-- [ ] The `development` schema declares `component`, `related_adrs`, `agentic` and `milestone`
-- [ ] `milestone` is gone from the core `types` enum
-- [ ] questkit's own log adopts `schema: development` **before** `strict: true` is enforced
-- [ ] `quest list --where milestone=0.3.0` returns this epic's build order
-- [ ] `archived` is a core boolean field, sorting into the alphabetical tail of `field_order`
-- [ ] `--where status!=draft` filters correctly and `!=` is not shredded by the `=` branch
-- [ ] `>=` and `<=` parse correctly and are not shredded by the `=` branch
-- [ ] `--where status_changed<2026-08-05` filters lexically on ISO dates
-- [ ] `quest schema quest` reflects everything above
+- [x] `field_order` drives both `quest new` and `quest format`
+- [x] Fields absent from `field_order` sort alphabetically after those present
+- [x] A log or named schema can override `field_order`
+- [x] `{{ project }}`, `{{ today }}`, `{{ id }}`, `{{ env.USER }}` expand in defaults at creation
+- [x] `type: enum` + `values:` rejects an out-of-vocabulary value for a custom field
+- [x] `quest new --set <undeclared>=x` errors under strict, naming the valid fields
+- [x] `strict: false` warns on stderr for the same case
+- [x] `strict` is inherited through an `extends:` chain
+- [x] `quest set <id> --set f=v` errors with a message naming the positional form
+- [x] `quest format --fill-defaults` backfills declared defaults and is idempotent
+- [x] `required: true` with a static default emits a warning; with a macro default it does not
+- [x] `schema: development` resolves from `99-system/questkit/schemas/`
+- [x] `statuses`/`priorities`/`efforts`/`tiers`/`types` are ordered sequences, and `--sort <field>` uses declaration order
+- [x] `--sort "priority:asc,effort:desc"` sorts by both keys, in order
+- [x] `quest schema quest status` prints the declared order, not a sorted one
+- [x] `terminal_statuses` defaults to `[done, scrapped]` intersected with the declared statuses
+- [x] Overriding `statuses:` with no surviving default and no `terminal_statuses` is a hard schema error
+- [x] `quest done` writes `terminal_statuses[0]`; `quest scrap` writes `scrapped`
+- [x] `status: completed` is gone; `done` replaces it and `quest done` writes it
+- [x] `blocked` is gone from the core status enum and `quest list` defaults to `todo, in-progress`
+- [x] Declaring an enum value named `blocked`/`blocks`/`idle`/`age`/`archived` is a schema error naming the collision
+- [x] `agentic` is gone from `schema.py` — no enum, no AFK rule, no epic rule
+- [x] `--set agentic=afk` errors under strict in a log that has not declared it
+- [x] `readiness:` rules are read from the schema and drive `quest brief`'s READY verdict
+- [x] A `when:` guard makes a rule conditional on a `--where` expression
+- [x] `sections:` matches any-of; `checklist:` counts items under a heading
+- [x] The core ships all four universal readiness rules; a schema can override the list to fewer
+- [x] `quest validate` enforces no readiness rule and cannot fail on one
+- [x] Under `strict: true`, an undeclared field found in a file is a validation error
+- [x] Obsidian-reserved property names are allowlisted and listed by `quest schema quest`
+- [x] The `development` schema declares `component`, `related_adrs`, `agentic` and `milestone`
+- [x] `milestone` is gone from the core `types` enum
+- [x] questkit's own log adopts `schema: development` **before** `strict: true` is enforced
+- [x] `quest list --where milestone=0.3.0` returns this epic's build order
+- [x] `archived` is a core boolean field, sorting into the alphabetical tail of `field_order`
+- [x] `--where status!=draft` filters correctly and `!=` is not shredded by the `=` branch
+- [x] `>=` and `<=` parse correctly and are not shredded by the `=` branch
+- [x] `--where status_changed<2026-08-05` filters lexically on ISO dates
+- [x] `quest schema quest` reflects everything above
 
 ## Log
 
+- 2026-08-21: **rules 5, 14-16 implemented (batch B3) — the schema engine is complete.** The `--where` grammar moved out of `list_cmd` into a new `query.py` module first, so `schema.py`'s readiness engine could reuse `!=`/`sections`/etc. without importing back through `commands.*` (a circular import). `list_cmd._parse_where`/`_matches` are now aliases onto `query.parse_where`/`query.matches`, unchanged for every existing test. `AGENTIC_MODES`, the enum check, and `_check_afk_readiness` are deleted outright — not relocated, deleted — and `agentic` is gone from `CORE_FIELDS`. `readiness:` ships as a `ReadinessRule` tuple with full-replacement semantics (matching every other sibling key, not a merge), and `evaluate_readiness()` is exposed as a public function for [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] to call once `brief` exists. `strict` defaults `True`, inherits through `extends` for free (it reads from the already-merged dict), and gates two things: `quest new --set <undeclared>=x` (hard error under strict, stderr warning under lenient, shorthand flags exempt since they always name core fields) and `quest validate` (an undeclared frontmatter key is an error under strict, silent under lenient, with `OBSIDIAN_RESERVED_FIELDS` allowlisted either way).
+  Two of the old core-schema tests (`test_afk_without_acceptance_criteria_is_flagged`, `test_afk_with_full_spec_passes`) asserted the exact behavior this batch removes; replaced with characterization tests for the new one — `agentic` undeclared by default, fine once a schema declares it, no longer coupled to body shape at all.
+  This closes out QST-j68u5 in full. The non-negotiable ordering constraint from rule 14 — `development` must exist and be adopted before `strict` is enforced — held: this log declared `schema: development` in B2, so strict landed on a corpus that already satisfied it, and `quest validate` stayed at 0 errors through the whole batch.
 - 2026-08-21: **rules 1-4, 6-9, 17-18 implemented (batch B2).** `field_order` lives on `SchemaConfig` and is applied by a new `Quest.reorder(schema)` — kept out of `render()` deliberately, so the pre-commit hooks and any `Quest.load(...).save()` keep working on a file whose log cannot be resolved. `resolved_defaults()` merges `fields.<n>.default` over `defaults:`; macros got a single `context_for()` builder because three callers (`new`, `format --fill-defaults`, `migrate --backfill`) need identical semantics, and building it per caller is how `{{ project }}` ends up meaning the log directory in one command and the config's `project:` in another. `FieldSpec` gained `values` and `default`; named schemas resolve from `QST_SCHEMA_PATH` then `99-system/questkit/schemas/` walking up, with `schema: development` as a scalar shorthand.
   Two things worth recording. Routing every default through one map **lost the log's `project:` stamping** — `config.project` is not one of `config.defaults`, so `quest new` silently stopped writing it. Caught by an existing `mv` test, now guarded by three of its own. And applying the specified default `field_order` reshuffled all 23 files: because the head list omits `tier` and `effort`, they land in the alphabetical tail, so `tier` now sorts *last* — after `milestone`. That is exactly what "one rule, then alphabetical" produces, but it reads oddly next to `type`, and it is a one-line `field_order` override if the ordering should change.
   This log now declares `schema: development`, which satisfies the non-negotiable constraint for B3: `development` must exist and be adopted **before** `strict` is enforced, or the release that introduces strict validation fails validation on its own tracker.

@@ -88,19 +88,23 @@ title: Human-readable title
 description: One-line purpose — omit while status is draft
 created: 2026-08-13
 modified: 2026-08-13
-type: task                    # feature | task | bug | epic | milestone | chore
+type: task                    # feature | task | bug | epic | chore
 tier: spark                    # spark | brief | blueprint — optional
 status: draft                  # draft | todo | in-progress | parked | done | scrapped
 priority: medium               # critical | high | medium | low | deferred
 effort: m                      # xs | s | m | l | xl — optional
 owner: alex                    # free text — whose quest this is
-agentic: hitl                  # afk | hitl — optional; can an agent run this unsupervised?
 project: some-project          # optional; stamped from the log's own config, if it declares one
 tags: []
 blocked_by: []                  # ids this quest is blocked by
 aliases: [QST-x7k2m]             # surfaces the short id in Obsidian search/quick-switcher/autocomplete
 ---
 ```
+
+`agentic: afk | hitl` is not shown above — it is not a core field. It is
+declared by the `development` schema (`schema: development` in a log's
+`.questkit.yaml`), because "can an agent run this unsupervised" is not a
+universal vocabulary; household work has no such axis.
 
 ### Cross-referencing other quests in Obsidian
 
@@ -149,9 +153,11 @@ no git at all), run `quest format [--in DIR]`; the `quest-format`
 pre-commit hook does the same for staged files on every commit (see
 [docs/questkit.md §11](docs/questkit.md#11-git-hooks-and-validation)).
 
-`agentic: afk` is a claim, not a declaration — `quest validate` checks that
-an AFK quest actually carries a `## Spec`/`## Design` section and an
-`## Acceptance Criteria` checklist before treating it as handoff-ready.
+`agentic: afk` is a claim, not a declaration — but `quest validate` no longer
+checks it. That check now lives in a schema's `readiness:` block (advisory,
+not commit-blocking): the `development` schema requires a `## Spec`/`##
+Design` section and an `## Acceptance Criteria` checklist before treating an
+AFK quest as handoff-ready. See [docs/questkit.md §13](docs/questkit.md#13-agentic-support).
 
 ### What else `quest validate` checks
 
