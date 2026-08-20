@@ -3,7 +3,8 @@ id: QST-37n0t
 title: Built-in views (next, stale, blocked) and quest deps
 description: Ship the loop-closing views as schema-defined prefills exposed as subcommands, plus a real dependency-graph walk.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo
@@ -39,10 +40,24 @@ exposed as **bare subcommands**:
 
 ```yaml
 views:
+  default: { where: ["status=todo,in-progress"] }
   next:    { where: ["blocked=false"], sort: "priority:asc,effort:asc,idle:desc", limit: 1 }
   stale:   { where: ["idle>14"], sort: "idle:desc" }
   blocked: { where: ["blocked=true"], sort: "blocks:desc" }
 ```
+
+**`views.default` is the one that pays for the mechanism.** `quest list`'s
+implicit status filter is hardcoded today (`todo, in-progress, blocked`) and
+cannot survive a log that overrides `statuses:` — a `household` schema with
+`waiting`/`doing` would silently list nothing. Moving it into the view layer
+removes the last hardcoded status list rather than replacing it with another
+config key, and it means a schema's vocabulary and its default listing are
+declared in the same file.
+
+Note `blocked` is gone from the default filter: [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] removes
+it from the core status enum, and derived-blocked quests stay visible via the
+`todo [blocked]` marking in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] instead of a status
+value nobody maintains by hand.
 
 - `quest next`, `quest stale`, `quest blocked` — real argparse subcommands that
   prefill `list`'s arguments and accept every `list` flag on top.
@@ -81,6 +96,8 @@ print it ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-lo
 
 ## Acceptance Criteria
 
+- [ ] `views.default` drives `quest list`'s implicit filter, and a schema can override it
+- [ ] A log overriding `statuses:` with its own `views.default` lists correctly
 - [ ] `quest next` returns one quest and never one with an open dependency
 - [ ] `quest next` accepts `--in`, `--where`, `--sort`, `--limit` on top of the view
 - [ ] `quest stale` ranks by `idle` and its threshold is configurable

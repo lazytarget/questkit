@@ -3,7 +3,8 @@ id: QST-yiep7
 title: Qualified cross-log references in blocked_by
 description: Let a reference declare its own scope as project/QST-xxxxx, so cross-log dependencies work without making validation device-dependent.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo

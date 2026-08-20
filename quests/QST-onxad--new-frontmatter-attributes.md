@@ -3,7 +3,8 @@ id: QST-onxad
 title: New frontmatter attributes
 description: Decide how a language hint reaches agents — resolved as a schema-declared field with a default, not a new core field.
 created: 2026-08-16
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: spark
 status: todo

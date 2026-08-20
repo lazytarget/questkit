@@ -3,7 +3,8 @@ id: QST-3h09k
 title: status_changed frontmatter field and reusable backfill
 description: Add a status_changed date written only on real status transitions, so staleness measures work progress instead of file churn.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo

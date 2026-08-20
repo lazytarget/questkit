@@ -3,7 +3,8 @@ id: QST-fmk0p
 title: Resolve a quest log by project name via --in
 description: Let --in accept a log's project name, not just a path, so targeting the right log stops depending on remembering a deep nested path.
 created: 2026-08-16
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo
@@ -60,6 +61,25 @@ error. The seven existing logs already satisfy this. The alternative — treatin
 `project:` as a free label and prompting to disambiguate — would build an
 interactive path into a tool that pipes into agents.
 
+**A path that is not itself a log expands to the logs beneath it.** Resolution
+order for a path value:
+
+1. The path **is** a log (`.questkit.yaml` present) → that log. Unchanged.
+2. Otherwise, sweep downward for logs under it:
+   - **read commands** (`list`, views, `deps`, `logs`) → **all** logs found;
+   - **write commands** (`new`, `init`) → exactly one, else the existing
+     `AmbiguousDestinationError` naming the candidates.
+
+So `--in 02-projects/grocy-ecosystem` resolves the same as
+`--in 02-projects/grocy-ecosystem/quests`, `--in ./quests` and `--in .` both work
+from a repo root, and `--in .` from the Realm root is honestly equivalent to
+`-A`. The read/write asymmetry is not new — it is exactly the guard
+`resolve_log_for_new` already implements, applied one level up.
+
+Note this sweeps **downward** only, while a bare command with no `--in` walks
+**up**. Different directions for different things: explicit beats implicit, and
+an explicit path means "here and below".
+
 Resolution is scoped to logs discovered under the sweep root
 (`resolve_sweep_root()`: explicit `--root`, then `QST_ROOT`, then the git root,
 then cwd), reusing `find_all_logs()` and its `DEFAULT_IGNORE_DIRS` pruning.
@@ -90,6 +110,10 @@ wrong.
 
 - [ ] `--in family` resolves to `02-projects/family/quests`
 - [ ] `--in ./quests` and `--in 99-system/quests` still resolve as paths
+- [ ] `--in 02-projects/grocy-ecosystem` resolves to its single child log
+- [ ] `--in .` from a repo root resolves to that repo's log
+- [ ] A directory containing several logs expands to all of them for reads
+- [ ] The same directory errors for `quest new`, naming the candidate logs
 - [ ] An existing directory name that is also a project name resolves as the path
 - [ ] An unknown name errors, listing known project names with their paths
 - [ ] A name matching two logs errors, naming both

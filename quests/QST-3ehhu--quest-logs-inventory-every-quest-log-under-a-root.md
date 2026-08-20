@@ -3,7 +3,8 @@ id: QST-3ehhu
 title: quest logs — inventory every quest log under a root
 description: Add a 'quest logs' command that lists every quest log discoverable from the sweep root, with per-log project, counts and git mode, and aggregates config warnings.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo
@@ -56,7 +57,9 @@ aggregates or de-duplicates them across a large sweep."*
 
    - `PROJECT` — the config's `project:`, or `-` for a catch-all log with none.
    - `QUESTS` — files matching that log's own `pattern`.
-   - `OPEN` — quests not in a terminal status.
+   - `OPEN` — quests not in a terminal status, per the log's own
+     `terminal_statuses` ([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 10), never a
+     hardcoded pair.
    - `GIT` — `auto` | `manual`.
    - `PATH` — relative to the sweep root.
 
@@ -82,16 +85,17 @@ aggregates or de-duplicates them across a large sweep."*
 7. **Enforces `project:` uniqueness** across the sweep — the identity guarantee
    [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] depends on. A collision is reported as an error naming both paths.
 
-8. Read-only. `quest logs` never writes, never creates, never migrates.
+8. An **archived** log ([[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]) shows an `ARCHIVED`
+   marker and its counts are excluded from the footer totals, so the inventory is
+   honest about what it is and is not counting.
+
+9. Read-only. `quest logs` never writes, never creates, never migrates.
 
 ## Open Questions
 
-- **Terminal statuses under a custom schema.** `OPEN` needs a definition of "not
-  done", and hardcoding `completed`/`scrapped` breaks any log that overrides
-  `statuses:`. Now tracked in [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]], since [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] needs the same
-  decision — it is load-bearing in two places and should be decided once.
-- `agentic:` deliberately left unset — AFK-readiness is a triage outcome to be
-  earned, not declared at capture.
+None. The terminal-status question is decided in
+[[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] (rule 10) — `OPEN` reads the log's declared
+`terminal_statuses`.
 
 ## Acceptance Criteria
 
@@ -99,7 +103,9 @@ aggregates or de-duplicates them across a large sweep."*
 - [ ] `quest logs --root <dir>` restricts the sweep to that subtree
 - [ ] A log with no `project:` renders `-` rather than crashing
 - [ ] `quest logs --format json` emits one object per log, valid for `jq`
-- [ ] `--verbose` shows schema overrides, custom fields and strict mode
+- [ ] `--verbose` shows schema overrides, custom fields, strict mode and terminal statuses
+- [ ] `OPEN` uses the log's own `terminal_statuses`
+- [ ] An archived log is marked and excluded from footer totals
 - [ ] A log with a broken `schema.extends` still appears as a row, with its warning printed once after the table
 - [ ] The footer names the sweep root and totals, one row per root
 - [ ] A duplicate `project:` across two logs is reported as an error naming both

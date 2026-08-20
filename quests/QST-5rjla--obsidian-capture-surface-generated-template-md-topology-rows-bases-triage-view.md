@@ -3,7 +3,8 @@ id: QST-5rjla
 title: "Obsidian capture surface: generated _template.md, topology rows, Bases triage view"
 description: Give the family log a creation surface that is not the CLI, by generating the Obsidian template from the schema instead of hand-writing it.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo

@@ -3,7 +3,8 @@ id: QST-bmzl2
 title: "questkit v3: loop closure, multi-log UX, and agent handoff"
 description: "Umbrella epic for questkit v3: close the work loop, make multi-log targeting legible, and make an agent handoff format real. (v3)"
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: epic
 tier: blueprint
 status: todo
@@ -19,7 +20,6 @@ tags:
 blocked_by: []
 aliases:
   - QST-bmzl2
-agentic: afk
 ---
 
 ## Description
@@ -73,6 +73,7 @@ Ordered by dependency. Each item is its own quest.
 | 11 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | loop closure |
 | 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | automation |
 | 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | capture surface |
+| 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | multi-log |
 
 Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
@@ -96,6 +97,13 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
   invites the missing half.
 - **`completed_at`** — derivable from git for `git: auto` logs, genuinely
   uncertain elsewhere, and no v3 command needs it.
+- **A membership / parent-child concept.** `milestone:` is a planning bucket, not
+  a link; an epic's Scope table stays prose. Grouping is a real gap and a real
+  design round, and 20 quests is not enough pressure to justify it.
+- **Renaming `status: completed` to `done`.** The command/value asymmetry is not
+  a defect (`git commit` does not write `status: committed`), and
+  `completed`/`scrapped` is a matched pair of outcomes that `done`/`scrapped` is
+  not.
 - **WIP limits and auto-scrapping** — policy, and policy needs usage evidence
   that does not exist yet.
 - **`quest ready`** — deferred until `quest brief` has been used by hand enough
@@ -110,6 +118,7 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
 - [ ] `quest brief <id>` output is sufficient to execute a groomed quest with no further discovery commands
 - [ ] The family log has a working creation path that is not the CLI
 - [ ] `quest validate` on every Realm log reports clean, or reports something real
+- [ ] A finished project's log can stop appearing in sweeps without any file moving
 
 ## Log
 

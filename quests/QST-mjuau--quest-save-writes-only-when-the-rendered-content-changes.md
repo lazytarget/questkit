@@ -3,7 +3,8 @@ id: QST-mjuau
 title: Quest.save() writes only when the rendered content changes
 description: quest format and quest set rewrite files unconditionally, churning mtimes across Syncthing and destroying the quiescence signal a timed committer needs.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: bug
 tier: spark
 status: todo

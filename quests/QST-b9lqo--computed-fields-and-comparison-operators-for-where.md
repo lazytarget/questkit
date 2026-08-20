@@ -3,7 +3,8 @@ id: QST-b9lqo
 title: Computed fields and comparison operators for --where
 description: Derive blocked, blocks, idle and age alongside frontmatter and expose them to --where, --select and --sort, with numeric and date comparisons.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo
@@ -60,6 +61,13 @@ shredded into `>` plus a stray `=`. Check order: `:exists`, `>=`, `<=`, `~`,
 `>`, `<`, `=`. ISO dates compare correctly as plain strings, so
 `--where status_changed<2026-08-05` needs no date parsing at all.
 
+**`blocked` is now unambiguous.** [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] removes `blocked`
+from the core `status` enum and makes it a schema validation error for any log to
+re-declare it, precisely so that `--where blocked=true` has exactly one meaning.
+Without that, a quest could be `status: blocked` with no dependencies (computed
+`false`) or the reverse, and `--where blocked=true` versus `--where status=blocked`
+would be two different questions one word apart.
+
 **Marking.** A blocked row renders its status cell as `todo [blocked]`. ASCII, so
 it survives a PowerShell terminal; self-documenting, so no legend is needed; and
 it costs width only on affected rows. A gutter column and a Unicode glyph were
@@ -84,8 +92,11 @@ what makes [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-ca
 
 ## Open Questions
 
-- Depends on the **terminal-status** decision in [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]]. Without it,
-  `blocked` cannot be computed for a log that overrides `statuses:`.
+None. The terminal-status question this depended on is resolved in
+[[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] (rule 10): `terminal_statuses` is a declarable,
+ordered schema key defaulting to `[completed, scrapped]`, and a log that
+overrides `statuses:` without a surviving default must declare it or fail loudly
+at config load.
 
 ## Acceptance Criteria
 
@@ -95,10 +106,11 @@ what makes [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-ca
 - [ ] `>=` and `<=` parse correctly and are not shredded by the `=` branch
 - [ ] Default `quest list` renders blocked rows as `todo [blocked]`
 - [ ] `quest set <id> blocked=true` errors — computed fields are read-only
+- [ ] `blocked` resolves against the log's `terminal_statuses`, not a hardcoded pair
 - [ ] `blocks` counts reverse edges across the active log set, and the summary states that scope
-- [ ] Terminal statuses are honored under a custom schema, not hardcoded
 - [ ] A quest with no `status_changed` gets `idle` from `created`
 
 ## Log
 
+- 2026-08-19: `blocked` removed from the core status enum so the computed field owns the name outright.
 - 2026-08-19: captured. The corpus check that motivated it: 0 uses of `status: blocked`, 8 quests genuinely blocked by an open dependency.

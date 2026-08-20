@@ -2,7 +2,7 @@
 title: questkit v3 — loop closure, multi-log UX, and agent handoff
 description: "Design record for questkit v3: the decisions, the evidence behind them, and the alternatives rejected along the way."
 created: 2026-08-19
-modified: 2026-08-19
+modified: 2026-08-20
 type: plan
 status: active
 tags:
@@ -41,6 +41,9 @@ Measured across the Realm on 2026-08-19. These numbers drove specific decisions 
 | `.sync-conflict` files | 46, across 15 `.git` directories | one-writer-per-repo |
 | Syncthing folder for the Realm root | **none** — folders are `00-inbox`, `01-daily`, `02-projects/<project>`, `03-knowledge`, `04-workbench`, `05-assets`, `06-archive`, `90-playground`, `99-system` | shared schemas live under `99-system/`, never the root |
 | `.stignore-gitmeta` | exists, referenced by nothing | the `.git/` exclusion option is already built |
+| `status: parked` | **0** | kept — it is the *declared* counterpart to computed `blocked` |
+| `type: milestone` | **0** of 129 | removed from core types; `milestone:` becomes a field |
+| Review pass, 2026-08-19 | 15 → `agentic: afk`, 1 → `hitl`, 1 → `status: draft` | `status` and `agentic` are separate axes, used differently in one sitting |
 
 **Measured, not assumed** — a pathspec-limited commit does *not* avoid rewriting `.git/index`:
 
@@ -85,11 +88,74 @@ A three-group rule (ordered natives → alphabetical natives → alphabetical cu
 
 `field_order` must drive `quest new` as well as `quest format`; `new_cmd.py` currently hardcodes its own order, so without this every freshly captured quest is immediately non-conformant.
 
+### The status enum
+
+Core becomes `draft | todo | in-progress | parked | completed | scrapped` —
+**`blocked` is removed.**
+
+The reason is not disuse (0 of 129, same as `parked`, which stays). It is that a
+status value and a computed field **cannot share a name in a query language**:
+with `blocked` computed, `--where blocked=true` and `--where status=blocked`
+would be two different questions one word apart, and a quest could satisfy either
+without the other. `blocked` is derived; `parked` is the declared state for
+"deliberately not being worked"; a blocker that is not itself a quest should
+become one.
+
+This generalises into a rule: **a schema may not declare an enum value colliding
+with a computed field name** (`blocked`, `blocks`, `idle`, `age`), enforced at
+config load. That is what makes the removal permanent rather than a tidy-up
+someone reverses in six months.
+
+`completed` is **not** renamed to `done`. The command/value asymmetry is not a
+defect — `git commit` does not write `status: committed` — and
+`completed`/`scrapped` is a matched pair of outcomes that `done`/`scrapped` is
+not. The rename would cost a corpus migration and a doc sweep for symmetry alone.
+
+### Terminal statuses
+
+Four consumers need to know which statuses mean "done": `quest logs`' `OPEN`
+column, the `blocked` computation, `stale`'s exclusion set, and what `quest done`
+writes. `terminal_statuses` is an **ordered** schema key defaulting to
+`[completed, scrapped]` intersected with the declared statuses; `quest done`
+writes the first entry.
+
+A log that overrides `statuses:` where **no** default survives, and declares no
+`terminal_statuses`, is a **hard schema error**. Degrading (an `OPEN` column that
+silently equals `total`) is a wrong answer delivered confidently, which is worse
+than failing at config load.
+
+Two related concepts get no key of their own. **Draft-ness** derives from
+`defaults.status` — the status a fresh quest is born with — so a log whose quests
+start at `todo` simply has no draft state and the `description` exemption
+correctly does not apply. The **default listing** becomes `views.default`, which
+removes the third hardcoded status list rather than replacing it with a third
+config key.
+
 ### Core vs. schema
 
 `tier` and `effort` **stay core**. The test is not "is this field used everywhere" but "is this vocabulary universal": `xs|s|m|l|xl` and `spark|brief|blueprint` describe any unit of work including a household chore. `component` and `related_adrs` are meaningless outside software and belong in the `development` schema. Demoting a universal vocabulary to shrink the core would also lose validation on the 20 files already carrying `effort`.
 
 `language` follows the same rule and is therefore **not** a core field — see [[QST-onxad--new-frontmatter-attributes]].
+
+`agentic` **stays core**, against the instinct to demote it. The deciding
+argument is the same one that kept `effort`: under `strict: true`, a field the
+schema does not declare cannot be written by the CLI at all, so demoting
+`agentic` would make `--set agentic=afk` a *hard error* in every log that had not
+opted in — and would leave a core command's (`quest brief`) readiness logic
+depending on a field the core does not know exists. Low usage is not the test;
+`due` is core and used once. Two rules do get added: `agentic: afk` requires a
+non-draft status (AFK-readiness is earned at grooming), and `agentic` on a
+`type: epic` is an error — an epic is a container, not a unit of execution, so
+the AFK rule's `## Spec` requirement can never be honestly satisfied.
+
+`milestone:` joins the `development` schema — a free-text planning bucket
+(`0.4.0`, `spring-2027`) for "what shipped when" queries and release notes. Named
+`milestone` rather than `planned_version` because it is a bucket that can slip,
+not a fact, and rather than `version` because that would read as "which questkit
+version" beside the config's own `version: 1`. `milestone` therefore leaves the
+core `types` enum (0 uses; `epic` already covers a grouping quest), per the
+collision rule above. It is **not** a membership link — questkit still has no
+parent/child concept, and v3 does not add one.
 
 ### Defaults, macros, typed fields, strict
 
@@ -138,10 +204,15 @@ Views are **pure prefills** defined in the schema file, overridable per log, exp
 
 ```yaml
 views:
+  default: { where: ["status=todo,in-progress"] }
   next:    { where: ["blocked=false"], sort: "priority:asc,effort:asc,idle:desc", limit: 1 }
   stale:   { where: ["idle>14"], sort: "idle:desc" }
   blocked: { where: ["blocked=true"], sort: "blocks:desc" }
 ```
+
+`views.default` is what pays for the mechanism: `quest list`'s implicit status
+filter is hardcoded today and would silently list nothing in a log that overrode
+`statuses:`.
 
 Config overrides a built-in's *definition*, never its *command name* — argparse is built before any log resolves, and a CLI whose command list depends on cwd is a debugging nightmare.
 
@@ -162,6 +233,7 @@ Selective Syncthing makes multi-log mandatory — folder boundaries in this vaul
 - **Repeatable `--in`**, accepting names or paths, allowed on mutation commands too where it remains a bounded search set with no silent sweep past it.
 - **One `resolve_log_set()`** with three sources replaces two divergent code paths. A simplification, not an addition.
 - **Per-log grouping** whenever more than one log is in scope — sort order plus a table-only separator header. **JSON and CSV stay flat arrays**; nesting would break every `jq '.[].title'` consumer, including the Home Assistant sensor.
+- **One column set for the whole result**, with the header repeated under each group separator. A `--select` field missing from some logs renders as an empty column (informative) rather than being dropped (hides it) or made ragged per group (unscannable); missing from *every* log in scope stays a hard error. CSV and JSON have to be uniform regardless, and a table disagreeing with them would be worse.
 - **A summary block on stderr**, silenced by `--quiet`. Rows to stdout so pipes and `--out` stay clean. It names the view, the filters (including the *injected default status filter* and its override idiom), the sort, the paging, and one `logs` row per root.
 
 Grouping replaced an earlier proposal to force a single global ranking. Concatenating per-log results means each log evaluates its own view definition, which is strictly more correct — and it makes `quest next -A` a legitimate standup view rather than an error.
@@ -209,7 +281,7 @@ It does **not** prevent `.git/index` churn (§2). So the Syncthing mitigation ha
 
 **Decision:** flip the quest-only logs (`family`, `realm-common`, `grocy-ecosystem`) to `git: manual` and give the timer an **explicit multi-`--in` scope**. Workstations write quest *files*; Syncthing carries them; realm-01 commits them.
 
-The four `git: manual` code repos are where the 46 conflicts actually live. Nothing questkit does helps there — the fix is `#include .stignore-gitmeta` plus Gitea as the reconciliation point, or not Syncthing-ing them at all. That is a Realm decision, outside this plan. Worth noting *why* the 2026-08-16 revert felt bad: excluding only `index`/`logs` while syncing the worktree leaves the index describing a tree that is not there, so `git status` lies. Excluding all of `.git/` does not have that failure mode.
+The four `git: manual` code repos are where the 46 conflicts actually live. **Decided 2026-08-20: they stay in Syncthing, `.git/` included** — the multi-device working experience is worth more than the conflict litter, and the 2026-08-16 revert of the `index`/`logs` exclusion was the right call for the same reason (excluding only those while syncing the worktree leaves the index describing a tree that is not there, so `git status` lies). This is a Realm decision, recorded here because it bounds what `quest commit` can promise: pathspec limiting prevents *staging unrelated files*, and nothing questkit does prevents index churn.
 
 ### `quest commit`
 
@@ -290,7 +362,29 @@ Routing rule, first test that fires wins:
 | `grocy-ecosystem` | keep as one log, add `component` | 3 — 35 of 66 titles already carry a hand-typed prefix |
 | `family` | keep | 1 |
 | `realm-common` | keep, **re-charter as the inbox** | "shared in some way" routes nothing; an inbox has a real charter and something to be stale about |
-| `career-transition` | keep — but it is time-boxed with no exit | needs an archive story before there are three dead logs |
+| `career-transition` | keep — archive it when it ends | see below |
+
+### Archival
+
+A time-boxed project's log needs to stop talking without any file moving.
+`archived: true` in its own `.questkit.yaml` does that: sweeps and views skip it
+unless `--include-archived`, and `quest logs` marks it and drops it from the
+footer totals.
+
+The granularity is the insight — the thing that ends is a **project**, not a
+quest. Per-quest archival would mean 13 file rewrites for one project ending, and
+moving files into a `quests/archive/` subdirectory is forbidden outright by v1
+(it breaks the Obsidian link graph this system exists to build).
+
+**Archival affects listing, never id resolution.** `show`/`brief`/`deps` and
+`blocked_by` references still resolve into an archived log — otherwise every
+cross-log reference into a finished project would start failing validation the
+day it was archived, and `quest deps` would lose half its graph.
+
+The concrete trigger is not tidiness: `career-transition` will end with some
+quests still `todo`, and `quest stale` would nag about them forever with no
+action that could ever silence it. A dead log poisons the loop-closure views,
+which are the point of v3.
 
 `project:` is **identity**, unique per log, enforced by `quest logs` and `quest validate`. The alternative (free label + disambiguation prompt) would build an interactive path into a tool that pipes into agents.
 
@@ -302,6 +396,9 @@ Routing rule, first test that fires wins:
 - **`completed_at`.**
 - **WIP limits and auto-scrapping** — policy, and policy needs usage evidence that does not exist.
 - **`quest ready`** — deferred.
+- **A membership / parent-child concept.** `milestone:` is a planning bucket, not a link; an epic's Scope table stays prose.
+- **Renaming `completed` to `done`.**
+- **Per-quest archival.** Archival is log-level; see §10.
 - **A second config key splitting CLI-auto-commit from daemon-commit** — the explicit timer scope removes the need.
 
 ## 12. Build order
@@ -321,15 +418,21 @@ Routing rule, first test that fires wins:
 | 11 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | needs computed fields |
 | 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | |
 | 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | needs the schema engine |
+| 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | needs `quest logs` |
 
 Independent: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
 ## 13. Open questions
 
-- **Terminal statuses under a custom schema.** Needed by `quest logs`' `OPEN` column *and* by the `blocked`/`next` computations. Either `SchemaConfig` declares its terminal set or consumers degrade. Load-bearing in two places — decided in [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]], not separately.
-- **An archive story.** `career-transition` is time-boxed; when it ends its 13 quests stay in `-A` forever. Archiving as a *mutation* (move to cold storage, drop out of sweeps) is a real feature, and the `archive` command name is reserved for it.
-- **Whether the code repos belong in Syncthing folders at all.** Realm-side, not questkit's, but it is the root cause of the 46 conflict files.
+None outstanding. The two carried from the first draft are resolved:
+
+- **Terminal statuses under a custom schema** → an ordered `terminal_statuses` schema key, defaulting to `[completed, scrapped]` intersected with the declared statuses, and a hard error when a vocabulary override leaves none (§4). Decided once, in [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]], because it was load-bearing for both `quest logs`' `OPEN` column and the `blocked` computation.
+- **The archive story** → log-level `archived: true`, affecting listing but never id resolution (§10), tracked as [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]].
+
+**Whether the code repos belong in Syncthing** is no longer open — decided on 2026-08-20 that they stay, `.git/` included (§7).
 
 ## 14. Provenance
 
-Written 2026-08-19 from a design grilling session covering positioning, multi-log friction, schema defaults and macros, the agent handoff format, the Obsidian/mobile capture surface, and the git/Syncthing boundary. Corpus figures in §2 and the `.git/index` measurement in §7 were taken during that session.
+Revised 2026-08-20 after a review pass over the quest set: the `status`/computed-field
+collision, terminal statuses, archival, `agentic`'s home, `milestone:`, and the
+grouped-output column rules. Originally written 2026-08-19 from a design grilling session covering positioning, multi-log friction, schema defaults and macros, the agent handoff format, the Obsidian/mobile capture surface, and the git/Syncthing boundary. Corpus figures in §2 and the `.git/index` measurement in §7 were taken during that session.

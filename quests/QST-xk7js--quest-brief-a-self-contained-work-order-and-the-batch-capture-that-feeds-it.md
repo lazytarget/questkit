@@ -3,7 +3,8 @@ id: QST-xk7js
 title: "quest brief: a self-contained work order, and the batch capture that feeds it"
 description: Emit a lean, agent-agnostic Markdown work order for one quest, and accept a body or a batch of quests on stdin as the inbound half.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: draft
@@ -88,7 +89,29 @@ REPORT BACK
   Notable decisions → the quest's ## Log. Commit prefix: quest(questkit):
 
 READY  ✅ spec · ✅ 4 acceptance criteria · ✅ agentic=afk
+STATE  ✅ todo · ✅ unblocked · blocks 2
 ```
+
+**Two lines, not one — they fail for different reasons and have different fixes.**
+
+| Line | Question | Checks | Fixed by |
+|------|----------|--------|----------|
+| `READY` | Is this document executable as written? | `## Spec`/`## Design`, real acceptance criteria, `description`, `agentic` | grooming |
+| `STATE` | Should anyone pick it up right now? | `blocked=false`, status not draft/terminal/parked | unblocking, or a status change |
+
+A `READY` failure means "not implementation-ready — this is grooming input". A
+`STATE` failure is a warning, never a refusal: **`quest brief` must still emit a
+full brief for a blocked quest**, because the most common reason to brief one is
+to hand an agent the thing that unblocks it. It names the blocker so the reader
+can retarget:
+
+```
+STATE  ⚠️  blocked by QST-3ehhu (todo) — that quest is the actionable work
+```
+
+`status=scrapped` and `status=completed` warn loudly (`already completed
+2026-08-14 — briefing it is probably a mistake`) rather than erroring, since
+re-briefing a finished quest to understand what was done is legitimate.
 
 For an **ungroomed** quest the same command collapses to header, location and
 warnings — short-by-default emerges exactly where a full brief would be
@@ -164,6 +187,10 @@ optional (`nargs="?"` plus a mutual-exclusion check).
 - [ ] The brief sweeps all logs and prints its scope
 - [ ] `REPORT BACK` names the exact commands and the log's commit prefix
 - [ ] An ungroomed quest's brief collapses to header, location and warnings
+- [ ] `READY` and `STATE` are separate lines with separate verdicts
+- [ ] A blocked quest still gets a full brief, with `STATE` naming the blocker
+- [ ] A completed or scrapped quest warns but still briefs
+- [ ] Only a `READY` failure produces the "not implementation-ready" verdict
 - [ ] Output contains no vendor-specific or model-specific text
 - [ ] `quest new --body -` reads the Markdown body from stdin
 - [ ] `quest new --batch -` creates N quests and prints their ids in input order
@@ -171,4 +198,5 @@ optional (`nargs="?"` plus a mutual-exclusion check).
 
 ## Log
 
+- 2026-08-19: readiness split into READY (document quality) and STATE (right-now eligibility) — they fail for different reasons and a blocked quest must still be briefable.
 - 2026-08-19: captured. The default output was deliberately shrunk from an earlier verbose draft; the schema block's conditional presence is the principled half of that, not just the shorter one.

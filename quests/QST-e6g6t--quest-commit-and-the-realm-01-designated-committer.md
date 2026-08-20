@@ -3,7 +3,8 @@ id: QST-e6g6t
 title: quest commit and the realm-01 designated committer
 description: Own the commit convention in the app, give it a bounded pathspec, and make one always-on host the sole git writer for the quest-only logs.
 created: 2026-08-19
-modified: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 type: feature
 tier: brief
 status: todo
