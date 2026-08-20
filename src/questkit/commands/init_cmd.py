@@ -24,12 +24,33 @@ def run(args: argparse.Namespace) -> int:
     if created_dir:
         print(f"[quest init] {target}: created quests directory")
 
+    _ensure_gitignore(target)
+
     if args.base:
         _init_base(target)
     if args.hooks:
         _init_hooks(target)
 
     return 0
+
+
+def _ensure_gitignore(target: Path) -> None:
+    """`_validation.md` (`quest validate --report`) is derived state whose
+    transport is Syncthing, not git -- and several real logs are their own
+    git repos with no `.gitignore` at all, so without this it sits untracked
+    forever, waiting for the first `git add -A`."""
+    gitignore = target / ".gitignore"
+    entry = "_validation.md"
+    if gitignore.is_file():
+        text = gitignore.read_text(encoding="utf-8")
+        if entry in [line.strip() for line in text.splitlines()]:
+            return
+        needs_newline = bool(text) and not text.endswith("\n")
+        with gitignore.open("a", encoding="utf-8") as handle:
+            handle.write(("\n" if needs_newline else "") + f"{entry}\n")
+    else:
+        gitignore.write_text(f"{entry}\n", encoding="utf-8")
+        print(f"[quest init] {gitignore}: created, ignoring {entry}")
 
 
 def _resolve_target(dir_arg: str | None) -> Path:

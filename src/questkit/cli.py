@@ -8,6 +8,7 @@ import sys
 from .commands import (
     archive_cmd,
     brief_cmd,
+    commit_cmd,
     deps_cmd,
     done_cmd,
     format_cmd,
@@ -250,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help="show informational notes (never affects the exit code)",
     )
+    p_validate.add_argument(
+        "--report",
+        dest="report",
+        metavar="FILE",
+        help="write findings as a Markdown note to FILE, deleting it when the log is clean",
+    )
     p_validate.set_defaults(func=validate_cmd.run)
 
     p_format = subparsers.add(
@@ -305,6 +312,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="commit per log afterwards; refuses on a dirty index",
     )
     p_migrate.set_defaults(func=migrate_cmd.run)
+
+    p_commit = subparsers.add(
+        "commit", group="Maintain", help="commit quest changes with a derived message"
+    )
+    p_commit.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
+    p_commit.add_argument("-A", "--all-logs", dest="all_logs", action="store_true")
+    p_commit.add_argument("--root", dest="root", action="append")
+    p_commit.add_argument(
+        "--no-verify", dest="no_verify", action="store_true", help="forwarded to git commit"
+    )
+    p_commit.add_argument("--push", action="store_true", help="push afterwards (opt-in, off by default)")
+    p_commit.set_defaults(func=commit_cmd.run)
 
     p_logs = subparsers.add("logs", group="Logs", help="inventory every quest log under a root")
     p_logs.add_argument("--root", dest="root", action="append", help="repeatable")

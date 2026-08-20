@@ -34,6 +34,7 @@ def run(args: argparse.Namespace) -> int:
     checked = 0
     total_errors = 0
     total_notes = 0
+    report_sections: list[str] = []
     for path in sorted(quests_dir.glob(config.pattern)):
         checked += 1
         try:
@@ -41,6 +42,7 @@ def run(args: argparse.Namespace) -> int:
         except QuestFileError as exc:
             print(f"[!] {exc}")
             total_errors += 1
+            report_sections.append(f"## {path}\n\n- error: {exc}\n")
             continue
 
         errors = schema.validate_quest(quest, config.schema)
@@ -65,9 +67,30 @@ def run(args: argparse.Namespace) -> int:
             if args.notes:
                 for note in notes:
                     print(f"      note: {note.message}")
+        if errors or notes:
+            lines = [f"- error: {e.message}" for e in errors] + [f"- note: {n.message}" for n in notes]
+            report_sections.append(f"## {path}\n\n" + "\n".join(lines) + "\n")
 
     print(f"[quest validate] {_summary(checked, total_errors, total_notes)}")
+
+    if getattr(args, "report", None):
+        _write_report(Path(args.report), checked, total_errors, total_notes, report_sections)
+
     return 1 if total_errors else 0
+
+
+def _write_report(report_path: Path, checked: int, errors: int, notes: int, sections: list[str]) -> None:
+    """Write findings as a Markdown note, deleting it when the log is clean.
+
+    Derived state, transported by Syncthing rather than git -- `quest
+    commit`'s default `tracked:` set deliberately excludes it -- and left
+    stale forever if nobody deletes it once the log is fixed.
+    """
+    if not errors and not notes:
+        report_path.unlink(missing_ok=True)
+        return
+    header = f"# Validation report\n\n{_summary(checked, errors, notes)}\n\n"
+    report_path.write_text(header + "\n".join(sections), encoding="utf-8")
 
 
 def _warn_validation_theater(config: QuestLogConfig) -> None:

@@ -857,6 +857,11 @@ design** — safe to run any number of times; never overwrites an existing
   containing the target (walks up looking for `.git`; a no-op with a
   message if there isn't one) — see [§11](#11-git-hooks-and-validation)
   for exactly what this does.
+- **Every run ensures `<log>/.gitignore` contains `_validation.md`**,
+  idempotently — creating the file if it doesn't exist, appending the entry
+  if it does and doesn't already have it. Several real logs are their own
+  git repo with no `.gitignore` at all; without this, `quest validate
+  --report`'s note sits untracked forever, waiting for the first `git add -A`.
 
 ```bash
 $ quest init --project pensieve --git manual --hooks --base
@@ -891,6 +896,16 @@ a log that is permanently "failing" is a log whose output nobody reads.
 $ quest validate
 [quest validate] 23 quest(s) checked, 0 error(s), 2 note(s)
 ```
+
+**`--report FILE`** writes every finding as a Markdown note to `FILE`, and
+**deletes it when the log is clean** — exit-code semantics are unaffected
+either way. Meant for an unattended run (`quest validate --report
+quests/_validation.md || true`): the timer chooses leniency by appending
+`|| true` itself, rather than questkit growing a `--no-fail` flag someone
+later pastes into a hook. `_validation.md` is derived state, transported by
+Syncthing rather than git — see `quest init`'s `.gitignore` handling below
+and `quest commit`'s default `tracked:` set ([§6](#6-cli-reference)), both of
+which deliberately exclude it.
 
 ### `quest format [PATH ...] [--in DIR] [--check] [--fill-defaults]`
 
@@ -1003,6 +1018,38 @@ Shared behavior:
   changes there is no way to produce a commit containing only the migration,
   and a run touching 129 files across 7 repositories is the wrong place to
   discover that afterwards. Each log commits separately, in its own repo.
+
+### `quest commit [--in LOG ...] [-A] [--root DIR ...] [--no-verify] [--push]`
+
+Owns the commit convention in the app, rather than duplicating it across a
+systemd timer, a Home Assistant `shell_command`, and fingers. Stages and
+commits **exactly the log's `tracked:` pathspec** via `git commit --
+<pathspec>`, which ignores the index — so staged, unrelated code changes in
+the same repo are never swept into a `quest(...)` commit, even if `git add
+-A` already ran.
+
+- **`tracked:`** ([§8](#8-questkityaml-configuration-reference)) defaults to
+  the log's own `pattern`, `.questkit.yaml`, `.gitignore`, `_template.md` and
+  `quests.base` — **not** `_validation.md`, which is derived state whose
+  transport is Syncthing, not git.
+- **The message is derived from the frontmatter diff, deterministically —
+  no model anywhere in this path**:
+  ```
+  quest(family): add 2, update 1
+
+  + QST-9x2kf  Book the chimney sweep
+  + QST-p4m1c  Order gutter cleaning
+  ~ QST-3ehhu  status: todo → done
+  ```
+- **Nothing to commit exits `0` and writes no empty commit.**
+- **A pre-commit hook failure (without `--no-verify`) exits non-zero and
+  prints the hook's output** — an unattended timer must never let a
+  data-quality problem become a silent history gap.
+- **`--no-verify` is forwarded to git**, off by default: normal interactive
+  use keeps hook enforcement; an unattended caller opts out explicitly.
+- **`--push` is opt-in and off by default** — a network side effect with
+  conflict semantics a local command shouldn't default to.
+- Repeatable `--in`/`-A`/`--root`, the same multi-log resolution as `list`.
 
 ### `quest logs [--root DIR ...] [--format table|json] [--verbose]`
 
@@ -1170,6 +1217,7 @@ schema:
 | `defaults.type` / `.status` / `.priority` | `task` / `draft` / `medium` | Used by `quest new` whenever the corresponding `--type`/`--status`/`--priority` flag isn't given. Loading a config that doesn't specify one of these three falls back to the same hardcoded defaults — `defaults:` in the file only needs to list the ones you want to override. |
 | `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list -A`, cross-log id resolution) walks this log's own tree — see [§9](#9-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention `syncthing.yaml`/`scaffold_syncthing.py` uses elsewhere in the Realm, so a log inside the Realm can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
 | `schema` | *(absent)* | Overrides/extends the built-in `type`/`status`/`tier`/`priority`/`effort` vocabularies, declares `terminal_statuses`, and/or declares custom fields, for this log only. See the dedicated subsection below — absent entirely, a log behaves exactly as if this key didn't exist at all (full backward compatibility). |
+| `tracked` | *(absent)* | The exact pathspec `quest commit` stages and commits ([§6](#6-cli-reference)). Absent means the derived default: this log's own `pattern`, `.questkit.yaml`, `.gitignore`, `_template.md`, `quests.base` — deliberately never `_validation.md`, which is derived state transported by Syncthing, not git. |
 
 Config values load through the exact same `ruamel.yaml` instance used for
 quest files (`preserve_quotes=True`, wide line width, `---` document-start
@@ -1434,6 +1482,17 @@ interact in specific ways worth understanding:
   commit (`git commit -- <exact file>`, never `-a`, never a push) is a
   safety rail if you do choose `auto` somewhere with other content — it
   can never accidentally sweep in unrelated staged changes.
+- **Pathspec does not protect `.git/index` itself, though — measured, not
+  assumed.** `git commit -m x -- a.md` (no `git add` at all) still rewrites
+  the index, because git's partial-commit path stages the named paths into
+  the *real* index and writes it before building a temporary index for the
+  commit. So pathspec buys a different property than it might look like:
+  it prevents staging *unrelated files*, which is a correctness guarantee,
+  not a Syncthing one. **The actual mitigation for the index-race Syncthing
+  hits when two devices write to the same repo is one git writer per
+  repo** — see `quest commit` above, which exists precisely so an
+  unattended designated-committer machine can be that one writer for a log
+  currently set to `manual` for that reason.
 - **Syncthing conflicts are handled the same way any other Markdown file's
   conflicts are** — questkit doesn't do anything special here. A
   simultaneous edit to the same quest from two offline devices produces a
