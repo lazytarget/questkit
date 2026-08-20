@@ -262,6 +262,14 @@ that one call (see [§9](#9-multi-zone-setup) for the full resolution
 order). Examples below assume you're standing inside an already-opted-in
 log unless `--in` is shown explicitly.
 
+**`quest --help` groups its ~20 commands** (Capture, Query, Modify, Logs,
+Maintain, Introspect) instead of rendering one flat, insertion-ordered list
+— the shape `git help -a` uses at a much larger scale. Grouping is purely a
+`--help` rendering concern: every command is unrenamed, unnested, and reached
+exactly as `quest <verb>` either way; `quest <command> --help` is unaffected.
+A view (`next`/`stale`/`blocked`) is marked `(view)` in the Query group,
+since it's a prefilled `list` invocation accepting every `list` flag.
+
 ### Resolving `--in` by name
 
 Every command that takes `--in DIR` also accepts a **project name**: `--in

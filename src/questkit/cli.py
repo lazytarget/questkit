@@ -21,6 +21,7 @@ from .commands import (
     show_cmd,
     validate_cmd,
 )
+from .help_groups import GroupedSubparsers
 
 
 def _add_list_options(parser: argparse.ArgumentParser) -> None:
@@ -95,9 +96,9 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="quest", description="File-based quest tracking.")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = GroupedSubparsers(parser.add_subparsers(dest="command", required=True))
 
-    p_new = subparsers.add_parser("new", help="capture a new quest")
+    p_new = subparsers.add("new", group="Capture", help="capture a new quest")
     p_new.add_argument("title")
     p_new.add_argument("--type", dest="type")
     p_new.add_argument("--tier", dest="tier")
@@ -117,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_new.add_argument("--edit", action="store_true")
     p_new.set_defaults(func=new_cmd.run)
 
-    p_list = subparsers.add_parser("list", help="list quests")
+    p_list = subparsers.add("list", group="Query", help="list quests")
     _add_list_options(p_list)
     p_list.set_defaults(func=list_cmd.run)
 
@@ -129,24 +130,24 @@ def build_parser() -> argparse.ArgumentParser:
     # *definition* (schema.SchemaConfig.views), never its command name --
     # argparse is built before any log resolves, so the CLI's command list
     # can't depend on cwd.
-    p_next = subparsers.add_parser("next", help="the single best quest to do next")
+    p_next = subparsers.add("next", group="Query", view=True, help="the single best quest to do next")
     _add_list_options(p_next)
     p_next.set_defaults(func=list_cmd.run, view="next")
 
-    p_stale = subparsers.add_parser("stale", help="quests whose status has gone untouched")
+    p_stale = subparsers.add("stale", group="Query", view=True, help="quests whose status has gone untouched")
     _add_list_options(p_stale)
     p_stale.set_defaults(func=list_cmd.run, view="stale")
 
-    p_blocked = subparsers.add_parser("blocked", help="quests with an open dependency")
+    p_blocked = subparsers.add("blocked", group="Query", view=True, help="quests with an open dependency")
     _add_list_options(p_blocked)
     p_blocked.set_defaults(func=list_cmd.run, view="blocked")
 
-    p_show = subparsers.add_parser("show", help="show a quest by id")
+    p_show = subparsers.add("show", group="Query", help="show a quest by id")
     p_show.add_argument("id")
     p_show.add_argument("--in", dest="in_dir")
     p_show.set_defaults(func=show_cmd.run)
 
-    p_set = subparsers.add_parser("set", help="set one or more fields on a quest")
+    p_set = subparsers.add("set", group="Modify", help="set one or more fields on a quest")
     p_set.add_argument("id")
     # nargs="*" rather than "+" so `quest set <id> --set f=v` reaches the
     # command and gets the message naming the positional form, instead of
@@ -168,45 +169,45 @@ def build_parser() -> argparse.ArgumentParser:
     p_set.add_argument("--set", dest="rejected_set", action="append", help=argparse.SUPPRESS)
     p_set.set_defaults(func=set_cmd.run)
 
-    p_done = subparsers.add_parser("done", help="mark a quest done")
+    p_done = subparsers.add("done", group="Modify", help="mark a quest done")
     p_done.add_argument("id")
     p_done.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_done.set_defaults(func=done_cmd.run)
 
-    p_scrap = subparsers.add_parser("scrap", help="mark a quest scrapped")
+    p_scrap = subparsers.add("scrap", group="Modify", help="mark a quest scrapped")
     p_scrap.add_argument("id")
     p_scrap.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_scrap.set_defaults(func=done_cmd.run_scrap)
 
-    p_archive = subparsers.add_parser("archive", help="archive a quest (retention, not status)")
+    p_archive = subparsers.add("archive", group="Modify", help="archive a quest (retention, not status)")
     p_archive.add_argument("id")
     p_archive.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_archive.set_defaults(func=archive_cmd.run_archive)
 
-    p_unarchive = subparsers.add_parser("unarchive", help="un-archive a quest")
+    p_unarchive = subparsers.add("unarchive", group="Modify", help="un-archive a quest")
     p_unarchive.add_argument("id")
     p_unarchive.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_unarchive.set_defaults(func=archive_cmd.run_unarchive)
 
-    p_archive_log = subparsers.add_parser(
-        "archive-log", help="archive every quest in a whole log (bulk quest archive)"
+    p_archive_log = subparsers.add(
+        "archive-log", group="Logs", help="archive every quest in a whole log (bulk quest archive)"
     )
     p_archive_log.add_argument("log", metavar="LOG", help="name or path")
     p_archive_log.set_defaults(func=archive_cmd.run_archive_log)
 
-    p_unarchive_log = subparsers.add_parser(
-        "unarchive-log", help="un-archive every quest in a whole log"
+    p_unarchive_log = subparsers.add(
+        "unarchive-log", group="Logs", help="un-archive every quest in a whole log"
     )
     p_unarchive_log.add_argument("log", metavar="LOG", help="name or path")
     p_unarchive_log.set_defaults(func=archive_cmd.run_unarchive_log)
 
-    p_mv = subparsers.add_parser("mv", help="move a quest to a different quest log")
+    p_mv = subparsers.add("mv", group="Modify", help="move a quest to a different quest log")
     p_mv.add_argument("id")
     p_mv.add_argument("dest", help="destination quests/ directory (must already be a quest log)")
     p_mv.add_argument("--in", dest="in_dir", help="restrict source lookup to this quest log")
     p_mv.set_defaults(func=mv_cmd.run)
 
-    p_init = subparsers.add_parser("init", help="opt a directory into a quest log")
+    p_init = subparsers.add("init", group="Logs", help="opt a directory into a quest log")
     p_init.add_argument("dir", nargs="?", default=None)
     p_init.add_argument("--base", action="store_true")
     p_init.add_argument("--hooks", action="store_true")
@@ -214,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--git", dest="git", choices=["auto", "manual"], default=None)
     p_init.set_defaults(func=init_cmd.run)
 
-    p_validate = subparsers.add_parser("validate", help="validate quests against the schema")
+    p_validate = subparsers.add("validate", group="Maintain", help="validate quests against the schema")
     p_validate.add_argument("--in", dest="in_dir")
     p_validate.add_argument(
         "--notes",
@@ -225,8 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_validate.set_defaults(func=validate_cmd.run)
 
-    p_format = subparsers.add_parser(
-        "format", help="reformat quest frontmatter to match the current normalization rules"
+    p_format = subparsers.add(
+        "format", group="Maintain",
+        help="reformat quest frontmatter to match the current normalization rules"
     )
     p_format.add_argument(
         "targets",
@@ -248,7 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_format.set_defaults(func=format_cmd.run)
 
-    p_migrate = subparsers.add_parser("migrate", help="frontmatter-aware corpus migrations")
+    p_migrate = subparsers.add("migrate", group="Maintain", help="frontmatter-aware corpus migrations")
     p_migrate.add_argument(
         "--backfill",
         metavar="FIELD=SOURCE",
@@ -278,7 +280,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_migrate.set_defaults(func=migrate_cmd.run)
 
-    p_logs = subparsers.add_parser("logs", help="inventory every quest log under a root")
+    p_logs = subparsers.add("logs", group="Logs", help="inventory every quest log under a root")
     p_logs.add_argument("--root", dest="root", action="append", help="repeatable")
     p_logs.add_argument("--format", dest="format", choices=["table", "json"], default="table")
     p_logs.add_argument(
@@ -288,7 +290,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_logs.set_defaults(func=logs_cmd.run)
 
-    p_deps = subparsers.add_parser("deps", help="show a quest's dependency graph")
+    p_deps = subparsers.add("deps", group="Query", help="show a quest's dependency graph")
     p_deps.add_argument("id")
     p_deps.add_argument(
         "--blocks",
@@ -301,12 +303,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_deps.add_argument("--root", dest="root", action="append", help="repeatable")
     p_deps.set_defaults(func=deps_cmd.run)
 
-    p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")
+    p_schema = subparsers.add("schema", group="Introspect", help="introspect the active schema (for agents)")
     p_schema.add_argument("kind", choices=["quest"])
     p_schema.add_argument("field", nargs="?", default=None)
     p_schema.add_argument("--format", dest="format", choices=["json", "table"], default="json")
     p_schema.add_argument("--in", dest="in_dir")
     p_schema.set_defaults(func=schema_cmd.run)
+
+    subparsers.validate()
+    parser.formatter_class = subparsers.formatter_class()
 
     return parser
 

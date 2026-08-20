@@ -4,14 +4,14 @@ title: Group root commands in help output as the CLI passes 20 verbs
 description: Render quest --help as labelled groups instead of one flat alphabetical list, so a 22-command CLI stays legible to humans and to agents reading it cold.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 aliases:
   - QST-zl5xc
@@ -128,15 +128,16 @@ command stays reachable as `git <verb>`. Same shape, same reason.
 
 ## Acceptance Criteria
 
-- [ ] `quest --help` renders labelled groups in the order above
-- [ ] Every command appears in exactly one group
-- [ ] No command is renamed, removed, or nested — `quest <verb>` is unchanged for all of them
-- [ ] Views are marked `(view)` in the Query group
-- [ ] Adding a subparser without a group is a startup error, not a silent ungrouped command
-- [ ] `quest <command> --help` is unchanged
-- [ ] Output is plain ASCII and wraps sanely at 80 columns
-- [ ] A test asserts every registered subparser has a group
+- [x] `quest --help` renders labelled groups in the order above
+- [x] Every command appears in exactly one group
+- [x] No command is renamed, removed, or nested — `quest <verb>` is unchanged for all of them
+- [x] Views are marked `(view)` in the Query group
+- [x] Adding a subparser without a group is a startup error, not a silent ungrouped command
+- [x] `quest <command> --help` is unchanged
+- [x] Output is plain ASCII and wraps sanely at 80 columns
+- [x] A test asserts every registered subparser has a group
 
 ## Log
 
+- 2026-08-20: implemented. New `src/questkit/help_groups.py`: `GroupedSubparsers` wraps the real subparsers action, requiring `group=` on every `.add(...)` call (used in place of `subparsers.add_parser(...)` throughout `cli.py`); `.validate()` — called once at the end of `build_parser()`, not lazily at `--help` time — raises `RuntimeError` naming any subcommand added by bypassing `.add(...)`, which is the actual "startup error" (a test constructs a raw subparser this way to prove it). `.formatter_class()` returns a `HelpFormatter` subclass that special-cases the one subparsers pseudo-action (identity-compared, not type-compared, so a nested subparsers action elsewhere would render normally) and renders it grouped by `GROUP_ORDER`, appending `(view)` for views. `commit`/`brief` will get group assignments when [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]]/[[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] ship. 7 new tests in `tests/test_help_groups.py`.
 - 2026-08-19: captured. Trigger was counting the v3 command set: 10 today, 22 after v3, on an argparse default that renders them as one flat list.
