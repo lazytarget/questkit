@@ -10,6 +10,7 @@ from .commands import (
     format_cmd,
     init_cmd,
     list_cmd,
+    logs_cmd,
     migrate_cmd,
     mv_cmd,
     new_cmd,
@@ -211,6 +212,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="commit per log afterwards; refuses on a dirty index",
     )
     p_migrate.set_defaults(func=migrate_cmd.run)
+
+    p_logs = subparsers.add_parser("logs", help="inventory every quest log under a root")
+    p_logs.add_argument("--root", dest="root", action="append", help="repeatable")
+    p_logs.add_argument("--format", dest="format", choices=["table", "json"], default="table")
+    p_logs.add_argument(
+        "--verbose",
+        action="store_true",
+        help="table only: an extra line per log naming schema overrides and strict mode",
+    )
+    p_logs.set_defaults(func=logs_cmd.run)
 
     p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")
     p_schema.add_argument("kind", choices=["quest"])

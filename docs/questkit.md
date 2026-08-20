@@ -793,6 +793,52 @@ Shared behavior:
   and a run touching 129 files across 7 repositories is the wrong place to
   discover that afterwards. Each log commits separately, in its own repo.
 
+### `quest logs [--root DIR ...] [--format table|json] [--verbose]`
+
+Inventories every quest log found under the swept root(s) — read-only; it
+never writes, creates, or migrates. Sorted by project name:
+
+```
+$ quest logs
+PROJECT              QUESTS   OPEN  GIT     PATH
+family                    0      0  auto    02-projects/family/quests
+questkit                 23     12  manual  02-projects/lazytarget/questkit/quests
+...
+
+7 logs, 145 quests (132 open), swept from /home/gitops/realm
+```
+
+- **PROJECT** — the config's `project:`, or `-` for a catch-all log with none.
+- **QUESTS** — files matching that log's own `pattern`.
+- **OPEN** — quests not in a terminal status, per that log's own
+  `terminal_statuses` (see [§8](#8-questkityaml-configuration-reference)) —
+  never a hardcoded pair, so a log with a renamed vocabulary still reports
+  correctly.
+- **GIT** — `auto` | `manual`.
+- **PATH** — relative to whichever swept root contains it.
+
+The footer names every root swept and the totals — not decoration: selective
+Syncthing means a log present on one device is absent on another, so the
+scope of any sweep is device-dependent and must be stated, not implied. A
+**fully archived log is excluded from the footer totals** (its work is done);
+its own row still reports its real counts.
+
+**`project:` uniqueness is enforced here.** A duplicate `project:` across two
+logs is a hard error naming both paths — `--in`'s name resolution
+([§9](#9-multi-zone-setup)) depends on that uniqueness being true, so a
+collision is caught at the one command whose whole job is inventorying every
+log at once.
+
+`--format json` emits one object per log with the full config surface —
+project, path, counts, `git`, declared custom fields, `strict`, `field_order`
+— for programmatic consumers. `--verbose` (table only) adds a second line per
+log naming its schema overrides.
+
+A log whose config fails to load (a broken `schema.extends`, a future config
+version) still appears as a row — with `?` in place of its counts — rather
+than aborting the whole inventory; the warning prints once, after the table,
+under a `warning:` line per broken log.
+
 ### `quest schema quest [field] [--format json|table] [--in DIR]`
 
 Introspects the active, merged schema for a log — so an agent never has to
