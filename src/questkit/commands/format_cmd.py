@@ -5,13 +5,16 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .. import macros
 from ..config import CONFIG_FILENAME, ConfigVersionError, QuestLogConfig, config_exists
 from ..discovery import resolve_log
 from ..quest import Quest, QuestFileError
+from ..schema import SchemaConfigError, SchemaExtendsError
 
 
 def run(args: argparse.Namespace) -> int:
     check_only = getattr(args, "check", False)
+    fill_defaults = getattr(args, "fill_defaults", False)
     try:
         paths = _resolve_targets(getattr(args, "targets", None), args.in_dir)
     except TargetError as exc:
@@ -27,6 +30,15 @@ def run(args: argparse.Namespace) -> int:
         except (OSError, QuestFileError) as exc:
             print(f"[!] {exc}")
             continue
+
+        config = _config_for(path)
+        quest.reorder(config.schema)
+        if fill_defaults:
+            try:
+                _fill_defaults(quest, config, path)
+            except macros.UnknownMacroError as exc:
+                print(f"[!] {path}: {exc}")
+                continue
 
         if check_only:
             if _would_change(quest):
@@ -95,6 +107,47 @@ def _dedupe(paths: list[Path]) -> list[Path]:
             seen.add(path)
             unique.append(path)
     return unique
+
+
+def _config_for(path: Path) -> QuestLogConfig:
+    """The config for the log a quest file lives in, or the built-in default.
+
+    A quest file always sits directly in its log directory, so `path.parent`
+    is that log. Falls back to the defaults when it has no `.questkit.yaml`
+    (or the config cannot be read) -- `quest format <a stray file>` should
+    still normalize something sensible rather than crash, which is the same
+    fallback `hooks._schema_for` already makes.
+    """
+    try:
+        return QuestLogConfig.load(path.parent)
+    except (OSError, ConfigVersionError, SchemaExtendsError, SchemaConfigError):
+        return QuestLogConfig()
+
+
+def _fill_defaults(quest: Quest, config: QuestLogConfig, path: Path) -> None:
+    """Write every declared default into fields the quest is missing.
+
+    A hard prerequisite for adopting any `required: true` field against a live
+    corpus: the moment a log declares one, `quest validate` fails every quest
+    that predates it and the pre-commit hook blocks every commit.
+
+    Deliberately does not bump `modified` -- backfilling a field nobody asked
+    about is not a content edit, and `--fill-defaults` across the corpus giving
+    every quest a fresh `modified` is precisely the laundering `status_changed`
+    exists to prevent.
+    """
+    defaults = config.schema.resolved_defaults(config.defaults)
+    context = macros.context_for(quest, config, path)
+    for name, raw in defaults.items():
+        if not _is_blank(quest.frontmatter.get(name)):
+            continue
+        value = macros.expand(str(raw), context) if macros.has_macro(str(raw)) else raw
+        quest.set(name, value)
+    quest.reorder(config.schema)
+
+
+def _is_blank(value) -> bool:
+    return value is None or (isinstance(value, str) and value.strip() == "")
 
 
 def _would_change(quest: Quest) -> bool:

@@ -2,25 +2,25 @@
 id: QST-bmzl2
 title: "questkit v3: loop closure, multi-log UX, and agent handoff"
 description: "Umbrella epic for questkit v3: close the work loop, make multi-log targeting legible, and make an agent handoff format real. (v3)"
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: epic
-tier: blueprint
 status: todo
 priority: high
-effort: xl
-milestone: 0.3.0
-owner: peter
-project: questkit
 tags:
   - questkit
   - quests
   - framework
   - tooling
-blocked_by: []
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 aliases:
   - QST-bmzl2
+blocked_by: []
+effort: xl
+milestone: 0.3.0
+owner: peter
+tier: blueprint
 ---
 
 ## Description

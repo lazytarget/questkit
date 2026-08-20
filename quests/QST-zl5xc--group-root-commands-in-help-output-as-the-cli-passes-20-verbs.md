@@ -2,23 +2,23 @@
 id: QST-zl5xc
 title: Group root commands in help output as the CLI passes 20 verbs
 description: Render quest --help as labelled groups instead of one flat alphabetical list, so a 22-command CLI stays legible to humans and to agents reading it cold.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: todo
 priority: medium
-effort: s
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
   - dx
-blocked_by: []
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 aliases:
   - QST-zl5xc
+blocked_by: []
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

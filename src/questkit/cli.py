@@ -33,6 +33,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_new.add_argument("--project", dest="project")
     p_new.add_argument("--description", dest="description")
     p_new.add_argument("--tag", dest="tags", action="append")
+    p_new.add_argument(
+        "--set",
+        dest="sets",
+        action="append",
+        metavar="field=value",
+        help="set any declared field; repeatable (argparse cannot grow a flag per custom field)",
+    )
     p_new.add_argument("--in", dest="in_dir")
     p_new.add_argument("--edit", action="store_true")
     p_new.set_defaults(func=new_cmd.run)
@@ -72,8 +79,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_set = subparsers.add_parser("set", help="set one or more fields on a quest")
     p_set.add_argument("id")
-    p_set.add_argument("assignments", nargs="+", metavar="field=value")
+    # nargs="*" rather than "+" so `quest set <id> --set f=v` reaches the
+    # command and gets the message naming the positional form, instead of
+    # argparse's "the following arguments are required: field=value".
+    p_set.add_argument("assignments", nargs="*", metavar="field=value")
     p_set.add_argument("--in", dest="in_dir")
+    # `set` takes positional assignments while `new` takes `--set`, and the
+    # asymmetry has a cause: `new` has a positional title, so
+    # `quest new "fix thing" type=bug` is genuinely ambiguous, while `set`'s
+    # id + nargs="+" is not. Accepting `--set` here too would be a second
+    # grammar for one operation, so it is a rejection that names the right
+    # form rather than a silent alias.
+    p_set.add_argument("--set", dest="rejected_set", action="append", help=argparse.SUPPRESS)
     p_set.set_defaults(func=set_cmd.run)
 
     p_done = subparsers.add_parser("done", help="mark a quest done")
@@ -125,6 +142,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="report what would change, write nothing, exit 1 if anything would",
+    )
+    p_format.add_argument(
+        "--fill-defaults",
+        dest="fill_defaults",
+        action="store_true",
+        help="backfill declared schema defaults into fields a quest is missing",
     )
     p_format.set_defaults(func=format_cmd.run)
 

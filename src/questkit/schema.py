@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ruamel.yaml import YAML
 
+from . import macros
 from .utils import slugify
 
 # Vocabularies are **ordered tuples, not sets**, and that is load-bearing.
@@ -42,6 +44,26 @@ _FIELD_VOCABULARIES = {
     "effort": "efforts",
 }
 
+# The explicit head of the frontmatter order; everything else sorts
+# alphabetically after it. **One rule, not three.** A three-group scheme
+# (ordered natives -> alphabetical natives -> alphabetical custom) needs
+# questkit to know which fields are "native", and that boundary is itself
+# schema-defined -- so the same quest would sort differently in two logs and
+# `quest mv` would silently reorder frontmatter.
+FIELD_ORDER = (
+    "id",
+    "title",
+    "description",
+    "project",
+    "type",
+    "status",
+    "priority",
+    "tags",
+    "created",
+    "status_changed",
+    "modified",
+)
+
 _yaml = YAML()
 
 # Checked for presence only; enum membership is checked separately below.
@@ -72,6 +94,7 @@ CORE_FIELDS = (
     "blocked_by",
     "aliases",
     "agentic",
+    "archived",
 )
 
 # What each core field is, for `quest schema quest <field>`. An agent reading
@@ -96,6 +119,16 @@ CORE_FIELD_SPECS = {
         "doc": "the day the file last changed, including formatting-only commits",
     },
     "due": {"type": "date", "required": False, "doc": "an external deadline, if any"},
+    "archived": {
+        "type": "bool",
+        "required": False,
+        "doc": (
+            "whether this quest should still be in front of you. Orthogonal to `status`: "
+            "archiving answers a retention question, scrapping answers what happened to the "
+            "work, and a `done` quest in a wound-up project is archived and not scrapped. "
+            "Affects listing, never id resolution."
+        ),
+    },
 }
 
 DEFAULT_STATUS = "draft"
@@ -124,6 +157,18 @@ class FieldSpec:
     name: str
     type: str = "string"
     required: bool = False
+    values: tuple = ()  # only meaningful for type: enum; ordered, so it sorts
+    default: object = None
+
+    @property
+    def has_static_default(self) -> bool:
+        """A default with no macro in it -- the same value for every quest.
+
+        Paired with `required: true` this is validation theater: a mandatory
+        field nobody ever thinks about. It stays legal, because a *computed*
+        default that genuinely varies carries real information.
+        """
+        return isinstance(self.default, str) and not macros.has_macro(self.default)
 
 
 @dataclass(frozen=True)
@@ -136,6 +181,7 @@ class SchemaConfig:
     priorities: tuple = PRIORITIES
     efforts: tuple = EFFORTS
     terminal_statuses: tuple = TERMINAL_STATUSES
+    field_order: tuple = FIELD_ORDER
     fields: dict = field(default_factory=dict)  # name -> FieldSpec, custom fields only
 
     @classmethod
@@ -153,8 +199,12 @@ class SchemaConfig:
         """
         vocabulary = _FIELD_VOCABULARIES.get(field_name)
         if vocabulary is None:
-            return None
-        values: tuple = getattr(self, vocabulary)
+            spec = self.fields.get(field_name)
+            if spec is None or not spec.values:
+                return None
+            values = spec.values
+        else:
+            values = getattr(self, vocabulary)
         try:
             return values.index(str(value))
         except ValueError:
@@ -164,12 +214,7 @@ class SchemaConfig:
     def load(cls, quests_dir: Path, schema_block: dict | None) -> SchemaConfig:
         merged = _resolve_schema_extends(quests_dir, dict(schema_block or {}))
         fields = {
-            name: FieldSpec(
-                name=name,
-                type=(spec or {}).get("type", "string"),
-                required=bool((spec or {}).get("required", False)),
-            )
-            for name, spec in (merged.get("fields") or {}).items()
+            name: _field_spec(name, spec or {}) for name, spec in (merged.get("fields") or {}).items()
         }
         vocabularies = {
             "types": _as_tuple(merged, "types", TYPES),
@@ -182,8 +227,52 @@ class SchemaConfig:
         return cls(
             **vocabularies,
             terminal_statuses=_resolve_terminal_statuses(merged, vocabularies["statuses"]),
+            field_order=_as_tuple(merged, "field_order", FIELD_ORDER),
             fields=fields,
         )
+
+    def resolved_defaults(self, log_defaults: dict) -> dict:
+        """Every field default in effect, by precedence.
+
+        `--flag` > `fields.<n>.default` > `defaults.<n>` > built-in. The
+        top-level `defaults:` key is sugar writing into the same map as
+        `schema.fields.<n>.default`, which is canonical -- two places to say
+        the same thing is how they end up disagreeing.
+        """
+        resolved = dict(log_defaults)
+        for name, spec in self.fields.items():
+            if spec.default is not None:
+                resolved[name] = spec.default
+        return resolved
+
+    def order_key(self, field_name: str) -> tuple:
+        """Sort key placing `field_order` fields first, then everything alphabetically."""
+        try:
+            return (0, self.field_order.index(field_name), "")
+        except ValueError:
+            return (1, 0, field_name)
+
+
+def _field_spec(name: str, spec: dict) -> FieldSpec:
+    field_type = spec.get("type", "string")
+    values = tuple(str(v) for v in (spec.get("values") or ()))
+    if field_type == "enum" and not values:
+        raise SchemaConfigError(
+            f"field '{name}' declares type: enum but no values:. An enum with no "
+            "vocabulary validates nothing."
+        )
+    if values and field_type != "enum":
+        raise SchemaConfigError(
+            f"field '{name}' declares values: but type: {field_type} -- values: is only "
+            "meaningful for type: enum"
+        )
+    return FieldSpec(
+        name=name,
+        type=field_type,
+        required=bool(spec.get("required", False)),
+        values=values,
+        default=spec.get("default"),
+    )
 
 
 def _as_tuple(merged: dict, key: str, fallback: tuple) -> tuple:
@@ -244,24 +333,37 @@ def _resolve_terminal_statuses(merged: dict, statuses: tuple) -> tuple:
     return surviving
 
 
+SCHEMA_PATH_ENV = "QST_SCHEMA_PATH"
+
+# Where a *named* schema (`extends: development`) is looked up, relative to an
+# ancestor of the log. Deliberately under `99-system/`, not the Realm root:
+# `99-system/syncthing.yaml` has no folder for `.`, so the root is a local
+# composition of independently-synced folders rather than a synced entity. A
+# schema file there would resolve on one machine and fail silently on every
+# other -- the worst possible failure shape. Generalizes: any questkit artifact
+# that must reach every device belongs under `99-system/`.
+REALM_SCHEMA_DIR = ("99-system", "questkit", "schemas")
+
+
 def _resolve_schema_extends(
     quests_dir: Path, schema_block: dict, _visited: frozenset = frozenset()
 ) -> dict:
     """Recursively resolve `extends`; sibling keys fully replace the parent's.
 
-    The file an `extends` points at (resolved relative to `quests_dir`) is
-    itself treated as a schema document -- it may declare its own `extends`,
-    chaining further. No deep-merging of lists: a child's `statuses` entirely
-    replaces the parent's, it doesn't union with it.
+    The file an `extends` points at is itself treated as a schema document --
+    it may declare its own `extends`, chaining further. No deep-merging of
+    lists: a child's `statuses` entirely replaces the parent's rather than
+    unioning with it.
+
+    An `extends` value is either a **path** (relative to `quests_dir`) or a
+    **name**. See `_looks_like_a_path`.
     """
     extends = schema_block.get("extends")
     merged: dict = {}
     if extends:
-        parent_path = (quests_dir / extends).expanduser().resolve()
+        parent_path = _resolve_extends_target(quests_dir, str(extends))
         if parent_path in _visited:
             raise SchemaExtendsError(f"circular schema 'extends' chain at {parent_path}")
-        if not parent_path.is_file():
-            raise SchemaExtendsError(f"schema extends '{extends}' -> {parent_path} not found")
         parent_data = _yaml.load(parent_path.read_text(encoding="utf-8")) or {}
         merged = _resolve_schema_extends(parent_path.parent, parent_data, _visited | {parent_path})
     for key, value in schema_block.items():
@@ -269,6 +371,60 @@ def _resolve_schema_extends(
             continue
         merged[key] = value
     return merged
+
+
+def _looks_like_a_path(extends: str) -> bool:
+    """Path vs. name, by the same shape rule `--in` uses for logs.
+
+    Anything carrying a separator or a `.yaml`/`.yml` suffix is a path;
+    anything else is a name resolved against the search path. One rule, no new
+    syntax, and fully backward compatible with the path-relative `extends:`
+    that shipped in v2.
+    """
+    return "/" in extends or "\\" in extends or extends.endswith((".yaml", ".yml"))
+
+
+def _schema_search_path(quests_dir: Path) -> list[Path]:
+    """Where named schemas are looked for, most specific first.
+
+    `QST_SCHEMA_PATH` wins so a standalone (non-Realm) user, or a test, can
+    point questkit somewhere else entirely without inventing a config key that
+    every log would then have to repeat.
+    """
+    candidates: list[Path] = []
+    env_value = os.environ.get(SCHEMA_PATH_ENV)
+    if env_value:
+        candidates.extend(
+            Path(part).expanduser().resolve() for part in env_value.split(os.pathsep) if part
+        )
+    current = quests_dir.resolve()
+    while True:
+        candidates.append(current.joinpath(*REALM_SCHEMA_DIR))
+        if current.parent == current:
+            break
+        current = current.parent
+    return candidates
+
+
+def _resolve_extends_target(quests_dir: Path, extends: str) -> Path:
+    if _looks_like_a_path(extends):
+        parent_path = (quests_dir / extends).expanduser().resolve()
+        if not parent_path.is_file():
+            raise SchemaExtendsError(f"schema extends '{extends}' -> {parent_path} not found")
+        return parent_path
+
+    searched: list[Path] = []
+    for directory in _schema_search_path(quests_dir):
+        candidate = directory / f"{extends}.yaml"
+        searched.append(candidate)
+        if candidate.is_file():
+            return candidate
+    raise SchemaExtendsError(
+        f"schema extends '{extends}': no such named schema. Searched "
+        f"{', '.join(str(p) for p in searched[:4])}"
+        + (f" (and {len(searched) - 4} more)" if len(searched) > 4 else "")
+        + f". Set {SCHEMA_PATH_ENV}, or use a path ending in .yaml for a path-relative extend."
+    )
 
 
 class ValidationError:
@@ -317,6 +473,8 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
             errors.append(
                 ValidationError(quest.path, f"missing required custom field '{field_name}'")
             )
+        if spec.type == "enum":
+            errors.extend(_check_enum(quest.path, fm, field_name, spec.values))
 
     agentic = fm.get("agentic")
     if agentic is not None:

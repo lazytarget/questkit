@@ -2,26 +2,26 @@
 id: QST-3h09k
 title: status_changed frontmatter field and reusable backfill
 description: Add a status_changed date written only on real status transitions, so staleness measures work progress instead of file churn.
-created: 2026-08-19
-status_changed: 2026-08-20
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: done
 priority: high
-effort: s
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - schema
   - cli
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
+aliases:
+  - QST-3h09k
 blocked_by:
   - QST-mjuau
   - QST-lc3co
-aliases:
-  - QST-3h09k
-agentic: afk
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

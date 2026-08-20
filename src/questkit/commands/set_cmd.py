@@ -12,6 +12,18 @@ from ..timeutil import today
 
 
 def run(args: argparse.Namespace) -> int:
+    if getattr(args, "rejected_set", None):
+        first = args.rejected_set[0]
+        print(
+            f"[quest] `quest set` takes positional assignments, not --set. "
+            f"Use: quest set {args.id} {first}"
+        )
+        return 1
+
+    if not args.assignments:
+        print(f"[quest] nothing to set. Use: quest set {args.id} field=value [field=value ...]")
+        return 1
+
     found = resolve_mutation_target(args.id, explicit_in=args.in_dir)
     if found is None:
         print(f"[quest] no quest matching id '{args.id}' found")

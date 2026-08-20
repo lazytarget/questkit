@@ -2,26 +2,26 @@
 id: QST-iqwjm
 title: "Multi-log query UX: --all-logs, repeatable --in and --root, per-log grouping, summary block"
 description: "Make the scope of every query legible: rename --all, allow multiple logs and roots, group results per log, and print the filters in effect."
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: todo
 priority: high
-effort: m
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
   - dx
   - multi-log
-blocked_by:
-  - QST-fmk0p
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-iqwjm
-agentic: afk
+blocked_by:
+  - QST-fmk0p
+effort: m
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

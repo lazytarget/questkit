@@ -2,24 +2,24 @@
 id: QST-lcsza
 title: "Archival as an orthogonal `archived:` field, per quest and per log"
 description: Add a core archived boolean that preserves a quest's status, with per-quest and whole-log commands, so a finished project stops appearing in sweeps without any file moving or any outcome being erased.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: todo
 priority: medium
-effort: s
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
   - multi-log
-blocked_by:
-  - QST-3ehhu
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 aliases:
   - QST-lcsza
+blocked_by:
+  - QST-3ehhu
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

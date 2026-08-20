@@ -2,27 +2,27 @@
 id: QST-j68u5
 title: "Schema engine: field order, defaults, macros, typed fields, strict writes"
 description: field_order normalization, schema.fields defaults with macros, --fill-defaults, enum-typed custom fields, generic --set, and strict CLI writes.
-created: 2026-08-19
-status_changed: 2026-08-20
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: blueprint
 status: in-progress
 priority: high
-effort: l
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - schema
   - cli
   - dx
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
+aliases:
+  - QST-j68u5
 blocked_by:
   - QST-mjuau
   - QST-3h09k
-aliases:
-  - QST-j68u5
-agentic: afk
+effort: l
+milestone: 0.3.0
+tier: blueprint
 ---
 
 ## Description
@@ -414,6 +414,10 @@ each was load-bearing in more than one place:
 
 ## Log
 
+- 2026-08-21: **rules 1-4, 6-9, 17-18 implemented (batch B2).** `field_order` lives on `SchemaConfig` and is applied by a new `Quest.reorder(schema)` — kept out of `render()` deliberately, so the pre-commit hooks and any `Quest.load(...).save()` keep working on a file whose log cannot be resolved. `resolved_defaults()` merges `fields.<n>.default` over `defaults:`; macros got a single `context_for()` builder because three callers (`new`, `format --fill-defaults`, `migrate --backfill`) need identical semantics, and building it per caller is how `{{ project }}` ends up meaning the log directory in one command and the config's `project:` in another. `FieldSpec` gained `values` and `default`; named schemas resolve from `QST_SCHEMA_PATH` then `99-system/questkit/schemas/` walking up, with `schema: development` as a scalar shorthand.
+  Two things worth recording. Routing every default through one map **lost the log's `project:` stamping** — `config.project` is not one of `config.defaults`, so `quest new` silently stopped writing it. Caught by an existing `mv` test, now guarded by three of its own. And applying the specified default `field_order` reshuffled all 23 files: because the head list omits `tier` and `effort`, they land in the alphabetical tail, so `tier` now sorts *last* — after `milestone`. That is exactly what "one rule, then alphabetical" produces, but it reads oddly next to `type`, and it is a one-line `field_order` override if the ordering should change.
+  This log now declares `schema: development`, which satisfies the non-negotiable constraint for B3: `development` must exist and be adopted **before** `strict` is enforced, or the release that introduces strict validation fails validation on its own tracker.
+  Rules 5 and 14-16 (strict, `agentic` out of core, `readiness:`) are B3.
 - 2026-08-21: **rules 10-13 and 19 implemented (batch B1).** Vocabularies are now ordered tuples with a `rank_of()` lookup; `_apply_sort` parses comma-separated keys and sorts right-to-left through Python's stable sort, one pass per key. `terminal_statuses` resolves as declared-or-(defaults ∩ declared statuses), with a hard `SchemaConfigError` when a log keeps none of the defaults and declares nothing. `quest scrap` added, and `quest done` now reads `terminal_statuses[0]` instead of writing a hardcoded `completed`. The collision rule covers every vocabulary *and* custom field names.
   Three things worth recording. `--sort` needs a schema, and `_apply_sort` had none — threaded through as the *first resolved log's* schema, which is exact for a single log and an approximation under `-A` across logs with divergent vocabularies; merging two independently declared orderings has no correct answer, so the honest fix is [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]]'s per-log grouping rather than inventing one here. Every error message and `quest schema` listing switched from `sorted()` to `list()` — printing a declared order alphabetically tells the reader the wrong thing about their own schema. And the `completed`→`done` migration ran on this log through the tool built in B0: 7 files renamed, with both verified prose collisions (`QST-bmzl2`'s "is completed or explicitly scrapped" and `QST-whm2e`'s "Completed quests stay exactly...") left untouched.
   Rules 1-9 and 17-18 are B2; rules 5 and 14-16 are B3.

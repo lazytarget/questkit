@@ -66,7 +66,7 @@ class QuestLogConfig:
             project=data.get("project"),
             defaults={**_DEFAULT_FIELD_DEFAULTS, **(data.get("defaults") or {})},
             ignore=list(data.get("ignore") or []),
-            schema=schema.SchemaConfig.load(quests_dir, data.get("schema")),
+            schema=schema.SchemaConfig.load(quests_dir, _schema_block(data.get("schema"))),
         )
 
     def resolved_ignores(self, quests_dir: Path) -> list[str]:
@@ -88,6 +88,18 @@ class QuestLogConfig:
         with config_path.open("w", encoding="utf-8") as handle:
             handle.write("---\n")
             _yaml.dump(data, handle)
+
+
+def _schema_block(value) -> dict | None:
+    """`schema: development` is shorthand for `schema: {extends: development}`.
+
+    The common case by far -- four logs sharing one named schema and adding
+    nothing -- so it should not require a nested block whose only key is
+    `extends`.
+    """
+    if isinstance(value, str):
+        return {"extends": value}
+    return value
 
 
 def config_exists(quests_dir: Path) -> bool:

@@ -2,25 +2,25 @@
 id: QST-b9lqo
 title: Computed fields and comparison operators for --where
 description: Derive blocked, blocks, idle and age alongside frontmatter and expose them to --where, --select and --sort, with numeric and date comparisons.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: todo
 priority: high
-effort: m
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
   - dx
-blocked_by:
-  - QST-3h09k
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-b9lqo
-agentic: afk
+blocked_by:
+  - QST-3h09k
+effort: m
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

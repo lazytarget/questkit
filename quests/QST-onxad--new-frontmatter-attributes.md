@@ -2,24 +2,24 @@
 id: QST-onxad
 title: New frontmatter attributes
 description: Decide how a language hint reaches agents — resolved as a schema-declared field with a default, not a new core field.
-created: 2026-08-16
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: spark
 status: todo
 priority: low
-effort: xs
-milestone: 0.4.0
-project: questkit
 tags:
   - questkit
   - schema
-blocked_by:
-  - QST-j68u5
+created: 2026-08-16
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-onxad
-agentic: afk
+blocked_by:
+  - QST-j68u5
+effort: xs
+milestone: 0.4.0
+tier: spark
 ---
 
 ## Description

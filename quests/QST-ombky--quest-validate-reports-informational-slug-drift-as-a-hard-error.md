@@ -2,23 +2,23 @@
 id: QST-ombky
 title: quest validate reports informational slug drift as a hard error
 description: check_slug_drift documents itself as informational and is excluded from the pre-commit hook, but validate_cmd counts it toward the exit code.
-created: 2026-08-19
-status_changed: 2026-08-20
-modified: 2026-08-20
+project: questkit
 type: bug
-tier: spark
 status: done
 priority: medium
-effort: xs
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
-blocked_by: []
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-ombky
-agentic: afk
+blocked_by: []
+effort: xs
+milestone: 0.3.0
+tier: spark
 ---
 
 ## Description

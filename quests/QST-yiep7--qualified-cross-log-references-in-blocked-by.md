@@ -2,25 +2,25 @@
 id: QST-yiep7
 title: Qualified cross-log references in blocked_by
 description: Let a reference declare its own scope as project/QST-xxxxx, so cross-log dependencies work without making validation device-dependent.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: todo
 priority: medium
-effort: m
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - schema
   - multi-log
-blocked_by:
-  - QST-fmk0p
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: hitl
 aliases:
   - QST-yiep7
-agentic: hitl
+blocked_by:
+  - QST-fmk0p
+effort: m
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

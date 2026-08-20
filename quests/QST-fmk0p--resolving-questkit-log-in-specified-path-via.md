@@ -2,25 +2,25 @@
 id: QST-fmk0p
 title: Resolve a quest log by project name via --in
 description: Let --in accept a log's project name, not just a path, so targeting the right log stops depending on remembering a deep nested path.
-created: 2026-08-16
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: todo
 priority: high
-effort: s
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
   - dx
   - multi-log
-blocked_by: []
+created: 2026-08-16
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-fmk0p
-agentic: afk
+blocked_by: []
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

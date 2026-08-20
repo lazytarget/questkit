@@ -55,3 +55,21 @@ def expand(template: str, context: dict[str, object]) -> str:
 
 def has_macro(value: str) -> bool:
     return bool(_MACRO_RE.search(value))
+
+
+def context_for(quest, config, path) -> dict:
+    """The macro context for one quest, built in one place.
+
+    Three callers need identical semantics -- `quest new`,
+    `quest format --fill-defaults`, and `quest migrate --backfill`. Building
+    it per caller is how `{{ project }}` ends up meaning the log directory in
+    one command and the config's `project:` in another.
+    """
+    return {
+        "project": quest.get("project") or config.project or path.parent.name,
+        "log": path.parent.name,
+        "id": quest.get("id"),
+        "title": quest.get("title"),
+        "owner": quest.get("owner"),
+        "slug": path.stem.partition("--")[2],
+    }

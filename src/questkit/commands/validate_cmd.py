@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
 
 from .. import schema
@@ -27,6 +28,8 @@ def run(args: argparse.Namespace) -> int:
     except ConfigVersionError as exc:
         print(f"[quest validate] {exc}")
         return 1
+
+    _warn_validation_theater(config)
 
     checked = 0
     total_errors = 0
@@ -64,6 +67,25 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"[quest validate] {_summary(checked, total_errors, total_notes)}")
     return 1 if total_errors else 0
+
+
+def _warn_validation_theater(config: QuestLogConfig) -> None:
+    """Flag `required: true` paired with a *static* default.
+
+    A mandatory field that always gets the same value is a field nobody ever
+    thinks about -- the check can never fail, so it enforces nothing. It stays
+    legal rather than becoming an error, because a *computed* default that
+    genuinely varies (`{{ env.USER }}` on `owner`) carries real information,
+    and the config cannot tell the author's intent apart from the outside.
+    """
+    for name, spec in sorted(config.schema.fields.items()):
+        if spec.required and spec.has_static_default:
+            print(
+                f"[quest validate] warning: field '{name}' is required with the static "
+                f"default '{spec.default}', so the requirement can never fail -- "
+                "validation theater. Use a macro default, or drop `required`.",
+                file=sys.stderr,
+            )
 
 
 def _summary(checked: int, errors: int, notes: int) -> str:

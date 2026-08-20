@@ -48,6 +48,19 @@ class Quest:
             frontmatter = CommentedMap()
         return cls(path=path, frontmatter=frontmatter, body=body)
 
+    def reorder(self, schema_config) -> None:
+        """Reorder frontmatter to the schema's `field_order`.
+
+        Not folded into `render()`: rendering must stay schema-agnostic so the
+        pre-commit hooks and `Quest.load(...).save()` keep working on a file
+        whose log cannot be resolved. Callers that *have* a schema (the
+        `format` command, `new`) call this first.
+        """
+        ordered = CommentedMap()
+        for key in sorted(self.frontmatter.keys(), key=schema_config.order_key):
+            ordered[key] = self.frontmatter[key]
+        self.frontmatter = ordered
+
     def render(self) -> str:
         """The exact file content `save()` would write, without writing it.
 

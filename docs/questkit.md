@@ -263,6 +263,21 @@ log unless `--in` is shown explicitly.
 
 ### `quest new "title" [options]`
 
+Beyond the shorthand flags below, **`--set field=value` (repeatable) writes any
+declared field.** argparse is built before the log is resolved, so it cannot
+grow a flag per custom field; `--type`/`--status`/`--priority`/`--description`/
+`--tag` stay as shorthands for fields every schema has.
+
+```bash
+quest new "Fix the importer" --status todo --set component=api --set effort=s
+```
+
+Note `quest set` keeps *positional* assignments (`quest set <id> field=value`).
+The asymmetry has a cause: `new` has a positional title, so
+`quest new "fix thing" type=bug` is genuinely ambiguous, while `set`'s id plus
+`nargs="*"` is not. Passing `--set` to `quest set` is an error naming the right
+form rather than a second grammar.
+
 ```
 quest new "title" [--type X] [--tier X] [--status X] [--priority X]
                    [--project X] [--description X] [--tag X ...]
@@ -568,7 +583,7 @@ $ quest validate
 [quest validate] 23 quest(s) checked, 0 error(s), 2 note(s)
 ```
 
-### `quest format [PATH ...] [--in DIR] [--check]`
+### `quest format [PATH ...] [--in DIR] [--check] [--fill-defaults]`
 
 Re-saves every file matching the log's `pattern`, applying `Quest.save()`'s
 normalization (list style, date-field quoting, quote style — see
@@ -605,6 +620,20 @@ report `0 quest(s) checked` as though the log were clean.
 usable in CI. It shares its predicate with `Quest.render()`, the same code
 `save()` uses to decide whether to write, so it can never disagree with what a
 real run would do.
+
+`--fill-defaults` writes every declared default into fields a quest is
+missing, expanding `{{ }}` macros as it goes. It never overwrites an existing
+value and is idempotent. This is a **hard prerequisite** for adopting any
+`required: true` field against a live corpus: the moment a log declares one,
+`quest validate` fails every quest that predates it and the pre-commit hook
+blocks every commit. It deliberately does **not** bump `modified` — backfilling
+a field nobody asked about is not a content edit, and a corpus-wide
+`--fill-defaults` giving every quest a fresh `modified` is exactly the
+laundering `status_changed` exists to prevent.
+
+`quest format` also imposes the schema's **`field_order`** (see
+[§8](#8-questkityaml-configuration-reference)); reordering alone counts as a
+change.
 
 **A no-op `quest format` touches no mtimes.** `Quest.save()` compares the
 rendered content against the file and returns whether it wrote. That is not
@@ -714,7 +743,9 @@ you will never see a raw Python traceback from normal usage.
 | `priority` | Yes | enum | `critical \| high \| medium \| low \| deferred` |
 | `effort` | No | enum | `xs \| s \| m \| l \| xl` |
 | `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (In The Realm specifically, the convention is `peter`/`jenika`, but that's a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
-| `agentic` | No | enum | `afk \| hitl`. Absent means "not yet triaged for agent handoff." See [§13](#13-agentic-support). |
+| `agentic` | No | enum | `afk \| hitl`. Declared by the **`development`** schema, not the core — `afk\|hitl` is not a universal vocabulary, and household work has no unsupervised-agent axis. See [§13](#13-agentic-support). |
+| `archived` | No | bool | Whether this quest should still be in front of you. **Orthogonal to `status`**: archiving answers a retention question, scrapping answers what happened to the work, and a `done` quest in a wound-up project is archived and emphatically not scrapped. Sorts into the alphabetical tail of `field_order` — rarely set, never scanned. |
+| `milestone` | No | free text | A planning bucket (`0.4.0`, `spring-2027`), declared by the `development` schema. Named `milestone` because it is a bucket that can slip, not a fact. **Not** a membership link — questkit has no parent/child concept. |
 | `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§8](#8-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
 | `due` | No | `YYYY-MM-DD` | Rarely used in practice — most quests never need a hard date. |
 | `tags` | Yes | list of strings | Presence of the *key* is required (an empty list is fine); lowercase kebab-case by convention. |
@@ -812,6 +843,65 @@ overrides `statuses:` and keeps **none** of the defaults, without declaring
 `terminal_statuses`, is a **hard error at config load**. Degrading would mean
 an `OPEN` column silently equal to `total` and a `blocked` field that is always
 `false` — a wrong answer delivered confidently, which is worse than failing.
+
+**`field_order`** is the explicit head of the frontmatter key order;
+everything else sorts alphabetically after it. Default:
+
+```yaml
+field_order: [id, title, description, project, type, status, priority, tags,
+              created, status_changed, modified]
+```
+
+**One rule, not three.** A three-group scheme (ordered natives → alphabetical
+natives → alphabetical custom) was rejected because it needs questkit to know
+which fields are "native", and that boundary is itself schema-defined — so the
+same quest would sort differently in two logs and `quest mv` would silently
+reorder frontmatter. It drives `quest new` as well as `quest format`; otherwise
+every freshly captured quest is born non-conformant and the next `format`
+rewrites it.
+
+**Defaults live in one place.** `schema.fields.<name>.default` is canonical;
+the top-level `defaults:` key is sugar writing into the same map. Precedence,
+stated once: `--flag` > `fields.<n>.default` > `defaults.<n>` > built-in. A
+log's `project:` acts as the lowest-precedence default for the `project` field.
+
+**Macros.** A default may contain `{{ project }}`, `{{ log }}`, `{{ id }}`,
+`{{ slug }}`, `{{ title }}`, `{{ today }}`, `{{ owner }}` or
+`{{ env.SOMEVAR }}`. Expanded at **one** point — after id generation, before
+first save — so `{{ id }}` and `{{ slug }}` are always available and there are
+no ordering surprises. Plain substitution, no control flow: `{{ }}` is a strict
+subset of Jinja's syntax, so adopting Jinja later would cost nothing, while
+`{% if %}` turns a body template into something you debug. An **unknown** macro
+is an error, not an empty string — a default silently expanding to nothing
+writes a blank field into every quest the log captures and is only ever found
+by grep months later.
+
+**Typed fields.** A custom field may declare `type: enum` with `values:`, and
+`quest validate` then rejects an out-of-vocabulary value. `values:` is ordered,
+so `--sort component:asc` works. `type: enum` with no `values:` is a schema
+error (an enum with no vocabulary validates nothing), and `values:` on a
+non-enum type is too.
+
+**`required: true` with a *static* default emits a warning.** The requirement
+can never fail, so it enforces nothing — validation theater. It stays legal,
+because a *computed* default that genuinely varies (`{{ env.USER }}` on
+`owner`) carries real information, and the config cannot tell those apart.
+
+**Named schemas.** An `extends:` value carrying a `/`, `\` or a `.yaml`/`.yml`
+suffix is a **path**, resolved relative to the `.questkit.yaml`. Anything else
+is a **name**, looked up as `<dir>/<name>.yaml` along a search path:
+`QST_SCHEMA_PATH` (`os.pathsep`-separated) first, then
+`99-system/questkit/schemas/` in each ancestor directory of the log. And
+`schema: development` as a bare scalar is shorthand for
+`schema: {extends: development}`, which is the common case — four logs sharing
+one named schema and adding nothing.
+
+Shared schemas live under `99-system/`, **never the Realm root**.
+`99-system/syncthing.yaml` has no folder for `.`: the root is a local
+composition of independently-synced folders, not a synced entity. A schema file
+there would resolve on one machine and fail silently on every other — the worst
+failure shape available. This generalizes to any questkit artifact that must
+reach every device.
 
 **Reserved names.** A schema may not declare an enum value or a custom field
 named `blocked`, `blocks`, `idle`, `age` or `archived`. Those are computed

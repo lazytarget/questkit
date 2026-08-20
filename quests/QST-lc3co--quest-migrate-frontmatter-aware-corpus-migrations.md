@@ -2,24 +2,24 @@
 id: QST-lc3co
 title: "quest migrate: frontmatter-aware corpus migrations"
 description: One migration command with backfill, value-rename and field-move verbs, because sed on frontmatter corrupts prose and every schema change needs the same three jobs.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: brief
 status: done
 priority: high
-effort: s
-milestone: 0.3.0
-project: questkit
 tags:
   - questkit
   - cli
   - schema
-blocked_by:
-  - QST-mjuau
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 aliases:
   - QST-lc3co
+blocked_by:
+  - QST-mjuau
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description

@@ -9,3 +9,4 @@ defaults:
   status: draft
   priority: medium
 project: questkit
+schema: development
