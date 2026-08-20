@@ -9,6 +9,7 @@ type: feature
 tier: brief
 status: completed
 priority: low
+milestone: 0.2.0
 project: questkit
 tags:
   - cli

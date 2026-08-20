@@ -48,6 +48,7 @@ Measured across the Realm on 2026-08-19. These numbers drove specific decisions 
 | `--sort priority:asc` | returns `critical, deferred, high, low, medium` | ordered vocabularies are a prerequisite, not polish |
 | `--sort "a:asc,b:asc"` | second key silently dropped | multi-key sort does not exist |
 | career-transition | 13 quests, **4 finished** | `status: archived` would erase which ones shipped |
+| Release record | **no git tags, no CHANGELOG**; `pyproject.toml` reads `0.2.0` | `milestone:` is the only machine-readable "what shipped when" — worth retro-tagging |
 
 **Measured, not assumed** — a pathspec-limited commit does *not* avoid rewriting `.git/index`:
 
@@ -249,6 +250,11 @@ version" beside the config's own `version: 1`. `milestone` therefore leaves the
 core `types` enum (0 uses; `epic` already covers a grouping quest), per the
 collision rule above. It is **not** a membership link — questkit still has no
 parent/child concept, and v3 does not add one.
+
+The field is **already in use retroactively**: all 23 quests in questkit's own log
+carry one as of 2026-08-21 (§12). With no git tags and no CHANGELOG in the repo,
+it is the only source that can answer "what shipped in 0.2?" at all — and
+retro-tagging three finished quests to create that source costs nothing.
 
 ### Defaults, macros, typed fields, strict
 
@@ -562,6 +568,25 @@ the Obsidian link graph this system exists to build.
 
 Independent: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
+### Release scope
+
+This plan **is** the `0.3.0` release. `pyproject.toml` reads `0.2.0` today; every
+quest in the build order above carries `milestone: 0.3.0`, and shipping them all
+is what makes the bump honest.
+
+| Milestone | Quests | What it is |
+|-----------|--------|------------|
+| `0.1.0` | 1 | the founding design blueprint |
+| `0.2.0` | 2 | the dynamic schema engine and cross-log query |
+| `0.3.0` | 18 | this epic and its whole build order |
+| `0.4.0` | 2 | duplicate detection, and `language` (which needs `household`) |
+
+**If 0.3 needs to shrink, items 12-14 are the cut line** — `quest commit` and the
+realm-01 timer, the Obsidian capture surface, and archival. Each is useful and
+nothing earlier depends on them, so they move as a block without leaving anything
+half-built. Items 1-11 are not separable: they are the loop-closure story, and
+cutting one leaves a command specified against machinery that does not exist.
+
 ## 13. Open questions
 
 None outstanding. Four were carried and are now resolved:
@@ -582,11 +607,14 @@ QST-whm2e:65   ... Completed quests stay exactly where they were created, foreve
 
 Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. Roughly 90 lines plus tests — most of the machinery is inherited from quests already scheduled. `--commit` is opt-in and refuses on a dirty index; each log commits separately in its own repo, making this the first command that writes to multiple repositories in one invocation.
 
-Ordering constraint: `development` must exist and questkit's own log must adopt it **before** `agentic` leaves core, or the 16 files carrying it break under `strict`.
+**Ordering constraint, and it is not negotiable.** `development` must exist and questkit's own log must adopt it **before** `strict: true` is enforced. `agentic` leaving core put 16 files behind that constraint; `milestone:` now puts **all 23** — every quest in the log. Get the sequence wrong and the release that introduces strict validation fails validation on its own tracker.
 
 ## 14. Provenance
 
-Revised again 2026-08-21: archival reversed to a core per-quest `archived:` field
+Closed out 2026-08-21 with `milestone:` stamped across the log, and with a repair
+to QST-j68u5, whose Alternatives and Acceptance Criteria sections had been
+duplicated by an edit that sliced on a heading string that also appears inside one
+of its code blocks. Revised again 2026-08-21: archival reversed to a core per-quest `archived:` field
 after the scrapped-vs-archived distinction was drawn correctly (retention is not
 the same decision as the work's fate, and a stored field is the only form the
 family's surfaces can see); `dropped` weighed against `scrapped` from scratch and

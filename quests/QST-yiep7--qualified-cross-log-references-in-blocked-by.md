@@ -10,6 +10,7 @@ tier: brief
 status: todo
 priority: medium
 effort: m
+milestone: 0.3.0
 project: questkit
 tags:
   - questkit

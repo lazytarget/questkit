@@ -10,6 +10,7 @@ tier: blueprint
 status: todo
 priority: high
 effort: l
+milestone: 0.3.0
 project: questkit
 tags:
   - questkit
@@ -312,6 +313,22 @@ quest), per rule 13.
 It is **not** a membership link — questkit has no parent/child concept and v3
 does not add one.
 
+**Already in use, retroactively.** All 23 quests in questkit's own log carry a
+`milestone:` as of 2026-08-21 — `0.1.0` on the founding blueprint, `0.2.0` on the
+v2 work, `0.3.0` on this epic's build order, `0.4.0` on the two items that are
+not required for v3 to be coherent. The repo has **no git tags and no
+CHANGELOG**, so this field is currently the only machine-readable record of what
+shipped when; retro-tagging three finished quests costs nothing and makes
+`quest list --where milestone=0.2.0` answer a question that otherwise has no
+source at all.
+
+**That sharpens the ordering constraint from rule 14.** `agentic` leaving core
+meant 16 files depended on `development` existing before `strict: true` lands.
+`milestone` makes it **all 23** — every quest in this log. So the sequence is not
+negotiable: the `development` schema must exist, and this log must adopt it,
+**before** `strict` is enforced. Otherwise the release that introduces strict
+validation fails validation on its own tracker.
+
 ### Alternatives
 
 | Option | Verdict | Reason |
@@ -338,82 +355,6 @@ each was load-bearing in more than one place:
   to `quest brief`. Never both — and a config-defined rule that could block
   commits would be considerably more dangerous than a hardcoded one.
 
-## Acceptance Criteria", min: 1 }
-    message: "no acceptance criteria"
-  - when: "agentic=afk"                                     # development only
-    require: { where: "owner:exists" }
-    message: "AFK work needs an accountable owner"
-```
-
-Three constructs, each earning its place:
-
-- **`where:` reuses the `--where` grammar verbatim**, computed fields included —
-  one expression language, not two. It needs `!=` added alongside the `>`/`<`
-  operators in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]].
-- **`when:`** guards a rule so it applies conditionally. It exists for exactly one
-  reason: it is how "AFK implies spec + criteria" becomes *configuration* instead
-  of a hardcoded branch.
-- **`sections:` / `checklist:`** are the only body-aware predicates, deliberately
-  just two. A third construct and this is a template language.
-
-**The core ships all four universal rules; `household` overrides the list down to
-one.** The inverse (minimal core, rigor opted into via a schema) was considered
-and rejected: a fresh `pip install questkit` would then print ✅ for a quest with
-no spec and no criteria, making the flagship command look useless on day one.
-Overriding a list off is one line in a config that already exists; opting into
-rigor means authoring a whole schema file. "A spec and acceptance criteria make
-work handoff-ready" is not an opinion about a domain — it is what handoff-ready
-means.
-
-**Readiness is advisory and never blocks a commit.** `quest validate` stops
-enforcing it entirely (see Open Questions). That separation is what makes it safe
-for configuration to define these rules at all.
-
-**16. `strict` also governs `quest validate`, with an allowlist for Obsidian.**
-
-Extended from the original CLI-write-path-only scope: under `strict: true`, an
-undeclared field found *in a file* is a validation error, not just an error on
-`--set`. That is what makes rule 14's migration real rather than cosmetic.
-
-The hazard this creates is specific and worth naming: **Obsidian's Properties
-panel adds fields.** In the family log, where nobody can read a terminal, a
-stray `cssclasses` would produce a permanent validation error. So the core
-schema carries a short **allowlist of Obsidian-reserved property names** —
-`cssclasses`, `cssclass`, `permalink`, `publish`, `cover`, `image` — that are
-permitted but unmanaged. Allowlisted, not silently ignored: `quest schema quest`
-lists them so their status is discoverable.
-
-**17. The `development` schema gains `milestone:`.** A free-text planning bucket
-(`0.4.0`, `spring-2027`), enabling "what shipped when" queries and release-note
-generation.
-
-Named `milestone` rather than `planned_version` because it is a bucket that can
-slip, not a fact, and rather than `version` because that would read as "which
-questkit version" beside the config's own `version: 1`. **`milestone` therefore
-leaves the core `types` enum** (0 uses in 129; `epic` already covers a grouping
-quest), per rule 13.
-
-It is **not** a membership link — questkit has no parent/child concept and v3
-does not add one.
-
-### Alternatives
-
-| Option | Verdict | Reason |
-|--------|---------|--------|
-| `{{ name }}` substitution | ✅ Chosen | Strict subset of Jinja syntax, so adopting Jinja later costs nothing |
-| Jinja2 | ❌ | Large dependency for substitution into a Markdown skeleton; `{% if %}` turns a body template into something you debug |
-| `$PROJECT` | ❌ | Reads as shell/env interpolation in YAML; the first thing anyone tries is `$HOME` |
-| Three-group field ordering (native ordered / native alpha / custom alpha) | ❌ | Requires questkit to know native-vs-custom, which is schema-defined; same quest would sort differently in two logs and `quest mv` would silently reorder |
-| `strict: false` default | ❌ | Every existing log has no schema block, so the protection would be absent exactly where typos are most likely |
-| Demote `tier`/`effort` to `development` | ❌ | `xs|s|m|l|xl` and `spark|brief|blueprint` describe any unit of work including a chore. Only `component`/`related_adrs` are software-specific. Demoting a universal vocabulary loses validation on the 20 files already carrying `effort`. |
-
-## Open Questions
-
-None — the terminal-status question that was deferred here is resolved above
-(rule 10). It was load-bearing for [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]]'s `OPEN` column and
-[[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]'s `blocked` computation, which is why it was
-decided once, here, rather than twice.
-
 ## Acceptance Criteria
 
 - [ ] `field_order` drives both `quest new` and `quest format`
@@ -428,7 +369,6 @@ decided once, here, rather than twice.
 - [ ] `quest format --fill-defaults` backfills declared defaults and is idempotent
 - [ ] `required: true` with a static default emits a warning; with a macro default it does not
 - [ ] `schema: development` resolves from `99-system/questkit/schemas/`
-- [ ] The `development` schema exists and declares `component` and `related_adrs`
 - [ ] `statuses`/`priorities`/`efforts`/`tiers`/`types` are ordered sequences, and `--sort <field>` uses declaration order
 - [ ] `--sort "priority:asc,effort:desc"` sorts by both keys, in order
 - [ ] `quest schema quest status` prints the declared order, not a sorted one
@@ -449,11 +389,14 @@ decided once, here, rather than twice.
 - [ ] Obsidian-reserved property names are allowlisted and listed by `quest schema quest`
 - [ ] The `development` schema declares `component`, `related_adrs`, `agentic` and `milestone`
 - [ ] `milestone` is gone from the core `types` enum
+- [ ] questkit's own log adopts `schema: development` **before** `strict: true` is enforced
+- [ ] `quest list --where milestone=0.3.0` returns this epic's build order
 - [ ] `archived` is a core boolean field, sorting into the alphabetical tail of `field_order`
 - [ ] `quest schema quest` reflects everything above
 
 ## Log
 
+- 2026-08-21: `milestone:` stamped across all 23 quests in this log, including retroactive `0.1.0`/`0.2.0` on shipped work. Raises rule 14's `development`-before-`strict` constraint from 16 files to every file.
 - 2026-08-19: `agentic` demoted out of core and both its hardcoded guard rules replaced by a configurable `readiness:` block; `completed` renamed to `done`; vocabularies made ordered after finding `--sort priority` returns `critical, deferred, high, ...` and multi-key sort silently drops all but the first key.
 - 2026-08-19: rules 10-14 added after grilling terminal statuses, the `blocked` status/computed-field collision, and the milestone/planned-version question.
 - 2026-08-19: captured. Bundled deliberately — a `required: true` field is unshippable against a 129-quest corpus without `--fill-defaults` in the same release.

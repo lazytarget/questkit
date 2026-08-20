@@ -10,6 +10,7 @@ tier: brief
 status: draft
 priority: high
 effort: m
+milestone: 0.3.0
 project: questkit
 tags:
   - questkit

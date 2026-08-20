@@ -10,6 +10,7 @@ tier: blueprint
 status: completed
 priority: high
 effort: xl
+milestone: 0.1.0
 owner: peter
 agentic: hitl
 project: questkit

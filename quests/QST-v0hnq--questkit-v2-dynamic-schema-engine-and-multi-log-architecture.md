@@ -9,6 +9,7 @@ type: feature
 tier: blueprint
 status: completed
 priority: high
+milestone: 0.2.0
 project: questkit
 tags:
   - cli

@@ -10,6 +10,7 @@ tier: blueprint
 status: todo
 priority: high
 effort: xl
+milestone: 0.3.0
 owner: peter
 project: questkit
 tags:
@@ -79,6 +80,26 @@ Ordered by dependency. Each item is its own quest.
 
 Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
+## Release scope
+
+This epic **is** the `0.3.0` release. `pyproject.toml` reads `version = "0.2.0"`
+today; every quest in the Scope table above carries `milestone: 0.3.0`, and
+shipping them all is what makes the version bump honest.
+
+Two quests in this log are deliberately **not** in it —
+[[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]] and
+[[QST-onxad--new-frontmatter-attributes]] are `milestone: 0.4.0`. Neither is
+required for v3 to be coherent: duplicate detection is an independent nicety, and
+`language` needs the `household` schema, which is the *second* schema to be
+written.
+
+**If 0.3 needs to shrink, items 12-14 are the cut line** — `quest commit` and the
+realm-01 timer, the Obsidian capture surface, and archival. Each is genuinely
+useful and none of the earlier items depend on them, so they move to `0.4.0` as a
+block without leaving anything half-built. Items 1-11 are not separable: they are
+the loop-closure story, and cutting any one of them leaves a command specified
+against machinery that does not exist.
+
 ## Positioning decisions
 
 | Question          | Decision                                                                                                     |
@@ -122,6 +143,7 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
 - [ ] A finished project's log can stop appearing in sweeps without any file moving
 - [ ] A `household` log's `quest brief` applies no software-shaped readiness rule
 - [ ] `--sort priority:asc` returns critical-first, and honors a second sort key
+- [ ] Every `milestone: 0.3.0` quest is done or scrapped before `pyproject.toml` reads `0.3.0`
 
 ## Log
 
