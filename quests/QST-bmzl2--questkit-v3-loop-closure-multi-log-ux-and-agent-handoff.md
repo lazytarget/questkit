@@ -75,6 +75,7 @@ Ordered by dependency. Each item is its own quest.
 | 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | capture surface |
 | 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | multi-log |
 | 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | migration |
+| 16 | [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] | dx |
 
 Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
@@ -101,8 +102,7 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
 - **A membership / parent-child concept.** `milestone:` is a planning bucket, not
   a link; an epic's Scope table stays prose. Grouping is a real gap and a real
   design round, and 20 quests is not enough pressure to justify it.
-- **Per-quest archival.** Archival is log-level; the per-quest case is
-  `status: scrapped`, which already exists.
+- **Nesting commands into noun-verb groups.** v3 groups `--help` output only; every command stays reachable as `quest <verb>`.
 - **A readiness rule that can block a commit.** `quest validate` enforces the
   file contract; `readiness:` is advisory and belongs to `quest brief`.
 - **WIP limits and auto-scrapping** — policy, and policy needs usage evidence

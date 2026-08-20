@@ -2,7 +2,7 @@
 title: questkit v3 — loop closure, multi-log UX, and agent handoff
 description: "Design record for questkit v3: the decisions, the evidence behind them, and the alternatives rejected along the way."
 created: 2026-08-19
-modified: 2026-08-20
+modified: 2026-08-21
 type: plan
 status: active
 tags:
@@ -121,11 +121,19 @@ is removed and `completed` is renamed to `done`.**
 **`completed` → `done`** makes `quest done` and `status: done` the same word. The
 mismatch was defensible, but the alignment is worth more at v0.3 than it will
 ever be again, and the migration is 15 files. The counterpart stays **`scrapped`**,
-with **`quest scrap <id>`** added as the mirror of `quest done` — the symmetry
-then holds on both axes (`done`/`scrap` as commands, `done`/`scrapped` as
-states). `cancelled` is what Linear and Jira use and was the alternative, but it
-imports the **cancelled/canceled spelling trap** into a CLI enum where users
-would typo it forever.
+with **`quest scrap <id>`** added as the mirror of `quest done`.
+
+The counterpart was re-judged from scratch, ignoring incumbency:
+
+| Pair | Verdict |
+|------|---------|
+| `done` / `scrapped` | ✅ Chosen |
+| `done` / `dropped` | ❌ **`drop` means delete in CLI-land** — `git stash drop` removes the stash, SQL `DROP` destroys the table. A user who hesitates before `quest drop QST-x7k2m` is reasoning correctly from convention, and that hesitation never goes away. Also shares an initial letter with `done`, foreclosing any prefix ergonomics. And it is vaguer: "dropped" can mean deprioritized, which is `parked`. |
+| `done` / `cancelled` | ❌ The industry standard (Linear, Jira) and `quest cancel` is a fine verb, but it imports the **cancelled/canceled spelling trap** into a CLI enum where half the world types the other spelling |
+| `done` / `abandoned` | ❌ Long and judgmental |
+
+`scrapped` is also the more precise word: it means *cancelled after being
+planned*, which is exactly the state, and it does not overlap `parked`.
 
 **`blocked` leaves the enum** for a reason that is not disuse (0 of 129, same as
 `parked`, which stays). It is that a status value and a computed field **cannot
@@ -228,6 +236,11 @@ Obsidian-reserved property names** — `cssclasses`, `cssclass`, `permalink`,
 `publish`, `cover`, `image` — permitted but unmanaged, and listed by
 `quest schema quest` so their status is discoverable.
 
+**`archived` joins the core fields** — a boolean, defaulting to absent, sorting
+into the alphabetical tail of `field_order`. Retention is universal, so it passes
+the same core-vs-schema test that kept `tier` and `effort`. See §10 for why it is
+a stored field rather than a status value or a log-config key.
+
 `milestone:` joins the `development` schema — a free-text planning bucket
 (`0.4.0`, `spring-2027`) for "what shipped when" queries and release notes. Named
 `milestone` rather than `planned_version` because it is a bucket that can slip,
@@ -269,7 +282,9 @@ Some of the most useful facts about a quest are not stored in it.
 | `blocks` | int | how many quests list this one |
 | `idle` | int | days since `status_changed` (falling back to `created`) |
 | `age` | int | days since `created` |
-| `archived` | bool | this quest's log is archived (§10) |
+**`archived` is deliberately not computed** — it is a stored core field (§10), so
+there is nothing to derive. The computed fields must honor it, which is the only
+reason it appears here.
 
 **`blocks` counts only non-terminal, non-archived quests**, mirroring `blocked`.
 Both answer "what is actually in the way", so both must ignore work that has
@@ -461,40 +476,51 @@ Routing rule, first test that fires wins:
 ### Archival
 
 A time-boxed project's log needs to stop talking without any file moving.
-`archived: true` in its own `.questkit.yaml` does that: sweeps and views skip it
-unless `--include-archived`, and `quest logs` marks it and drops it from the
-footer totals.
 
-**`archived` is deliberately not a status.** career-transition holds 13 quests of
-which **4 are finished**; setting them to `status: archived` would erase which
-ones shipped. Archival is orthogonal to status — a quest is (done|todo|…) *and*
-(archived|not) — so collapsing the axes destroys information on every use.
+**Archival is orthogonal to status, because scrapping and archiving answer
+different questions.** `status: scrapped` says what happened to the *work*
+(declined, cancelled). `archived: true` says whether it should still be *in front
+of you*, and applies to a quest at any status — `done` included. A finished quest
+in a wound-up project is archived and emphatically not scrapped.
 
-**Per-quest archival already exists and is called `scrapped`.** The one real gap
-is that career-transition's still-`todo` quests were not abandoned on their
-merits, so scrapping them would be a lie. Log-level archival is the only option
-that stays truthful: every quest keeps its honest status and the *log* declares
-the project over.
+The corpus makes the cost of conflating them concrete: career-transition holds
+**4 finished quests among its 13**, so `status: archived` would erase which ones
+shipped.
 
-Moving files into a `quests/archive/` subdirectory is forbidden outright by v1 —
-it breaks the Obsidian link graph this system exists to build.
+So `archived` is a **core boolean field**. Stored rather than derived from log
+config, because a stored field is visible in Obsidian's Properties panel,
+filterable in Bases, and greppable — a config key is invisible to every non-CLI
+surface, including the family's.
 
-Query surface is one tri-state flag, `--archived {exclude,include,only}`,
-defaulting to `exclude`, plus a computed `archived` boolean. One `choices=`
-option beats `--include-archived` plus a separate `--archived-only`, and makes
-"only the dead project" expressible. `quest archive --in career-transition`
-writes the key; there is deliberately **no `quest archive <id>`** — that
-operation is `quest set <id> status=scrapped`.
+```bash
+quest archive QST-9x2kf [--in career-transition]     # one quest
+quest unarchive QST-9x2kf
+quest archive-log career-transition                  # every non-archived quest in it
+```
+
+**`archive-log` writes no log state** — it is purely a bulk `quest archive` over
+the log's quests. So log archived-ness is **derived** ("13/13 archived") rather
+than stored, which means: one source of truth that cannot drift; no special rule
+for `quest new` in an archived log (the new quest is unarchived, so the log is no
+longer fully archived — correct, the project came back to life); and `quest logs`
+reports a ratio instead of a boolean. The separate, deliberately clunky command
+name is the safety feature: a flag typo cannot archive an entire log when the
+whole-log operation is a different verb.
+
+Query surface is one tri-state flag, **`--archived {exclude,include,only}`**,
+defaulting to `exclude`. `--include-archived` plus a separate `--archived-only`
+would be two flags for one axis.
 
 **Archival affects listing, never id resolution.** `show`/`brief`/`deps` and
-`blocked_by` references still resolve into an archived log — otherwise every
+`blocked_by` references still resolve into archived quests — otherwise every
 cross-log reference into a finished project would start failing validation the
-day it was archived, and `quest deps` would lose half its graph.
+day it was archived. `blocks` does not count them, per §5. Neither `status` nor
+`status_changed` changes; `modified` does, which is exactly why the two date
+fields were split (§4) — archiving 13 quests leaves `idle` untouched, so `stale`
+is unaffected by the archival itself.
 
-The concrete trigger is not tidiness: `career-transition` will end with some
-quests still `todo`, and `quest stale` would nag about them forever with no
-action that could ever silence it. A dead log poisons the loop-closure views,
-which are the point of v3.
+Moving files into `quests/archive/` remains forbidden outright by v1 — it breaks
+the Obsidian link graph this system exists to build.
 
 `project:` is **identity**, unique per log, enforced by `quest logs` and `quest validate`. The alternative (free label + disambiguation prompt) would build an interactive path into a tool that pipes into agents.
 
@@ -508,7 +534,8 @@ which are the point of v3.
 - **`quest ready`** — deferred.
 - **A membership / parent-child concept.** `milestone:` is a planning bucket, not a link; an epic's Scope table stays prose.
 - **Renaming `completed` to `done`.**
-- **Per-quest archival.** Archival is log-level; the per-quest case is `status: scrapped`, which already exists (§10).
+- **Nesting commands into noun-verb groups.** v3 groups `--help` output only; every command stays reachable as `quest <verb>`.
+- **A `quest migrate --move-field` verb.** Moving a field between schemas changes no quest file; the check is `quest validate` under `strict: true`.
 - **A readiness rule that can block a commit.** `quest validate` enforces the file contract; `readiness:` is advisory (§13).
 - **A second config key splitting CLI-auto-commit from daemon-commit** — the explicit timer scope removes the need.
 
@@ -530,7 +557,8 @@ which are the point of v3.
 | 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | |
 | 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | needs the schema engine |
 | 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | needs `quest logs` |
-| 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | runs the three corpus migrations |
+| 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | runs the corpus migrations |
+| 16 | [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] | 10 commands become 22 |
 
 Independent: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
@@ -545,18 +573,25 @@ None outstanding. Four were carried and are now resolved:
 
 ### Migration
 
-Three corpus-wide migrations are now queued across 129 files in 7 logs: the `status_changed` backfill, `completed` → `done`, and the `agentic` demotion. They ship as one tool ([[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]]) rather than documented `sed`, because **`sed` corrupts prose** — verified in this log:
+Two corpus-wide migrations are queued across 129 files in 7 logs: the `status_changed` backfill and `completed` → `done`. (**The `agentic` demotion needs no file migration** — the 16 files already carry the field; only `schema.py` and `development.yaml` change, and `quest validate` under `strict: true` is the check that they line up.) They ship as one tool ([[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]]) rather than documented `sed`, because **`sed` corrupts prose** — verified in this log:
 
 ```
 QST-bmzl2:114  - [ ] Every quest in the Scope table is completed or explicitly scrapped
 QST-whm2e:65   ... Completed quests stay exactly where they were created, forever.
 ```
 
-Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. Ordering constraint: `development` must exist and questkit's own log must adopt it **before** `agentic` leaves core, or the 16 files carrying it break under `strict`.
+Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. Roughly 90 lines plus tests — most of the machinery is inherited from quests already scheduled. `--commit` is opt-in and refuses on a dirty index; each log commits separately in its own repo, making this the first command that writes to multiple repositories in one invocation.
+
+Ordering constraint: `development` must exist and questkit's own log must adopt it **before** `agentic` leaves core, or the 16 files carrying it break under `strict`.
 
 ## 14. Provenance
 
-Revised again 2026-08-20: `agentic` demoted out of core with configurable
+Revised again 2026-08-21: archival reversed to a core per-quest `archived:` field
+after the scrapped-vs-archived distinction was drawn correctly (retention is not
+the same decision as the work's fate, and a stored field is the only form the
+family's surfaces can see); `dropped` weighed against `scrapped` from scratch and
+rejected; `quest migrate` cut from three verbs to two; command-group help
+captured as the CLI passes 20 verbs. Revised 2026-08-20: `agentic` demoted out of core with configurable
 `readiness:` replacing both its hardcoded guard rules, `completed` renamed to
 `done`, vocabularies made ordered after finding `--sort priority` returns
 `critical, deferred, ...` and multi-key sort silently drops keys, archival

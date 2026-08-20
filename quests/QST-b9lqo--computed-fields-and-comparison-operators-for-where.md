@@ -56,9 +56,9 @@ output.
 They behave like any other field for `--where`, `--select` and `--sort`, and are
 **read-only** — `quest set <id> blocked=true` is an error.
 
-A fifth field, **`archived`** (bool, from the log's config — see
-[[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]), joins them so archival is queryable and
-sortable like anything else.
+**`archived` is deliberately *not* one of these** — it is a stored core field
+([[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]), so it needs no derivation. It is named
+here only because the computed fields must honor it.
 
 **`blocks` counts only non-terminal, non-archived quests**, mirroring `blocked`,
 which already only counts non-terminal dependencies. The symmetry is the
@@ -123,7 +123,7 @@ at config load.
 - [ ] `quest set <id> blocked=true` errors — computed fields are read-only
 - [ ] `blocked` resolves against the log's `terminal_statuses`, not a hardcoded pair
 - [ ] `blocks` excludes terminal and archived quests from its count
-- [ ] `archived` is available as a computed boolean field
+- [ ] `blocks` and `blocked` honor the stored `archived` field
 - [ ] `--where status!=draft` filters correctly and `!=` is not shredded by the `=` branch
 - [ ] `blocks` counts reverse edges across the active log set, and the summary states that scope
 - [ ] A quest with no `status_changed` gets `idle` from `created`

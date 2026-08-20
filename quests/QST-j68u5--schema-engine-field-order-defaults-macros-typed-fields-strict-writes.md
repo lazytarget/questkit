@@ -292,7 +292,14 @@ schema carries a short **allowlist of Obsidian-reserved property names** —
 permitted but unmanaged. Allowlisted, not silently ignored: `quest schema quest`
 lists them so their status is discoverable.
 
-**17. The `development` schema gains `milestone:`.** A free-text planning bucket
+**17. `archived` joins the core fields.** A boolean, defaulting to absent.
+Retention is universal — every domain archives — so it passes the same
+core-vs-schema test that kept `tier` and `effort`. It sorts into the alphabetical
+tail of `field_order`, not the explicit head: rarely set, never scanned. See
+[[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] for why it is a stored field rather than a
+status value or a log-config key.
+
+**18. The `development` schema gains `milestone:`.** A free-text planning bucket
 (`0.4.0`, `spring-2027`), enabling "what shipped when" queries and release-note
 generation.
 
@@ -442,6 +449,7 @@ decided once, here, rather than twice.
 - [ ] Obsidian-reserved property names are allowlisted and listed by `quest schema quest`
 - [ ] The `development` schema declares `component`, `related_adrs`, `agentic` and `milestone`
 - [ ] `milestone` is gone from the core `types` enum
+- [ ] `archived` is a core boolean field, sorting into the alphabetical tail of `field_order`
 - [ ] `quest schema quest` reflects everything above
 
 ## Log

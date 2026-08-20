@@ -85,9 +85,11 @@ aggregates or de-duplicates them across a large sweep."*
 7. **Enforces `project:` uniqueness** across the sweep — the identity guarantee
    [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] depends on. A collision is reported as an error naming both paths.
 
-8. An **archived** log ([[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]) shows an `ARCHIVED`
-   marker and its counts are excluded from the footer totals, so the inventory is
-   honest about what it is and is not counting.
+8. **Archived counts are derived, not stored.** A log whose quests all carry
+   `archived: true` ([[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]) renders
+   `13/13 archived`; a partially archived one renders `4/13 archived`. There is
+   no log-level archived flag to read, so the column can never disagree with the
+   files. Fully archived logs are excluded from the footer totals.
 
 9. Read-only. `quest logs` never writes, never creates, never migrates.
 
@@ -105,7 +107,7 @@ None. The terminal-status question is decided in
 - [ ] `quest logs --format json` emits one object per log, valid for `jq`
 - [ ] `--verbose` shows schema overrides, custom fields, strict mode and terminal statuses
 - [ ] `OPEN` uses the log's own `terminal_statuses`
-- [ ] An archived log is marked and excluded from footer totals
+- [ ] Archived counts are derived from the quests; a fully archived log is excluded from footer totals
 - [ ] A log with a broken `schema.extends` still appears as a row, with its warning printed once after the table
 - [ ] The footer names the sweep root and totals, one row per root
 - [ ] A duplicate `project:` across two logs is reported as an error naming both

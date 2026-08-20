@@ -1,7 +1,7 @@
 ---
 id: QST-lcsza
-title: Archive a whole quest log instead of individual quests
-description: Let a finished project's log be marked archived in its own config, so its quests drop out of sweeps and stale nags without any file ever moving.
+title: "Archival as an orthogonal `archived:` field, per quest and per log"
+description: Add a core archived boolean that preserves a quest's status, with per-quest and whole-log commands, so a finished project stops appearing in sweeps without any file moving or any outcome being erased.
 created: 2026-08-19
 status_changed: 2026-08-19
 modified: 2026-08-20
@@ -25,128 +25,127 @@ aliases:
 
 `02-projects/peter/2026-career-transition` is a **time-boxed** project. When it
 ends, its 13 quests stay in every `-A` sweep forever — and the ones still `todo`
-will be nagged about by `quest stale` ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]) permanently, with no
-action that can ever silence them. Scrapping them would be a lie (they were not
-abandoned on their merits), and completing them would be a bigger one.
-
-That is the concrete failure, and it is the whole argument for shipping this now
-rather than deferring: **a dead log poisons the loop-closure views**, which are
-the point of v3.
-
-The granularity is the key insight. The thing that ends is a **project**, not a
-quest. Nobody archives 13 quests one at a time; they finish a job and want the
-whole log to stop talking.
+get nagged about by `quest stale` ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]) permanently, with
+**no action that can ever silence them**. That is the concrete failure, and it is
+why this ships in v3 rather than waiting for a third dead log: a dead log poisons
+the loop-closure views, which are the point of v3.
 
 ## Spec
 
-### Scope
+### Archival is orthogonal to status
 
-**In:** `archived: true` in a log's `.questkit.yaml`, its effect on discovery,
-and `quest archive` / `quest unarchive` as the commands that set it.
-**Out:** per-quest archival, moving files, and any `active/`/`archive/`
-subdirectory — all three are forbidden by [[QST-whm2e--questkit-design-blueprint-for-file-based-quest-tracking]]'s "no
-`active/`/`archive/` subdirectories, ever", and that decision still holds.
+**Scrapping and archiving are different decisions:**
 
-### Why `archived` is not a status
+| | Question it answers | Applies to |
+|---|---|---|
+| `status: scrapped` | What happened to this work? *(declined, cancelled)* | work that was abandoned on its merits |
+| `archived: true` | Should this still be in front of me? *(retention/visibility)* | a quest at **any** status, `done` included |
 
-The tempting shape is `status: archived`, set per quest. It is wrong, and the
-corpus says why: **4 of career-transition's 13 quests are finished.** Setting
-them to `archived` erases which ones shipped. Archival is *orthogonal* to
-status — a quest is (done|todo|…) **and** (archived|not) — so collapsing the two
-axes into one enum destroys information every time it is used.
+A finished quest in a wound-up project is archived and emphatically not scrapped.
+Career-transition holds **4 finished quests among its 13** — collapsing archival
+into `status` would erase which ones shipped.
 
-**And per-quest archival already exists. It is called `scrapped`.** A quest
-abandoned on its merits has a status for that; adding a second one is two words
-for one idea.
+So `archived` is a **core boolean field**, not a status value and not a computed
+one. Core because retention is universal — every domain archives. **Stored**
+rather than derived from log config because a stored field is visible in
+Obsidian's Properties panel, filterable in Bases, and greppable; a config key is
+invisible to every non-CLI surface, including the family's.
 
-That leaves exactly one real gap, and it is the one that motivated this quest:
-career-transition's still-`todo` quests were *not* abandoned on their merits, so
-scrapping them would be a lie. **Log-level archival is the only option that stays
-truthful** — every quest keeps its honest status, and the *log* declares the
-project over. Nothing is falsified, nothing moves, one line changes.
+It sorts into the alphabetical tail of `field_order`
+([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]]), not the explicit head — it is
+rarely set and never scanned.
 
-### Approach
+### Commands
 
-```yaml
-# 02-projects/peter/2026-career-transition/quests/.questkit.yaml
-version: 1
-project: career-transition
-archived: true
+```bash
+quest archive QST-9x2kf                              # one quest
+quest archive QST-9x2kf --in career-transition       # bounded search set
+quest unarchive QST-9x2kf
+
+quest archive-log career-transition                  # every non-archived quest in that log
+quest unarchive-log career-transition
 ```
 
-**Archival affects listing, never id resolution.** That split is the whole
-design:
+`quest archive <id>` is sugar for `quest set <id> archived=true`, exactly as
+`quest done` is sugar for `status=done`.
 
-| Operation | Archived log |
-|-----------|--------------|
+**`archive-log` sets no log state.** It is purely a bulk `quest archive` over the
+log's quests, resolved by the same name-or-path logic as `--in`
+([[QST-fmk0p--resolving-questkit-log-in-specified-path-via]]). Three consequences, all wanted:
+
+- **One mechanism, one source of truth** — no config key that can disagree with
+  the files it describes.
+- **`quest new --in career-transition` needs no special rule.** The new quest is
+  unarchived, so the log is no longer fully archived — correct, because the
+  project came back to life. A stored log flag would have needed an error path
+  here, and an answer to what happens when the two disagree.
+- **`quest logs` reports `13/13 archived`**, derived, rather than a boolean that
+  can drift ([[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]]).
+
+The separate command name is deliberate and the clunkiness is the feature: a flag
+typo cannot archive an entire log when the whole-log operation is a different
+verb. They also sit in different `--help` groups ([[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]]).
+
+### Query surface
+
+**`--archived {exclude,include,only}`, default `exclude`.** One argparse
+`choices=` option covers all three questions and makes "only the dead project"
+expressible; `--include-archived` plus a separate `--archived-only` would be two
+flags for one axis. Once archived quests are in scope, `--where archived=true`
+and `--select archived` work like any other field.
+
+### What archival does and does not affect
+
+| Operation | Archived quest |
+|-----------|----------------|
 | `quest list` / views / `-A` sweeps | **excluded** unless `--archived include\|only` |
 | `quest stale` / `next` / `blocked` | **excluded** — the point of the feature |
-| `quest show` / `brief` / `deps` by id | **found**, with a note that its log is archived |
+| `quest show` / `brief` / `deps` by id | **found**, with a note that it is archived |
 | `blocked_by` reference resolution ([[QST-yiep7--qualified-cross-log-references-in-blocked-by]]) | **resolves** |
+| `blocks` count ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]) | **not counted** — nothing is really waiting |
 | `quest set` / `done` by id | **found**, with a warning |
-| `quest new --in <archived>` | **error** — reopen it first |
+| `quest validate` | **validated normally** — archived is not exempt |
 
-If archival hid ids, every cross-log reference into a finished project would
-start failing validation the day it was archived, and `quest deps` would lose
-half its graph. That is a worse problem than the one being solved.
+**Archival affects listing, never id resolution.** If it hid ids, every cross-log
+reference into a finished project would start failing validation the day it was
+archived and `quest deps` would lose half its graph — a worse problem than the
+one being solved.
 
-**Query surface: one tri-state flag.** `--archived {exclude,include,only}`,
-default `exclude`. One argparse `choices=` option beats `--include-archived`
-plus a separate `--archived-only`, and it makes "show me only the dead project"
-expressible rather than a two-flag idiom. A computed `archived` boolean
-([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]) makes it filterable and selectable like
-any other field.
-
-Note `--where "status~scrapped,archived"` deliberately does **not** work — that
-spelling is the axis conflation this design rejects.
-
-`quest logs` ([[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]]) lists archived logs with an
-`ARCHIVED` marker and excludes their counts from the footer totals, so the
-inventory stays honest about what it is and is not counting.
-
-`quest archive [--in LOG]` / `quest unarchive [--in LOG]` write the key. Nothing
-about a quest file changes — no field, no move, no rename, no mtime.
-
-**There is no `quest archive <id>`.** That operation is `quest set <id>
-status=scrapped`, and giving it a second name would imply a second mechanism.
+**Neither `status` nor `status_changed` changes.** Archiving is not a status
+transition. `modified` does bump (it is a real CLI edit), which is exactly why the
+two fields were split in [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]]: archiving 13
+quests leaves `idle` untouched, so `stale` is unaffected by the archival itself.
 
 ### Alternatives
 
 | Option | Verdict | Reason |
 |--------|---------|--------|
-| `archived: true` on the log config | ✅ Chosen | Matches the real granularity (a project ends), touches zero quest files, breaks zero links |
-| `quest archive <id>` moving files to `quests/archive/` | ❌ | Explicitly forbidden by v1; a move breaks the Obsidian link graph this system exists to build |
-| Per-quest `status: archived` | ❌ | **Erases the outcome** — 4 of the 13 are finished, and this forgets which |
-| Per-quest `archived: true` boolean | ❌ | 13 file rewrites for one project ending, and `scrapped` already covers per-quest abandonment |
-| Move the log into `06-archive/` | ❌ | `06-archive/` is an immutable data vault, a different Syncthing folder, and the log lives inside a git repo |
-| Do nothing — `--where status=completed` already hides them | ❌ | True for completed quests, false for the ones left `todo`, which are exactly the ones `stale` will nag about forever |
-
-### Snippets
-
-```bash
-quest archive --in career-transition
-quest logs                       # career-transition   13   9  manual  ARCHIVED
-quest stale -A                   # career-transition no longer appears
-quest show QST-xxxxx             # still works, prints: log 'career-transition' is archived
-quest list -A --include-archived # everything, including it
-```
+| Core `archived: true` field + bulk log command | ✅ Chosen | Preserves the outcome, visible in Obsidian/Bases, one mechanism |
+| `status: archived` | ❌ | **Erases the outcome** — 4 of the 13 are finished, and this forgets which |
+| Treat `status: scrapped` as the per-quest archive | ❌ | Conflates a decision about the *work* with a decision about *retention*; a `done` quest can be archived and is not scrapped |
+| `archived: true` in the log's `.questkit.yaml` only | ❌ | Invisible to Obsidian, Bases and grep — i.e. to every surface the family uses. Also needs a rule for what `quest new` does in an archived log. |
+| Move files to `quests/archive/` | ❌ | Forbidden outright by [[QST-whm2e--questkit-design-blueprint-for-file-based-quest-tracking]] — breaks the Obsidian link graph this system exists to build |
+| Move the log to `06-archive/` | ❌ | Immutable data vault, a different Syncthing folder, and the log lives inside a git repo |
+| `--include-archived` + `--archived-only` | ❌ | Two flags for one axis |
 
 ## Acceptance Criteria
 
-- [ ] `archived: true` in a log's config excludes it from `-A` sweeps and every view
-- [ ] `--archived include` brings it back; `--archived only` returns nothing else
-- [ ] `--archived` defaults to `exclude`
-- [ ] `archived` is queryable as a computed field once in scope
-- [ ] There is no per-quest archive command or status
-- [ ] `quest show` / `brief` / `deps` still resolve an id inside an archived log, with a note
-- [ ] A `blocked_by` reference into an archived log still resolves and does not error
-- [ ] `quest set` / `done` on an archived log's quest warns but succeeds
-- [ ] `quest new --in <archived log>` errors, naming `quest unarchive`
-- [ ] `quest logs` marks archived logs and excludes them from the footer totals
-- [ ] `quest archive` / `quest unarchive` are idempotent
-- [ ] No quest file is read, written, moved or renamed by either command
+- [ ] `archived` is a core boolean field, defaulting to absent/false
+- [ ] `quest archive <id>` sets it; `quest unarchive <id>` clears it
+- [ ] `quest archive <id> --in LOG` restricts the search to that log
+- [ ] `quest archive-log LOG` archives every non-archived quest in it, and is idempotent
+- [ ] `archive-log` writes no log config — archived-ness is derived
+- [ ] `quest new --in <fully archived log>` succeeds and the log is no longer fully archived
+- [ ] Archiving changes neither `status` nor `status_changed`
+- [ ] `--archived` defaults to `exclude`; `include` and `only` behave as named
+- [ ] `--where archived=true` and `--select archived` work once in scope
+- [ ] `quest show` / `brief` / `deps` still resolve an archived id, with a note
+- [ ] A `blocked_by` reference into an archived quest still resolves and does not error
+- [ ] `blocks` does not count archived quests
+- [ ] `quest logs` reports archived counts and excludes them from footer totals
+- [ ] `quest stale -A` returns nothing from a fully archived log
 
 ## Log
 
-- 2026-08-19: confirmed log-level after checking the corpus — career-transition holds 4 finished quests, which `status: archived` would erase. Per-quest archival rejected outright: that is `scrapped`.
-- 2026-08-19: captured after grilling the archive question. Log-level rather than quest-level, because the thing that ends is a project.
+- 2026-08-19: captured after grilling the archive question.
+- 2026-08-19: reversed from log-config-only to a core per-quest field. Two corrections drove it: archiving and scrapping answer different questions (retention vs. the work's fate), and a stored field is the only form visible to Obsidian, Bases and grep — i.e. to the family. Retitled; the filename slug is deliberately left alone (filenames are immutable by design) — see [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]].
