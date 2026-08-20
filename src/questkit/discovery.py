@@ -42,19 +42,26 @@ class AmbiguousDestinationError(QuestLogNotFoundError):
 def resolve_log(explicit: str | None = None, start: Path | None = None) -> Path:
     """Resolve the `quests/` directory a command should operate on.
 
-    Order: an explicit `--in` override, then walking up from `start`
-    (default: cwd) looking for a `.questkit.yaml` marker -- either directly
-    in an ancestor, or in that ancestor's `quests/` child -- then the
-    `QUEST_LOG` environment variable, then an actionable error.
+    Order: an explicit `--in` override (by name or by path -- see
+    `resolve_by_name_or_path`), then walking up from `start` (default: cwd)
+    looking for a `.questkit.yaml` marker -- either directly in an ancestor,
+    or in that ancestor's `quests/` child -- then the `QUEST_LOG` environment
+    variable, then an actionable error.
+
+    An explicit value that resolves to more than one log (a directory holding
+    several) is an `AmbiguousDestinationError` here -- this function always
+    returns exactly one log, for the single-target commands (`show`, `set`,
+    `done`, `mv`, `schema`, `new`, ...). A caller that wants every log beneath
+    a directory (`list`, `logs`) calls `resolve_by_name_or_path` directly.
     """
     if explicit is not None:
-        explicit_path = Path(explicit).expanduser().resolve()
-        if (explicit_path / CONFIG_FILENAME).is_file():
-            return explicit_path
-        raise QuestLogNotFoundError(
-            f"'{explicit_path}' is not a quest log (no {CONFIG_FILENAME} found). "
-            f"Run 'quest init {explicit_path}' first."
-        )
+        candidates = resolve_by_name_or_path(explicit, start=start)
+        if len(candidates) > 1:
+            raise AmbiguousDestinationError(
+                f"'{explicit}' resolves to multiple quest logs: "
+                f"{[str(p) for p in candidates]}. Specify one directly with --in <DIR>."
+            )
+        return candidates[0]
 
     found = _walk_up(start or Path.cwd())
     if found is not None:
@@ -72,6 +79,69 @@ def resolve_log(explicit: str | None = None, start: Path | None = None) -> Path:
     raise QuestLogNotFoundError(
         "no quest log found: run 'quest init' here, or set QUEST_LOG to your central log."
     )
+
+
+def resolve_by_name_or_path(
+    value: str, root: Path | None = None, start: Path | None = None
+) -> list[Path]:
+    """One `--in` value -> the log(s) it names, by project name or by path.
+
+    **One rule:** a value containing a `/` or `\\`, or naming a directory
+    that exists on disk, is a **path**. Anything else is a **project name**,
+    matched against each discovered log's `project:` under the sweep root
+    (`root`, or `resolve_sweep_root()` if not given). Disk existence wins the
+    tie: a directory named the same as a project resolves as the path, so an
+    existing script never breaks the day a project name happens to collide
+    with a real directory.
+
+    A path that **is** a log resolves to just itself. A path that is **not**
+    a log, but has logs somewhere beneath it, expands to all of them --
+    `--in 02-projects/grocy-ecosystem` behaves like
+    `--in 02-projects/grocy-ecosystem/quests`, and `--in .` from the Realm
+    root is honestly equivalent to `-A`. Callers that need exactly one log
+    (write commands) reject more than one result themselves --
+    `resolve_by_name_or_path` never picks for them.
+    """
+    if _looks_like_a_path(value):
+        target = Path(value).expanduser().resolve()
+        found = find_all_logs(target) if target.is_dir() else []
+        if found:
+            return found
+        raise QuestLogNotFoundError(
+            f"'{target}' is not a quest log (no {CONFIG_FILENAME} found). "
+            f"Run 'quest init {target}' first."
+        )
+
+    sweep_root = root if root is not None else resolve_sweep_root(start=start)
+    logs = find_all_logs(sweep_root)
+    matches = [log for log in logs if _project_of(log) == value]
+    if not matches:
+        known = sorted(
+            {(_project_of(log), log) for log in logs if _project_of(log) is not None}
+        )
+        listing = ", ".join(f"{name} ({path})" for name, path in known) or "(no named logs found)"
+        raise QuestLogNotFoundError(
+            f"no log named '{value}' under {sweep_root}. Known projects: {listing}. "
+            "(The resolution set is device-dependent: a log not synced to this device "
+            "cannot resolve here, even if its name is correct.)"
+        )
+    if len(matches) > 1:
+        raise QuestLogNotFoundError(
+            f"project name '{value}' matches multiple logs: {[str(m) for m in matches]} -- "
+            "each log's project: must be unique; fix the duplicate and retry"
+        )
+    return matches
+
+
+def _looks_like_a_path(value: str) -> bool:
+    return "/" in value or "\\" in value or Path(value).expanduser().is_dir()
+
+
+def _project_of(quests_dir: Path) -> str | None:
+    try:
+        return QuestLogConfig.load(quests_dir).project
+    except (OSError, ConfigVersionError, schema.SchemaExtendsError, schema.SchemaConfigError):
+        return None
 
 
 def _walk_up(start: Path) -> Path | None:
@@ -154,7 +224,11 @@ def resolve_log_set(
     block that reports the resolved scope.
     """
     if in_dirs:
-        return _dedupe_paths([resolve_log(explicit=value) for value in in_dirs])
+        sweep_root = resolve_sweep_root(explicit=root, start=start)
+        found: list[Path] = []
+        for value in in_dirs:
+            found.extend(resolve_by_name_or_path(value, root=sweep_root))
+        return _dedupe_paths(found)
     if all_logs:
         return find_all_logs(resolve_sweep_root(explicit=root, start=start))
     return [resolve_log(start=start)]

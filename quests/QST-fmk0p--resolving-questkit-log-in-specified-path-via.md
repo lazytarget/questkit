@@ -4,7 +4,7 @@ title: Resolve a quest log by project name via --in
 description: Let --in accept a log's project name, not just a path, so targeting the right log stops depending on remembering a deep nested path.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: high
 tags:
   - questkit
@@ -12,7 +12,7 @@ tags:
   - dx
   - multi-log
 created: 2026-08-16
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 agentic: afk
 aliases:
@@ -109,21 +109,22 @@ wrong.
 
 ## Acceptance Criteria
 
-- [ ] `--in family` resolves to `02-projects/family/quests`
-- [ ] `--in ./quests` and `--in 99-system/quests` still resolve as paths
-- [ ] `--in 02-projects/grocy-ecosystem` resolves to its single child log
-- [ ] `--in .` from a repo root resolves to that repo's log
-- [ ] A directory containing several logs expands to all of them for reads
-- [ ] The same directory errors for `quest new`, naming the candidate logs
-- [ ] An existing directory name that is also a project name resolves as the path
-- [ ] An unknown name errors, listing known project names with their paths
-- [ ] A name matching two logs errors, naming both
-- [ ] `quest validate` flags a duplicate `project:` across logs
-- [ ] Name resolution respects `--root` / `QST_ROOT`
-- [ ] Works on every command that takes `--in`, including mutations
-- [ ] Docs describe the path-vs-name rule in one sentence
+- [x] `--in family` resolves to `02-projects/family/quests`
+- [x] `--in ./quests` and `--in 99-system/quests` still resolve as paths
+- [x] `--in 02-projects/grocy-ecosystem` resolves to its single child log
+- [x] `--in .` from a repo root resolves to that repo's log
+- [x] A directory containing several logs expands to all of them for reads
+- [x] The same directory errors for `quest new`, naming the candidate logs
+- [x] An existing directory name that is also a project name resolves as the path
+- [x] An unknown name errors, listing known project names with their paths
+- [x] A name matching two logs errors, naming both
+- [x] `quest validate` flags a duplicate `project:` across logs
+- [x] Name resolution respects `--root` / `QST_ROOT`
+- [x] Works on every command that takes `--in`, including mutations
+- [x] Docs describe the path-vs-name rule in one sentence
 
 ## Log
 
+- 2026-08-21: implemented (batch B4). `resolve_by_name_or_path()` is the single new primitive: path-shaped values delegate straight to the already-tested `find_all_logs()` (which already handles "the directory itself is a log" and "logs nested beneath it" in one pass), so the path branch is a few lines. `resolve_log()` wraps it and rejects a multi-log result with `AmbiguousDestinationError`, giving every single-target command (`show`, `set`, `done`, `mv`, `schema`, `new`) name resolution for free. `resolve_log_set()` (built in B0 for `quest migrate`) now routes its repeatable `--in` through the same resolver instead of the single-log `resolve_log`, so a mutation command's `--in` can expand to more than one log when the value names a directory of several -- matching the spec's "bounded search set with no silent sweep past it," which is a different thing from "always exactly one."
 - 2026-08-16: captured
 - 2026-08-19: groomed as part of [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]. Retitled from "Resolving `Single()` Questkit Log in specified path via `--in`"; the filename slug is intentionally left alone (filenames are immutable by design) — see [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]] for why the resulting drift should not be an error.

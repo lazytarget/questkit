@@ -262,6 +262,24 @@ that one call (see [§9](#9-multi-zone-setup) for the full resolution
 order). Examples below assume you're standing inside an already-opted-in
 log unless `--in` is shown explicitly.
 
+### Resolving `--in` by name
+
+Every command that takes `--in DIR` also accepts a **project name**: `--in
+family` resolves to whichever log declares `project: family`, matched against
+every log discovered under the sweep root (`--root`, `QST_ROOT`, the git root,
+or cwd). **One rule** decides name vs. path: a value containing a `/` or `\`,
+or naming a directory that exists on disk, is a **path**; anything else is a
+name. Disk existence wins the tie, so a directory that happens to share a
+project's name still resolves as the path.
+
+`project:` is therefore **identity, not a label** — unique per log, enforced by
+`quest logs` and `quest validate`. A path that is not itself a log, but has
+logs beneath it, expands to all of them for a read command (`--in
+02-projects/grocy-ecosystem` behaves like `--in
+02-projects/grocy-ecosystem/quests`); a single-target command (`new`, `show`,
+`set`, ...) errors naming the candidates instead of guessing. Errors are
+actionable: an unknown name lists the known project names and their paths.
+
 ### `quest new "title" [options]`
 
 Beyond the shorthand flags below, **`--set field=value` (repeatable) writes any
