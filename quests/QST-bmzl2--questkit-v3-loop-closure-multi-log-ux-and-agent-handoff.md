@@ -74,6 +74,7 @@ Ordered by dependency. Each item is its own quest.
 | 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | automation |
 | 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | capture surface |
 | 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | multi-log |
+| 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | migration |
 
 Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
@@ -100,10 +101,10 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
 - **A membership / parent-child concept.** `milestone:` is a planning bucket, not
   a link; an epic's Scope table stays prose. Grouping is a real gap and a real
   design round, and 20 quests is not enough pressure to justify it.
-- **Renaming `status: completed` to `done`.** The command/value asymmetry is not
-  a defect (`git commit` does not write `status: committed`), and
-  `completed`/`scrapped` is a matched pair of outcomes that `done`/`scrapped` is
-  not.
+- **Per-quest archival.** Archival is log-level; the per-quest case is
+  `status: scrapped`, which already exists.
+- **A readiness rule that can block a commit.** `quest validate` enforces the
+  file contract; `readiness:` is advisory and belongs to `quest brief`.
 - **WIP limits and auto-scrapping** — policy, and policy needs usage evidence
   that does not exist yet.
 - **`quest ready`** — deferred until `quest brief` has been used by hand enough
@@ -119,6 +120,8 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
 - [ ] The family log has a working creation path that is not the CLI
 - [ ] `quest validate` on every Realm log reports clean, or reports something real
 - [ ] A finished project's log can stop appearing in sweeps without any file moving
+- [ ] A `household` log's `quest brief` applies no software-shaped readiness rule
+- [ ] `--sort priority:asc` returns critical-first, and honors a second sort key
 
 ## Log
 

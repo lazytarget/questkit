@@ -1,0 +1,109 @@
+---
+id: QST-lc3co
+title: "quest migrate: frontmatter-aware corpus migrations"
+description: One migration command with backfill, value-rename and field-move verbs, because sed on frontmatter corrupts prose and every schema change needs the same three jobs.
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
+type: feature
+tier: brief
+status: todo
+priority: high
+effort: m
+project: questkit
+tags:
+  - questkit
+  - cli
+  - schema
+blocked_by:
+  - QST-mjuau
+aliases:
+  - QST-lc3co
+---
+
+## Description
+
+v3 queues **three** corpus-wide migrations across 129 quests in 7 logs, several
+of which are shared with other people:
+
+1. **Backfill `status_changed`** from `created` ([[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]])
+2. **Rename `status: completed` → `done`** ([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 11)
+3. **Move `agentic` out of core** into the `development` schema ([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 13) — 16 files carry it
+
+And `quest format --fill-defaults` is a fourth of the same shape.
+
+**The decider is not convenience — it is that `sed` is unsafe here.** Quest
+bodies and `description:` values contain these words in ordinary prose. Verified
+in this very log on 2026-08-19:
+
+```
+QST-bmzl2:114  - [ ] Every quest in the Scope table is completed or explicitly scrapped
+QST-whm2e:65   ... Completed quests stay exactly where they were created, forever.
+```
+
+A line-oriented substitution corrupts both. Only a frontmatter-aware tool can
+rename a *value of a field* without touching prose that happens to use the same
+word — and questkit is the only thing in the Realm that parses this format.
+
+## Spec
+
+### Scope
+
+**In:** `quest migrate` with three verbs, `--dry-run`, and multi-log scoping.
+**Out:** schema *file* migration (config `version:` bumps), rollback/undo (git is
+the undo), and any automatic migration on load — migrations are always explicit.
+
+### Approach
+
+```bash
+quest migrate --backfill status_changed=created -A --dry-run
+quest migrate --backfill status_changed=created -A
+
+quest migrate --rename-value status:completed=done -A
+quest migrate --rename-value priority:normal=medium --in family
+
+quest migrate --move-field agentic --to development
+```
+
+Three verbs, one per migration shape:
+
+| Verb | Does | Guard |
+|------|------|-------|
+| `--backfill FIELD=SOURCE` | sets `FIELD` from `SOURCE` (another field, a literal, or a `{{ }}` macro) **only where FIELD is absent** | never overwrites an existing value |
+| `--rename-value FIELD:old=new` | rewrites one enum value of one field | **only that field's value** — never the body, never other fields |
+| `--move-field FIELD --to SCHEMA` | reports which logs carry `FIELD` and which of them adopt `SCHEMA`; errors listing the files that would be orphaned | read-only unless `--force` |
+
+Shared behavior:
+
+- Honors `--in` (repeatable) and `-A`/`--root` ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]]) — a migration must be scopeable to one log, because these logs are shared and you will not always want to touch someone else's.
+- **`--dry-run` prints a per-file diff and writes nothing.** Not optional: a corpus-wide mutation with no preview is not shippable.
+- Writes via `Quest.save()`, so it inherits write-only-on-change ([[QST-mjuau--quest-save-writes-only-when-the-rendered-content-changes]]) — a migration that is a no-op for a file leaves its mtime alone, which matters across Syncthing.
+- Does **not** bump `modified` (a migration is not a content edit) and does **not** touch `status_changed` (renaming `completed`→`done` is the same status under a new name, not a transition). Both are deliberate: a migration must not launder the loop-closure signals v3 exists to create.
+- Prints a summary block naming logs touched, files changed, and files skipped.
+
+### Alternatives
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| `quest migrate` with three verbs | ✅ Chosen | One tool, four known jobs, and more on every schema change |
+| `sed`/`ruby -pi -e` documented in the plan | ❌ | **Corrupts prose** — verified against this corpus |
+| A one-off script per migration | ❌ | Three scripts now, one per schema change forever, none with `--dry-run` |
+| Auto-migrate on load | ❌ | Silent mutation of files the user did not ask to touch; also unsafe across a Syncthing fleet mid-sync |
+| A general migration framework (versioned steps, up/down) | ❌ | Over-built for a tool whose data is plain Markdown in git |
+
+## Acceptance Criteria
+
+- [ ] `--backfill status_changed=created` fills only files missing the field, and is idempotent
+- [ ] `--rename-value status:completed=done` rewrites the frontmatter value only
+- [ ] The same run leaves the word "completed" untouched in bodies and in `description:`
+- [ ] `--move-field agentic --to development` reports orphans and writes nothing without `--force`
+- [ ] `--dry-run` prints a per-file diff and writes nothing
+- [ ] Migrations honor `--in` (repeatable), `-A` and `--root`
+- [ ] A no-op migration changes no file mtimes
+- [ ] `modified` and `status_changed` are not bumped by any migration
+- [ ] A summary names logs touched, files changed and files skipped
+- [ ] Tests cover: absent field, present field, prose collision, multi-log scoping
+
+## Log
+
+- 2026-08-19: captured. Split out of [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] once v3 accumulated three corpus migrations rather than one, and once the prose-collision hazard was verified in this log.

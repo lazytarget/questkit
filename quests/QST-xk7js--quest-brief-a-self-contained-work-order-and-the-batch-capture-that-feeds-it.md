@@ -94,10 +94,26 @@ STATE  ✅ todo · ✅ unblocked · blocks 2
 
 **Two lines, not one — they fail for different reasons and have different fixes.**
 
-| Line | Question | Checks | Fixed by |
+| Line | Question | Source | Fixed by |
 |------|----------|--------|----------|
-| `READY` | Is this document executable as written? | `## Spec`/`## Design`, real acceptance criteria, `description`, `agentic` | grooming |
-| `STATE` | Should anyone pick it up right now? | `blocked=false`, status not draft/terminal/parked | unblocking, or a status change |
+| `READY` | Is this document executable as written? | the schema's **`readiness:` rules** ([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 15) | grooming |
+| `STATE` | Should anyone pick it up right now? | computed: `blocked=false`, status not terminal/parked/archived | unblocking, or a status change |
+
+**`READY` is entirely schema-driven — `quest brief` hardcodes no rule.** It
+evaluates the log's `readiness:` list and prints each rule's own `message` on
+failure. That is what lets a `household` log declare that a chore needs a
+description and nothing else, while `development` requires a spec and acceptance
+criteria, without `brief` knowing either domain exists.
+
+It also means `agentic` is not special to `brief`. The old AFK gate is now just a
+conditional readiness rule that `development` happens to declare
+(`when: "agentic=afk"`), and `brief` reads it the same way it reads every other.
+
+**`STATE` stays computed and non-configurable.** The line is: `READY` is about
+what a human wrote, so a schema owns it; `STATE` is about where the quest sits in
+the graph, so the tool owns it. `status!=draft` is a *grooming* fact and belongs
+to READY; `blocked`, terminal and archived are *graph* facts and belong to
+STATE.
 
 A `READY` failure means "not implementation-ready — this is grooming input". A
 `STATE` failure is a warning, never a refusal: **`quest brief` must still emit a
@@ -188,6 +204,10 @@ optional (`nargs="?"` plus a mutual-exclusion check).
 - [ ] `REPORT BACK` names the exact commands and the log's commit prefix
 - [ ] An ungroomed quest's brief collapses to header, location and warnings
 - [ ] `READY` and `STATE` are separate lines with separate verdicts
+- [ ] `READY` is computed from the log's `readiness:` rules, with no rule hardcoded in `brief`
+- [ ] A rule's own `message` is what prints on failure
+- [ ] A `household`-schema quest with only a description reports READY ✅
+- [ ] `brief` never fails on `agentic` specifically — only via a declared rule
 - [ ] A blocked quest still gets a full brief, with `STATE` naming the blocker
 - [ ] A completed or scrapped quest warns but still briefs
 - [ ] Only a `READY` failure produces the "not implementation-ready" verdict
@@ -198,5 +218,6 @@ optional (`nargs="?"` plus a mutual-exclusion check).
 
 ## Log
 
+- 2026-08-19: READY rewired to the schema's `readiness:` list after `agentic` left the core; `brief` now hardcodes no readiness rule at all.
 - 2026-08-19: readiness split into READY (document quality) and STATE (right-now eligibility) — they fail for different reasons and a blocked quest must still be briefable.
 - 2026-08-19: captured. The default output was deliberately shrunk from an earlier verbose draft; the schema block's conditional presence is the principled half of that, not just the shorter one.

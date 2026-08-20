@@ -59,8 +59,10 @@ consumes it ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]).
   matter, because staleness only ever looks at non-terminal statuses. Say so in
   the migration note rather than building git archaeology for a field nobody
   queries on finished work.
-- The backfill script must be **re-runnable for a different field**, not
-  one-shot. The migration tooling is the expensive part; the field is not.
+- The backfill itself now lives in [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] —
+  v3 accumulated three corpus migrations rather than one (`status_changed`,
+  `completed`→`done`, `agentic` demotion), so the tool is its own quest. This
+  quest owns the **field and its write path**; that one owns **moving 129 files**.
 
 ### Alternatives
 
@@ -77,7 +79,7 @@ consumes it ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]).
 - [ ] Re-setting the same status changes neither `status_changed` nor `modified`
 - [ ] `quest done` sets `status_changed`
 - [ ] The backfill seeds every quest lacking the field from `created`, and is idempotent
-- [ ] The backfill is parameterized by field, not hardcoded to `status_changed`
+- [ ] The backfill runs via `quest migrate --backfill status_changed=created` ([[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]])
 - [ ] Field order places `status_changed` between `created` and `modified`
 - [ ] A quest with no `status_changed` is treated as `created` by every consumer
 - [ ] `quest schema quest status_changed` describes it

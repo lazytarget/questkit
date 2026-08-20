@@ -86,10 +86,10 @@ independent features need this: grocy's `component`, the `development` schema's
 `related_adrs`, and `--set` value checking.
 
 **5. `strict`.** Schema-block key, inheritable via `extends:`, **default `true`**.
-Governs the **CLI write path only** — a `--set` naming a field the schema does not
-declare is a hard error listing the valid names. Hand-edited frontmatter stays
-lenient forever, because Obsidian must remain free to add fields. With
-`strict: false` the same case still **warns on stderr**; silent is never correct
+A `--set` naming a field the schema does not declare is a hard error listing the
+valid names, and — see rule 16 — an undeclared field found *in a file* is a
+validation error too, with an allowlist for Obsidian's reserved property names.
+With `strict: false` the same case still **warns on stderr**; silent is never correct
 here, because the failure mode is a field that appears in no filter, fails no
 validation, and is only ever found by grep months later.
 
@@ -120,11 +120,43 @@ path. **Not the Realm root** — `99-system/syncthing.yaml` has no folder for `.
 so a file there reaches no other device; it would resolve on one machine and fail
 silently everywhere else.
 
-**10. Terminal statuses become declarable — and required when you override the
-vocabulary.** Four things need to know which statuses mean "done": `quest logs`'
-`OPEN` column, the `blocked` computation, `stale`'s exclusion set, and what
-`quest done` writes. Hardcoding `completed`/`scrapped` breaks the first log that
-overrides `statuses:`.
+**10. Vocabularies become ordered sequences, not sets — and this is load-bearing.**
+
+`statuses`, `priorities`, `efforts`, `tiers` and `types` are `frozenset`s today,
+so `list_cmd._apply_sort` falls back to a lexicographic string sort:
+
+| Sort | What it actually returns today |
+|------|--------------------------------|
+| `--sort priority:asc` | critical, **deferred**, high, low, medium |
+| `--sort effort:asc` | l, m, s, xl, xs |
+| `--sort tier:asc` | blueprint, brief, spark |
+
+So the `next` view ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]), specified as
+`sort: priority:asc,effort:asc`, would rank a `deferred` quest second. This is
+not a polish item — **ordered vocabularies are a prerequisite for `next` to mean
+anything.**
+
+Declaration order becomes sort order; membership still uses a set internally;
+`quest schema quest <field>` prints the declared order rather than a sorted one.
+
+```yaml
+statuses:   [draft, todo, in-progress, parked, done, scrapped]
+priorities: [critical, high, medium, low, deferred]
+efforts:    [xs, s, m, l, xl]
+tiers:      [spark, brief, blueprint]
+```
+
+**A second, independent bug in the same function:** `sort_expr.partition(":")` on
+`"priority:asc,effort:asc"` yields field=`priority`, direction=`"asc,effort:asc"`
+— the second key is silently dropped and `desc` never matches. **Multi-key sort
+does not exist.** `next` needs it. Fix both together: parse comma-separated
+`field[:dir]` pairs into a tuple key.
+
+**11. Terminal statuses become declarable — and required when you override the
+vocabulary.** Four things need to know which statuses mean "finished":
+`quest logs`' `OPEN` column, the `blocked` computation, `stale`'s exclusion set,
+and what `quest done` writes. Hardcoding breaks the first log that overrides
+`statuses:`.
 
 ```yaml
 schema:
@@ -132,91 +164,230 @@ schema:
   terminal_statuses: [shipped, cancelled]     # ordered — `quest done` writes the first
 ```
 
-`terminal_statuses` defaults to `[completed, scrapped]` intersected with the
-declared statuses. If a log overrides `statuses:` and **none** of the defaults
-survive and it declares no `terminal_statuses`, that is a **hard schema error** —
-not a silent degradation. The alternative (an `OPEN` column that silently equals
-`total`, a `blocked` field that is always false) is a wrong answer delivered
-confidently, which is worse than a loud failure at config-load time.
+`terminal_statuses` defaults to `[done, scrapped]` intersected with the declared
+statuses, and is **the tail of `statuses`** in the default vocabulary — the two
+lists agree by construction rather than by discipline. If a log overrides
+`statuses:` where **no** default survives and it declares no `terminal_statuses`,
+that is a **hard schema error** at config load. Degrading (an `OPEN` column
+silently equal to `total`, a `blocked` field always false) is a wrong answer
+delivered confidently.
 
-The list is **ordered**: `quest done` writes `terminal_statuses[0]`. That is the
-success outcome; anything after it is an abandonment outcome. One sentence of
-documentation, one config key, no fourth concept.
-
-**Draft-ness needs no key.** Its only two jobs — exempting `description` and
-forbidding `agentic: afk` — key off `defaults.status`, the status a fresh quest
-is born with. A log whose new quests start at `todo` simply has no draft state,
-and the exemption correctly does not apply. Zero new config.
+**Draft-ness needs no key.** Its jobs — exempting `description`, and the
+not-draft readiness rule — key off `defaults.status`, the status a fresh quest is
+born with. A log whose quests start at `todo` has no draft state and the
+exemption correctly does not apply.
 
 **The default listing is a view, not a config key.** `quest list`'s implicit
-status filter moves into `views.default` ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]), which is where
-per-schema vocabularies can already override it. That removes the third
-hardcoded status list rather than replacing it with a third config key.
+status filter moves into `views.default` ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]),
+removing the third hardcoded status list rather than replacing it with a third
+key.
 
-**11. `blocked` leaves the core `status` enum.**
+**12. `completed` → `done`, and `blocked` leaves the enum.**
 
-Current core: `draft | todo | in-progress | blocked | parked | completed | scrapped`.
-New core: `draft | todo | in-progress | parked | completed | scrapped`.
+```
+old core: draft | todo | in-progress | blocked | parked | completed | scrapped
+new core: draft | todo | in-progress | parked | done | scrapped
+```
 
-The deciding argument is not that it is unused (0 of 129, alongside `parked`) —
-it is that **a status value and a computed field cannot share a name in a query
-language.** With [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]], `--where blocked=true` and
+**`completed` → `done`** makes `quest done` and `status: done` the same word.
+The command/value mismatch was defensible; the alignment is worth more at v0.3
+than it will ever be again, and the migration is 15 files.
+
+The counterpart stays **`scrapped`**, with **`quest scrap <id>`** added as the
+mirror of `quest done` — then the symmetry holds on both axes (`done`/`scrap` as
+commands, `done`/`scrapped` as states). `cancelled` was the alternative, and is
+what Linear and Jira use, but it imports the **cancelled/canceled spelling trap**
+into a CLI enum where users will typo it forever.
+
+**`blocked` leaves the enum** not because it is unused (0 of 129, same as
+`parked`, which stays) but because **a status value and a computed field cannot
+share a name in a query language**: `--where blocked=true` and
 `--where status=blocked` would be two different questions one word apart, and a
-quest could be `status: blocked` with no `blocked_by` (computed `blocked=false`)
-or vice versa. That ambiguity never gets better with familiarity.
+quest could satisfy either without the other. `blocked` is derived; `parked` is
+the declared state for "deliberately not being worked"; a blocker that is not
+itself a quest should become one.
 
-`blocked` is **derived**; `parked` is the **declared** state for "deliberately not
-being worked". A blocker that is not itself a quest (waiting on a vendor, a
-person, a delivery) should become a quest — that is better tracking than a status
-that says only "something, somewhere".
+**13. A schema may not declare an enum value colliding with a computed field
+name.** `statuses: [..., blocked]` is a schema validation error naming the
+collision. Reserved names come from the computed-field registry (`blocked`,
+`blocks`, `idle`, `age`, `archived`), so the rule extends itself as that registry
+grows. This is what makes rule 12 permanent rather than a tidy-up someone
+reverses next year.
 
-Consequences:
-- `quest list`'s default status filter becomes `todo, in-progress` (the derived-blocked marking in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] is what keeps them visible).
-- A log that genuinely wants an explicit `blocked` status can still declare it via `statuses:` — which leads to the next rule.
+**14. `agentic` leaves the core schema entirely.**
 
-**12. A schema may not declare a status (or any enum value used as a bare filter
-target) that collides with a computed field name.** `statuses: [..., blocked]` is
-a **schema validation error**, naming the collision. Reserved names come from the
-computed-field registry (`blocked`, `blocks`, `idle`, `age`), so the rule extends
-itself automatically as that registry grows. This is what makes rule 11 permanent
-rather than a temporary tidy-up.
+`AGENTIC_MODES`, the enum check at `schema.py:157`, and the AFK spec/criteria
+rule at `schema.py:161` are all removed. `agentic` becomes a field declared by
+the `development` schema:
 
-**13. `agentic: afk` requires a non-draft status.** A quest that has not been
-promoted out of draft has not been groomed, and AFK-readiness is earned at
-grooming time. `quest validate` already enforces `## Spec` + real acceptance
-criteria for AFK; this is the same rule applied to the other axis, and it costs
-one comparison.
+```yaml
+fields:
+  agentic: { type: enum, values: [afk, hitl] }
+```
 
-**And `agentic` is meaningless on a `type: epic`.** An epic is a container, not a
-unit of execution — its children are its spec, so the AFK rule's `## Spec`
-requirement can never be satisfied honestly. Caught live on 2026-08-19: marking
-[[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]] `afk`
-during review made `quest validate` fail with no correct fix other than unsetting
-it. `agentic` on an epic should be a validation error naming the reason, not a
-puzzle.
+The reasoning is the one the core-vs-schema test already gives: **`afk|hitl` is
+not a universal vocabulary.** Household work has no unsupervised-agent axis, so
+shipping one in the core is questkit having an opinion about what kind of work
+its users do. Under `strict: true` a log that has not declared it will hard-error
+on `--set agentic=afk` — and that is correct, not collateral damage.
 
-The two axes stay **separate**, though — they are a partial order, not
-duplicates. `todo` + no spec is the common case (a human will figure it out).
-`afk` + `draft` is incoherent. Observed on 2026-08-19: a review pass marked 15
-quests `afk`, 1 `hitl`, and demoted 1 to `draft` — all three moves in one pass,
-using both axes for different things.
+The two hardcoded rules that guarded it (`afk` requires a non-draft status;
+`agentic` is meaningless on a `type: epic`) are **not reintroduced elsewhere**.
+The epic rule in particular was local taste dressed as a schema invariant: an OSS
+user with a different epic convention would get a rule they never asked for and
+could not turn off. Rule 15 is the general mechanism that replaces both.
 
-**14. The `development` schema gains `milestone:`.** A free-text planning bucket
+**15. Readiness rules move into the schema.**
+
+```yaml
+readiness:
+  - require: { where: "description:exists" }
+    message: "no description"
+  - require: { where: "status!=draft" }
+    message: "still a draft — not groomed"
+  - require: { sections: ["## Spec", "## Design"] }        # any-of
+    message: "no spec or design section"
+  - require: { checklist: "## Acceptance Criteria", min: 1 }
+    message: "no acceptance criteria"
+  - when: "agentic=afk"                                     # development only
+    require: { where: "owner:exists" }
+    message: "AFK work needs an accountable owner"
+```
+
+Three constructs, each earning its place:
+
+- **`where:` reuses the `--where` grammar verbatim**, computed fields included —
+  one expression language, not two. It needs `!=` added alongside the `>`/`<`
+  operators in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]].
+- **`when:`** guards a rule so it applies conditionally. It exists for exactly one
+  reason: it is how "AFK implies spec + criteria" becomes *configuration* instead
+  of a hardcoded branch.
+- **`sections:` / `checklist:`** are the only body-aware predicates, deliberately
+  just two. A third construct and this is a template language.
+
+**The core ships all four universal rules; `household` overrides the list down to
+one.** The inverse (minimal core, rigor opted into via a schema) was considered
+and rejected: a fresh `pip install questkit` would then print ✅ for a quest with
+no spec and no criteria, making the flagship command look useless on day one.
+Overriding a list off is one line in a config that already exists; opting into
+rigor means authoring a whole schema file. "A spec and acceptance criteria make
+work handoff-ready" is not an opinion about a domain — it is what handoff-ready
+means.
+
+**Readiness is advisory and never blocks a commit.** `quest validate` stops
+enforcing it entirely (see Open Questions). That separation is what makes it safe
+for configuration to define these rules at all.
+
+**16. `strict` also governs `quest validate`, with an allowlist for Obsidian.**
+
+Extended from the original CLI-write-path-only scope: under `strict: true`, an
+undeclared field found *in a file* is a validation error, not just an error on
+`--set`. That is what makes rule 14's migration real rather than cosmetic.
+
+The hazard this creates is specific and worth naming: **Obsidian's Properties
+panel adds fields.** In the family log, where nobody can read a terminal, a
+stray `cssclasses` would produce a permanent validation error. So the core
+schema carries a short **allowlist of Obsidian-reserved property names** —
+`cssclasses`, `cssclass`, `permalink`, `publish`, `cover`, `image` — that are
+permitted but unmanaged. Allowlisted, not silently ignored: `quest schema quest`
+lists them so their status is discoverable.
+
+**17. The `development` schema gains `milestone:`.** A free-text planning bucket
 (`0.4.0`, `spring-2027`), enabling "what shipped when" queries and release-note
 generation.
 
-Named `milestone`, not `planned_version`: it is a bucket that can slip, not a
-fact, and it generalizes past software. It is **not** `version:`, which would
-read as "which questkit version" next to the config's own `version: 1`.
+Named `milestone` rather than `planned_version` because it is a bucket that can
+slip, not a fact, and rather than `version` because that would read as "which
+questkit version" beside the config's own `version: 1`. **`milestone` therefore
+leaves the core `types` enum** (0 uses in 129; `epic` already covers a grouping
+quest), per rule 13.
 
-This makes `milestone` mean two things, since `type: milestone` is in the core
-type enum — so **remove `milestone` from core `types`**. It has 0 uses in 129
-quests, `epic` already covers "a big grouping quest", and a word that is both a
-type and a field is exactly the collision rule 12 exists to prevent.
+It is **not** a membership link — questkit has no parent/child concept and v3
+does not add one.
 
-Note what `milestone` deliberately is **not**: a membership/parent link. questkit
-has no grouping concept, and v3 does not add one — an epic's Scope table is prose,
-and at this corpus size that is fine.
+### Alternatives
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| `{{ name }}` substitution | ✅ Chosen | Strict subset of Jinja syntax, so adopting Jinja later costs nothing |
+| Jinja2 | ❌ | Large dependency for substitution into a Markdown skeleton; `{% if %}` turns a body template into something you debug |
+| `$PROJECT` | ❌ | Reads as shell/env interpolation in YAML; the first thing anyone tries is `$HOME` |
+| Three-group field ordering (native ordered / native alpha / custom alpha) | ❌ | Requires questkit to know native-vs-custom, which is schema-defined; same quest would sort differently in two logs and `quest mv` would silently reorder |
+| `strict: false` default | ❌ | Every existing log has no schema block, so the protection would be absent exactly where typos are most likely |
+| Demote `tier`/`effort` to `development` | ❌ | `xs|s|m|l|xl` and `spark|brief|blueprint` describe any unit of work including a chore. Only `component`/`related_adrs` are software-specific. Demoting a universal vocabulary loses validation on the 20 files already carrying `effort`. |
+
+## Open Questions
+
+None outstanding. Two questions were decided here rather than separately because
+each was load-bearing in more than one place:
+
+- **Terminal statuses** (rule 11) — needed by [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]]'s `OPEN`
+  column and [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]'s `blocked` computation.
+- **Readiness vs. validation** (rule 15) — `quest validate` stops enforcing
+  readiness entirely. The old AFK rule was a category error: it turned a
+  *grooming judgment* into a *commit-blocking contract*. `validate` answers "is
+  this file well-formed and are its references real"; `readiness` answers "is
+  this good enough to hand to someone", which is advisory by nature and belongs
+  to `quest brief`. Never both — and a config-defined rule that could block
+  commits would be considerably more dangerous than a hardcoded one.
+
+## Acceptance Criteria", min: 1 }
+    message: "no acceptance criteria"
+  - when: "agentic=afk"                                     # development only
+    require: { where: "owner:exists" }
+    message: "AFK work needs an accountable owner"
+```
+
+Three constructs, each earning its place:
+
+- **`where:` reuses the `--where` grammar verbatim**, computed fields included —
+  one expression language, not two. It needs `!=` added alongside the `>`/`<`
+  operators in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]].
+- **`when:`** guards a rule so it applies conditionally. It exists for exactly one
+  reason: it is how "AFK implies spec + criteria" becomes *configuration* instead
+  of a hardcoded branch.
+- **`sections:` / `checklist:`** are the only body-aware predicates, deliberately
+  just two. A third construct and this is a template language.
+
+**The core ships all four universal rules; `household` overrides the list down to
+one.** The inverse (minimal core, rigor opted into via a schema) was considered
+and rejected: a fresh `pip install questkit` would then print ✅ for a quest with
+no spec and no criteria, making the flagship command look useless on day one.
+Overriding a list off is one line in a config that already exists; opting into
+rigor means authoring a whole schema file. "A spec and acceptance criteria make
+work handoff-ready" is not an opinion about a domain — it is what handoff-ready
+means.
+
+**Readiness is advisory and never blocks a commit.** `quest validate` stops
+enforcing it entirely (see Open Questions). That separation is what makes it safe
+for configuration to define these rules at all.
+
+**16. `strict` also governs `quest validate`, with an allowlist for Obsidian.**
+
+Extended from the original CLI-write-path-only scope: under `strict: true`, an
+undeclared field found *in a file* is a validation error, not just an error on
+`--set`. That is what makes rule 14's migration real rather than cosmetic.
+
+The hazard this creates is specific and worth naming: **Obsidian's Properties
+panel adds fields.** In the family log, where nobody can read a terminal, a
+stray `cssclasses` would produce a permanent validation error. So the core
+schema carries a short **allowlist of Obsidian-reserved property names** —
+`cssclasses`, `cssclass`, `permalink`, `publish`, `cover`, `image` — that are
+permitted but unmanaged. Allowlisted, not silently ignored: `quest schema quest`
+lists them so their status is discoverable.
+
+**17. The `development` schema gains `milestone:`.** A free-text planning bucket
+(`0.4.0`, `spring-2027`), enabling "what shipped when" queries and release-note
+generation.
+
+Named `milestone` rather than `planned_version` because it is a bucket that can
+slip, not a fact, and rather than `version` because that would read as "which
+questkit version" beside the config's own `version: 1`. **`milestone` therefore
+leaves the core `types` enum** (0 uses in 129; `epic` already covers a grouping
+quest), per rule 13.
+
+It is **not** a membership link — questkit has no parent/child concept and v3
+does not add one.
 
 ### Alternatives
 
@@ -251,18 +422,30 @@ decided once, here, rather than twice.
 - [ ] `required: true` with a static default emits a warning; with a macro default it does not
 - [ ] `schema: development` resolves from `99-system/questkit/schemas/`
 - [ ] The `development` schema exists and declares `component` and `related_adrs`
-- [ ] `terminal_statuses` defaults to `[completed, scrapped]` intersected with the declared statuses
+- [ ] `statuses`/`priorities`/`efforts`/`tiers`/`types` are ordered sequences, and `--sort <field>` uses declaration order
+- [ ] `--sort "priority:asc,effort:desc"` sorts by both keys, in order
+- [ ] `quest schema quest status` prints the declared order, not a sorted one
+- [ ] `terminal_statuses` defaults to `[done, scrapped]` intersected with the declared statuses
 - [ ] Overriding `statuses:` with no surviving default and no `terminal_statuses` is a hard schema error
-- [ ] `quest done` writes `terminal_statuses[0]`
+- [ ] `quest done` writes `terminal_statuses[0]`; `quest scrap` writes `scrapped`
+- [ ] `status: completed` is gone; `done` replaces it and `quest done` writes it
 - [ ] `blocked` is gone from the core status enum and `quest list` defaults to `todo, in-progress`
-- [ ] Declaring a status named `blocked`/`blocks`/`idle`/`age` is a schema validation error naming the collision
-- [ ] `agentic: afk` on a quest whose status is the log's `defaults.status` fails validation
-- [ ] `agentic` set on a `type: epic` fails validation, naming the reason
-- [ ] The `development` schema declares `component`, `related_adrs` and `milestone`
+- [ ] Declaring an enum value named `blocked`/`blocks`/`idle`/`age`/`archived` is a schema error naming the collision
+- [ ] `agentic` is gone from `schema.py` — no enum, no AFK rule, no epic rule
+- [ ] `--set agentic=afk` errors under strict in a log that has not declared it
+- [ ] `readiness:` rules are read from the schema and drive `quest brief`'s READY verdict
+- [ ] A `when:` guard makes a rule conditional on a `--where` expression
+- [ ] `sections:` matches any-of; `checklist:` counts items under a heading
+- [ ] The core ships all four universal readiness rules; a schema can override the list to fewer
+- [ ] `quest validate` enforces no readiness rule and cannot fail on one
+- [ ] Under `strict: true`, an undeclared field found in a file is a validation error
+- [ ] Obsidian-reserved property names are allowlisted and listed by `quest schema quest`
+- [ ] The `development` schema declares `component`, `related_adrs`, `agentic` and `milestone`
 - [ ] `milestone` is gone from the core `types` enum
 - [ ] `quest schema quest` reflects everything above
 
 ## Log
 
+- 2026-08-19: `agentic` demoted out of core and both its hardcoded guard rules replaced by a configurable `readiness:` block; `completed` renamed to `done`; vocabularies made ordered after finding `--sort priority` returns `critical, deferred, high, ...` and multi-key sort silently drops all but the first key.
 - 2026-08-19: rules 10-14 added after grilling terminal statuses, the `blocked` status/computed-field collision, and the milestone/planned-version question.
 - 2026-08-19: captured. Bundled deliberately — a `required: true` field is unshippable against a 129-quest corpus without `--fill-defaults` in the same release.

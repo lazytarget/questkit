@@ -44,6 +44,10 @@ Measured across the Realm on 2026-08-19. These numbers drove specific decisions 
 | `status: parked` | **0** | kept — it is the *declared* counterpart to computed `blocked` |
 | `type: milestone` | **0** of 129 | removed from core types; `milestone:` becomes a field |
 | Review pass, 2026-08-19 | 15 → `agentic: afk`, 1 → `hitl`, 1 → `status: draft` | `status` and `agentic` are separate axes, used differently in one sitting |
+| `agentic:` in questkit's own log | 16 of 22 after review | `development` must declare it before it leaves core |
+| `--sort priority:asc` | returns `critical, deferred, high, low, medium` | ordered vocabularies are a prerequisite, not polish |
+| `--sort "a:asc,b:asc"` | second key silently dropped | multi-key sort does not exist |
+| career-transition | 13 quests, **4 finished** | `status: archived` would erase which ones shipped |
 
 **Measured, not assumed** — a pathspec-limited commit does *not* avoid rewriting `.git/index`:
 
@@ -88,13 +92,44 @@ A three-group rule (ordered natives → alphabetical natives → alphabetical cu
 
 `field_order` must drive `quest new` as well as `quest format`; `new_cmd.py` currently hardcodes its own order, so without this every freshly captured quest is immediately non-conformant.
 
+### Ordered vocabularies — a prerequisite, not polish
+
+`statuses`, `priorities`, `efforts`, `tiers` and `types` stop being `frozenset`s
+and become **ordered sequences**. Declaration order is sort order; membership
+still uses a set internally; `quest schema quest <field>` prints the declared
+order.
+
+This is load-bearing because `list_cmd._apply_sort` sorts lexicographically:
+
+| Sort | What it returns today |
+|------|-----------------------|
+| `--sort priority:asc` | critical, **deferred**, high, low, medium |
+| `--sort effort:asc` | l, m, s, xl, xs |
+| `--sort tier:asc` | blueprint, brief, spark |
+
+So `views.next` (`sort: priority:asc,effort:asc`) would rank a `deferred` quest
+second. A second bug in the same function compounds it: `sort_expr.partition(":")`
+drops every key after the first, so `effort` is never consulted and `desc` never
+matches. **Multi-key sort does not exist and `next` needs it.** Both are fixed
+together.
+
 ### The status enum
 
-Core becomes `draft | todo | in-progress | parked | completed | scrapped` —
-**`blocked` is removed.**
+Core becomes `draft | todo | in-progress | parked | done | scrapped` — **`blocked`
+is removed and `completed` is renamed to `done`.**
 
-The reason is not disuse (0 of 129, same as `parked`, which stays). It is that a
-status value and a computed field **cannot share a name in a query language**:
+**`completed` → `done`** makes `quest done` and `status: done` the same word. The
+mismatch was defensible, but the alignment is worth more at v0.3 than it will
+ever be again, and the migration is 15 files. The counterpart stays **`scrapped`**,
+with **`quest scrap <id>`** added as the mirror of `quest done` — the symmetry
+then holds on both axes (`done`/`scrap` as commands, `done`/`scrapped` as
+states). `cancelled` is what Linear and Jira use and was the alternative, but it
+imports the **cancelled/canceled spelling trap** into a CLI enum where users
+would typo it forever.
+
+**`blocked` leaves the enum** for a reason that is not disuse (0 of 129, same as
+`parked`, which stays). It is that a status value and a computed field **cannot
+share a name in a query language**:
 with `blocked` computed, `--where blocked=true` and `--where status=blocked`
 would be two different questions one word apart, and a quest could satisfy either
 without the other. `blocked` is derived; `parked` is the declared state for
@@ -106,18 +141,15 @@ with a computed field name** (`blocked`, `blocks`, `idle`, `age`), enforced at
 config load. That is what makes the removal permanent rather than a tidy-up
 someone reverses in six months.
 
-`completed` is **not** renamed to `done`. The command/value asymmetry is not a
-defect — `git commit` does not write `status: committed` — and
-`completed`/`scrapped` is a matched pair of outcomes that `done`/`scrapped` is
-not. The rename would cost a corpus migration and a doc sweep for symmetry alone.
-
 ### Terminal statuses
 
 Four consumers need to know which statuses mean "done": `quest logs`' `OPEN`
 column, the `blocked` computation, `stale`'s exclusion set, and what `quest done`
-writes. `terminal_statuses` is an **ordered** schema key defaulting to
-`[completed, scrapped]` intersected with the declared statuses; `quest done`
-writes the first entry.
+writes. `terminal_statuses` is an **ordered** schema key defaulting to `[done, scrapped]`
+intersected with the declared statuses; `quest done` writes the first entry. In
+the default vocabulary it is literally **the tail of `statuses`**, so the two
+lists agree by construction rather than by discipline — which is why `done` sits
+second-to-last in the status order rather than last.
 
 A log that overrides `statuses:` where **no** default survives, and declares no
 `terminal_statuses`, is a **hard schema error**. Degrading (an `OPEN` column that
@@ -137,16 +169,64 @@ config key.
 
 `language` follows the same rule and is therefore **not** a core field — see [[QST-onxad--new-frontmatter-attributes]].
 
-`agentic` **stays core**, against the instinct to demote it. The deciding
-argument is the same one that kept `effort`: under `strict: true`, a field the
-schema does not declare cannot be written by the CLI at all, so demoting
-`agentic` would make `--set agentic=afk` a *hard error* in every log that had not
-opted in — and would leave a core command's (`quest brief`) readiness logic
-depending on a field the core does not know exists. Low usage is not the test;
-`due` is core and used once. Two rules do get added: `agentic: afk` requires a
-non-draft status (AFK-readiness is earned at grooming), and `agentic` on a
-`type: epic` is an error — an epic is a container, not a unit of execution, so
-the AFK rule's `## Spec` requirement can never be honestly satisfied.
+`agentic` **leaves core entirely** and becomes a `development` field. The
+core-vs-schema test decides it: **`afk|hitl` is not a universal vocabulary.**
+Household work has no unsupervised-agent axis, so shipping one in the core is
+questkit having an opinion about what kind of work its users do. The objection
+that `strict: true` would then hard-error on `--set agentic=afk` in an
+un-opted-in log is correct and is *the intended behavior*, not collateral damage.
+
+Both hardcoded rules that guarded it are removed and **not reintroduced
+elsewhere**: `afk` requires a non-draft status, and `agentic` is meaningless on a
+`type: epic`. The second in particular was local taste dressed as a schema
+invariant — an OSS user with a different epic convention would get a rule they
+never asked for and could not turn off.
+
+### Readiness becomes configuration
+
+```yaml
+readiness:
+  - require: { where: "description:exists" }
+    message: "no description"
+  - require: { where: "status!=draft" }
+    message: "still a draft — not groomed"
+  - require: { sections: ["## Spec", "## Design"] }        # any-of
+    message: "no spec or design section"
+  - require: { checklist: "## Acceptance Criteria", min: 1 }
+    message: "no acceptance criteria"
+  - when: "agentic=afk"                                     # development only
+    require: { where: "owner:exists" }
+    message: "AFK work needs an accountable owner"
+```
+
+Three constructs. **`where:` reuses the `--where` grammar verbatim**, computed
+fields included — one expression language, not two (it needs `!=` added).
+**`when:`** guards a rule conditionally, and exists for exactly one reason: it is
+how "AFK implies spec + criteria" becomes configuration instead of a hardcoded
+branch. **`sections:` / `checklist:`** are the only body-aware predicates,
+deliberately just two; a third and this is a template language.
+
+**The core ships all four universal rules; `household` overrides the list down to
+one.** The inverse — minimal core, rigor opted into — was rejected because a
+fresh `pip install questkit` would then print ✅ for a quest with no spec and no
+criteria, making the flagship command look useless on day one. Overriding a list
+off is one line; opting into rigor is a whole schema file. "A spec and acceptance
+criteria make work handoff-ready" is not an opinion about a domain; it is what
+handoff-ready means. "Epics can't be AFK" was.
+
+**Readiness is advisory and never blocks a commit** — see §13.
+
+### `strict` also governs validation
+
+Extended from CLI-write-path-only: under `strict: true`, an undeclared field
+found *in a file* is a validation error. That is what makes the `agentic`
+migration real rather than cosmetic.
+
+The hazard is specific: **Obsidian's Properties panel adds fields**, and in the
+family log nobody can read a terminal. So the core carries a short **allowlist of
+Obsidian-reserved property names** — `cssclasses`, `cssclass`, `permalink`,
+`publish`, `cover`, `image` — permitted but unmanaged, and listed by
+`quest schema quest` so their status is discoverable.
 
 `milestone:` joins the `development` schema — a free-text planning bucket
 (`0.4.0`, `spring-2027`) for "what shipped when" queries and release notes. Named
@@ -164,7 +244,7 @@ Shipped as one unit because they are unshippable apart: the moment any log decla
 - **Defaults in one place** — `schema.fields.<n>.default` canonical, top-level `defaults:` as sugar. Precedence: `--flag` > `fields.<n>.default` > `defaults.<n>` > built-in.
 - **Macros** — `{{ project }} {{ log }} {{ id }} {{ slug }} {{ title }} {{ today }} {{ owner }} {{ env.USER }}`, expanded after id generation and before first save. Plain substitution, no control flow. Jinja2 was rejected as a large dependency for string substitution into a Markdown skeleton, and because `{% if %}` turns a body template into something you debug; `{{ }}` is a strict subset, so adopting Jinja later costs nothing. `$PROJECT` was rejected because it reads as shell interpolation in YAML and the first thing anyone tries is `$HOME`.
 - **`FieldSpec` gains `type: enum` + `values:`** — three separate features need it, and today `type` is validated against nothing.
-- **`strict`, default `true`** — governs the **CLI write path only**; hand-edited frontmatter stays lenient forever because Obsidian must remain free to add fields. `strict: false` still warns on stderr: the failure mode is a field that appears in no filter, fails no validation, and is only ever found by grep months later. A lenient default was rejected because every existing log has no schema block, so the protection would be absent exactly where typos are most likely.
+- **`strict`, default `true`** — governs the CLI write path *and* validation (see above). `strict: false` still warns on stderr: the failure mode is a field that appears in no filter, fails no validation, and is only ever found by grep months later. A lenient default was rejected because every existing log has no schema block, so the protection would be absent exactly where typos are most likely.
 - **`required: true` + a *static* default emits a warning** — the combination is validation theater. It stays legal, because a computed default that genuinely varies carries real information.
 
 → [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]]
@@ -189,12 +269,19 @@ Some of the most useful facts about a quest are not stored in it.
 | `blocks` | int | how many quests list this one |
 | `idle` | int | days since `status_changed` (falling back to `created`) |
 | `age` | int | days since `created` |
+| `archived` | bool | this quest's log is archived (§10) |
+
+**`blocks` counts only non-terminal, non-archived quests**, mirroring `blocked`.
+Both answer "what is actually in the way", so both must ignore work that has
+stopped moving; a raw reverse-edge count inflates permanently and worst on the
+oldest quests. The raw historical graph is `quest deps --blocks` — a view, not a
+ranking input.
 
 They behave like any other field for `--where`, `--select` and `--sort`, and are read-only.
 
 **This is the right layer.** An earlier framing gave each view its own bespoke logic, justified by "things `--where` cannot express". Pushing the derivation down one level is better: one computation, many consumers. The same `blocked` value marks the default list, defines the `blocked` view, filters `next`, and gives `quest brief` a priority signal.
 
-`--where` gains `>`, `<`, `>=`, `<=`, parsed before `=` so `>=` is not shredded. ISO dates compare correctly as strings, so no date parsing is needed.
+`--where` gains `!=`, `>`, `<`, `>=`, `<=`, parsed before `=` so `>=` is not shredded. ISO dates compare correctly as strings, so no date parsing is needed. `!=` is also what `readiness:` rules use — one grammar, two consumers.
 
 → [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]
 
@@ -325,6 +412,13 @@ Quiescence is **whole-log, not per-file**: reformatting file A while someone edi
 
 Six things a brief has that `cat` does not: resolved dependencies; location (repo root, branch, dirty state, log path, git mode); the schema inline **only when the log overrides the default vocabulary**; a write-back contract; reverse dependencies as a priority signal; and a stable format that scripts can target.
 
+**`READY` is entirely schema-driven** — `brief` evaluates the log's `readiness:`
+list and prints each rule's own message, hardcoding nothing. That is what lets a
+`household` quest need only a description while `development` needs a spec, with
+`brief` knowing neither domain exists. `STATE` stays computed and
+non-configurable: READY is about what a human wrote, so a schema owns it; STATE
+is about where the quest sits in the graph, so the tool owns it.
+
 Readiness is a **verdict, not a gate** — an ungroomed quest's brief collapses to header, location and warnings, so short-by-default emerges exactly where a full brief would be meaningless.
 
 The inbound half is `quest new --body -` and `--batch -`: today an agent that turns a spec into eight tickets must shell out eight times and cannot write a body at all. Together these make questkit own **both edges** of the tickets step in a grill → spec → tickets → implement → review flow.
@@ -371,10 +465,26 @@ A time-boxed project's log needs to stop talking without any file moving.
 unless `--include-archived`, and `quest logs` marks it and drops it from the
 footer totals.
 
-The granularity is the insight — the thing that ends is a **project**, not a
-quest. Per-quest archival would mean 13 file rewrites for one project ending, and
-moving files into a `quests/archive/` subdirectory is forbidden outright by v1
-(it breaks the Obsidian link graph this system exists to build).
+**`archived` is deliberately not a status.** career-transition holds 13 quests of
+which **4 are finished**; setting them to `status: archived` would erase which
+ones shipped. Archival is orthogonal to status — a quest is (done|todo|…) *and*
+(archived|not) — so collapsing the axes destroys information on every use.
+
+**Per-quest archival already exists and is called `scrapped`.** The one real gap
+is that career-transition's still-`todo` quests were not abandoned on their
+merits, so scrapping them would be a lie. Log-level archival is the only option
+that stays truthful: every quest keeps its honest status and the *log* declares
+the project over.
+
+Moving files into a `quests/archive/` subdirectory is forbidden outright by v1 —
+it breaks the Obsidian link graph this system exists to build.
+
+Query surface is one tri-state flag, `--archived {exclude,include,only}`,
+defaulting to `exclude`, plus a computed `archived` boolean. One `choices=`
+option beats `--include-archived` plus a separate `--archived-only`, and makes
+"only the dead project" expressible. `quest archive --in career-transition`
+writes the key; there is deliberately **no `quest archive <id>`** — that
+operation is `quest set <id> status=scrapped`.
 
 **Archival affects listing, never id resolution.** `show`/`brief`/`deps` and
 `blocked_by` references still resolve into an archived log — otherwise every
@@ -398,7 +508,8 @@ which are the point of v3.
 - **`quest ready`** — deferred.
 - **A membership / parent-child concept.** `milestone:` is a planning bucket, not a link; an epic's Scope table stays prose.
 - **Renaming `completed` to `done`.**
-- **Per-quest archival.** Archival is log-level; see §10.
+- **Per-quest archival.** Archival is log-level; the per-quest case is `status: scrapped`, which already exists (§10).
+- **A readiness rule that can block a commit.** `quest validate` enforces the file contract; `readiness:` is advisory (§13).
 - **A second config key splitting CLI-auto-commit from daemon-commit** — the explicit timer scope removes the need.
 
 ## 12. Build order
@@ -419,20 +530,37 @@ which are the point of v3.
 | 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | |
 | 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | needs the schema engine |
 | 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | needs `quest logs` |
+| 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | runs the three corpus migrations |
 
 Independent: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
 ## 13. Open questions
 
-None outstanding. The two carried from the first draft are resolved:
+None outstanding. Four were carried and are now resolved:
 
-- **Terminal statuses under a custom schema** → an ordered `terminal_statuses` schema key, defaulting to `[completed, scrapped]` intersected with the declared statuses, and a hard error when a vocabulary override leaves none (§4). Decided once, in [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]], because it was load-bearing for both `quest logs`' `OPEN` column and the `blocked` computation.
+- **Terminal statuses under a custom schema** → an ordered `terminal_statuses` key defaulting to `[done, scrapped]`, which is the tail of the default `statuses` list (§4).
 - **The archive story** → log-level `archived: true`, affecting listing but never id resolution (§10), tracked as [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]].
+- **Whether the code repos belong in Syncthing** → decided 2026-08-20 that they stay, `.git/` included (§7).
+- **Readiness vs. validation** → `quest validate` stops enforcing readiness entirely. The old AFK rule was a category error: it turned a *grooming judgment* into a *commit-blocking contract*. `validate` answers "is this file well-formed and are its references real"; `readiness` answers "is this good enough to hand to someone". Never both — and a config-defined rule that could block commits would be considerably more dangerous than a hardcoded one.
 
-**Whether the code repos belong in Syncthing** is no longer open — decided on 2026-08-20 that they stay, `.git/` included (§7).
+### Migration
+
+Three corpus-wide migrations are now queued across 129 files in 7 logs: the `status_changed` backfill, `completed` → `done`, and the `agentic` demotion. They ship as one tool ([[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]]) rather than documented `sed`, because **`sed` corrupts prose** — verified in this log:
+
+```
+QST-bmzl2:114  - [ ] Every quest in the Scope table is completed or explicitly scrapped
+QST-whm2e:65   ... Completed quests stay exactly where they were created, forever.
+```
+
+Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. Ordering constraint: `development` must exist and questkit's own log must adopt it **before** `agentic` leaves core, or the 16 files carrying it break under `strict`.
 
 ## 14. Provenance
 
-Revised 2026-08-20 after a review pass over the quest set: the `status`/computed-field
+Revised again 2026-08-20: `agentic` demoted out of core with configurable
+`readiness:` replacing both its hardcoded guard rules, `completed` renamed to
+`done`, vocabularies made ordered after finding `--sort priority` returns
+`critical, deferred, ...` and multi-key sort silently drops keys, archival
+confirmed log-level after the 4-finished-quests check, and corpus migration split
+into its own tool. Revised 2026-08-20 after a review pass over the quest set: the `status`/computed-field
 collision, terminal statuses, archival, `agentic`'s home, `milestone:`, and the
 grouped-output column rules. Originally written 2026-08-19 from a design grilling session covering positioning, multi-log friction, schema defaults and macros, the agent handoff format, the Obsidian/mobile capture surface, and the git/Syncthing boundary. Corpus figures in §2 and the `.git/index` measurement in §7 were taken during that session.

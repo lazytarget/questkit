@@ -46,6 +46,14 @@ views:
   blocked: { where: ["blocked=true"], sort: "blocks:desc" }
 ```
 
+**Two prerequisites in [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 10, without which `next` is
+broken as written.** `list_cmd._apply_sort` sorts lexicographically, so
+`priority:asc` today returns `critical, deferred, high, low, medium` — a
+`deferred` quest ranks second. And `sort_expr.partition(":")` silently drops
+every key after the first, so `effort` is never consulted at all. Ordered
+vocabularies and multi-key sort are not polish for this view; they are what make
+its definition mean what it reads like.
+
 **`views.default` is the one that pays for the mechanism.** `quest list`'s
 implicit status filter is hardcoded today (`todo, in-progress, blocked`) and
 cannot survive a log that overrides `statuses:` — a `household` schema with
@@ -98,6 +106,8 @@ print it ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-lo
 
 - [ ] `views.default` drives `quest list`'s implicit filter, and a schema can override it
 - [ ] A log overriding `statuses:` with its own `views.default` lists correctly
+- [ ] `quest next` ranks by the schema's declared priority/effort order, not alphabetically
+- [ ] `quest next` honors every key in a multi-key `sort:`
 - [ ] `quest next` returns one quest and never one with an open dependency
 - [ ] `quest next` accepts `--in`, `--where`, `--sort`, `--limit` on top of the view
 - [ ] `quest stale` ranks by `idle` and its threshold is configurable

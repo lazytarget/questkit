@@ -49,17 +49,32 @@ output.
 | Field | Type | Meaning |
 |-------|------|---------|
 | `blocked` | bool | any `blocked_by` ref resolves to a **non-terminal** quest |
-| `blocks` | int | how many quests list this one in their `blocked_by` |
+| `blocks` | int | how many **non-terminal, non-archived** quests list this one |
 | `idle` | int | days since `status_changed` (falling back to `created`) |
 | `age` | int | days since `created` |
 
 They behave like any other field for `--where`, `--select` and `--sort`, and are
 **read-only** — `quest set <id> blocked=true` is an error.
 
-**`--where` gains `>`, `<`, `>=`, `<=`**, parsed **before** `=` so `>=` is not
-shredded into `>` plus a stray `=`. Check order: `:exists`, `>=`, `<=`, `~`,
-`>`, `<`, `=`. ISO dates compare correctly as plain strings, so
-`--where status_changed<2026-08-05` needs no date parsing at all.
+A fifth field, **`archived`** (bool, from the log's config — see
+[[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]), joins them so archival is queryable and
+sortable like anything else.
+
+**`blocks` counts only non-terminal, non-archived quests**, mirroring `blocked`,
+which already only counts non-terminal dependencies. The symmetry is the
+argument: both answer "what is actually in the way", so both must ignore work
+that has already stopped moving. A raw reverse-edge count inflates permanently
+and worst on the oldest quests — a quest whose three dependents are all `done`
+would read as high-priority with nothing waiting on it. The raw historical graph
+is `quest deps --blocks`, which is a view, not a ranking input.
+
+**`--where` gains `!=`, `>`, `<`, `>=`, `<=`**, parsed **before** `=` so `>=` is
+not shredded into `>` plus a stray `=`. Check order: `:exists`, `!=`, `>=`, `<=`,
+`~`, `>`, `<`, `=`. ISO dates compare correctly as plain strings, so
+`--where status_changed<2026-08-05` needs no date parsing at all. `!=` is also
+what the schema's `readiness:` rules use
+([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 15) — one expression
+language, two consumers.
 
 **`blocked` is now unambiguous.** [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] removes `blocked`
 from the core `status` enum and makes it a schema validation error for any log to
@@ -107,6 +122,9 @@ at config load.
 - [ ] Default `quest list` renders blocked rows as `todo [blocked]`
 - [ ] `quest set <id> blocked=true` errors — computed fields are read-only
 - [ ] `blocked` resolves against the log's `terminal_statuses`, not a hardcoded pair
+- [ ] `blocks` excludes terminal and archived quests from its count
+- [ ] `archived` is available as a computed boolean field
+- [ ] `--where status!=draft` filters correctly and `!=` is not shredded by the `=` branch
 - [ ] `blocks` counts reverse edges across the active log set, and the summary states that scope
 - [ ] A quest with no `status_changed` gets `idle` from `created`
 
