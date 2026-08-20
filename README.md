@@ -90,7 +90,7 @@ created: 2026-08-13
 modified: 2026-08-13
 type: task                    # feature | task | bug | epic | milestone | chore
 tier: spark                    # spark | brief | blueprint — optional
-status: draft                  # draft | todo | in-progress | blocked | parked | completed | scrapped
+status: draft                  # draft | todo | in-progress | parked | done | scrapped
 priority: medium               # critical | high | medium | low | deferred
 effort: m                      # xs | s | m | l | xl — optional
 owner: alex                    # free text — whose quest this is
@@ -190,7 +190,8 @@ defaults:
 ignore:                # directory names/globs pruned during a cross-log sweep
   - dist
 schema:                 # override vocabularies and/or add custom fields — optional
-  statuses: [draft, todo, in-progress, in-review, completed, scrapped]
+  statuses: [draft, todo, in-progress, in-review, shipped, cancelled]
+  terminal_statuses: [shipped, cancelled]
   fields:
     sprint:
       type: string

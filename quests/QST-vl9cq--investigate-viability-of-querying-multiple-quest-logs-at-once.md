@@ -7,7 +7,7 @@ status_changed: 2026-08-14
 modified: 2026-08-20
 type: feature
 tier: brief
-status: completed
+status: done
 priority: low
 milestone: 0.2.0
 project: questkit

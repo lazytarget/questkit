@@ -76,10 +76,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_set.add_argument("--in", dest="in_dir")
     p_set.set_defaults(func=set_cmd.run)
 
-    p_done = subparsers.add_parser("done", help="mark a quest completed")
+    p_done = subparsers.add_parser("done", help="mark a quest done")
     p_done.add_argument("id")
     p_done.add_argument("--in", dest="in_dir")
     p_done.set_defaults(func=done_cmd.run)
+
+    p_scrap = subparsers.add_parser("scrap", help="mark a quest scrapped")
+    p_scrap.add_argument("id")
+    p_scrap.add_argument("--in", dest="in_dir")
+    p_scrap.set_defaults(func=done_cmd.run_scrap)
 
     p_mv = subparsers.add_parser("mv", help="move a quest to a different quest log")
     p_mv.add_argument("id")

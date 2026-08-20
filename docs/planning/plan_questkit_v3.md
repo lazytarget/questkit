@@ -643,6 +643,14 @@ QST-whm2e:65   ... Completed quests stay exactly where they were created, foreve
 
 Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. **So the tool ships second, before anything that mutates a vocabulary** — it was originally scheduled at #15, behind every migration it exists to perform. Roughly 90 lines plus tests — most of the machinery is inherited from quests already scheduled. `--commit` is opt-in and refuses on a dirty index; each log commits separately in its own repo, making this the first command that writes to multiple repositories in one invocation.
 
+**Deferred, 2026-08-21.** The corpus-wide runs are held until 0.3 is finalized;
+only questkit's own log migrates during implementation. The other five logs
+(`realm-common`, `grocy-ecosystem`, `pensieve`, `career-transition`,
+`realm-system`) total 122 files across four separate repositories, some syncing
+to family devices, and there is no reason to propagate that before the
+vocabulary it targets has stopped moving. The commands are unchanged when the
+time comes — `--dry-run` first, then `--commit`.
+
 **Ordering constraint, and it is not negotiable.** `development` must exist and questkit's own log must adopt it **before** `strict: true` is enforced. `agentic` leaving core put 16 files behind that constraint; `milestone:` now puts **all 23** — every quest in the log. Get the sequence wrong and the release that introduces strict validation fails validation on its own tracker.
 
 ## 14. Provenance

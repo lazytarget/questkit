@@ -51,7 +51,7 @@ def test_done_stamps_status_changed(quest_log, run, monkeypatch):
 
     path = next(quest_log.glob(f"{quest_id}*.md"))
     quest = Quest.load(path)
-    assert quest.get("status") == "completed"
+    assert quest.get("status") == "done"
     assert str(quest.get("status_changed")) == "2026-08-21"
 
 

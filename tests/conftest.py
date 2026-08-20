@@ -254,7 +254,7 @@ def multi_log(isolated, make_log, write_quest, monkeypatch):
     gamma = make_log(isolated, "gamma", git="manual")
 
     write_quest(alpha, "QST-a1aaa", title="Alpha one", status="todo", priority="high")
-    write_quest(alpha, "QST-a2aaa", title="Alpha two", status="completed", priority="low")
+    write_quest(alpha, "QST-a2aaa", title="Alpha two", status="done", priority="low")
     write_quest(beta, "QST-b1bbb", title="Beta one", status="in-progress", priority="critical")
     write_quest(gamma, "QST-g1ggg", title="Gamma one", status="todo", priority="medium")
     write_quest(gamma, "QST-g2ggg", title="Gamma two", status="draft", priority="medium")

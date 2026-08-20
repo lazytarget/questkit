@@ -25,12 +25,16 @@ def run(args: argparse.Namespace) -> int:
     quests_dir = resolve_log(explicit=args.in_dir)
     schema_config = QuestLogConfig.load(quests_dir).schema
 
+    # `list(...)`, not `sorted(...)`: declaration order *is* the sort order
+    # now, so an alphabetised listing would tell an agent reading the schema
+    # cold that `deferred` outranks `high`.
     full = {
-        "types": sorted(schema_config.types),
-        "statuses": sorted(schema_config.statuses),
-        "tiers": sorted(schema_config.tiers),
-        "priorities": sorted(schema_config.priorities),
-        "efforts": sorted(schema_config.efforts),
+        "types": list(schema_config.types),
+        "statuses": list(schema_config.statuses),
+        "tiers": list(schema_config.tiers),
+        "priorities": list(schema_config.priorities),
+        "efforts": list(schema_config.efforts),
+        "terminal_statuses": list(schema_config.terminal_statuses),
         "fields": {
             name: {"type": spec.type, "required": spec.required}
             for name, spec in sorted(schema_config.fields.items())

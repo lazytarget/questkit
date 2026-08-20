@@ -29,15 +29,9 @@ def test_schema_quest_field_returns_just_that_array(quest_log, capsys):
     assert main(["schema", "quest", "status"]) == 0
     data = json.loads(capsys.readouterr().out)
 
-    assert set(data) == {
-        "draft",
-        "todo",
-        "in-progress",
-        "blocked",
-        "parked",
-        "completed",
-        "scrapped",
-    }
+    # A *list* in declared order, not a set: the order is the sort order now,
+    # so printing it alphabetically would tell an agent the wrong thing.
+    assert data == ["draft", "todo", "in-progress", "parked", "done", "scrapped"]
 
 
 def test_schema_quest_custom_field_returns_its_spec(quest_log, capsys):

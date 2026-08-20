@@ -59,7 +59,9 @@ def test_unknown_status_is_flagged():
         "created": "2026-08-13",
         "modified": "2026-08-13",
         "type": "task",
-        "status": "done",
+        # `completed` was renamed to `done`, so it is now exactly the kind of
+        # stale value this check exists to catch.
+        "status": "completed",
         "priority": "medium",
         "tags": [],
     }
@@ -180,7 +182,7 @@ def test_schema_config_load_overrides_vocabularies_and_adds_fields(tmp_path):
     }
     loaded = schema.SchemaConfig.load(tmp_path, block)
 
-    assert loaded.statuses == frozenset({"draft", "todo", "done"})
+    assert loaded.statuses == ("draft", "todo", "done")
     assert loaded.types == schema.TYPES  # untouched sibling key keeps the default
     assert loaded.fields["sprint"] == schema.FieldSpec("sprint", type="string", required=True)
 
@@ -190,7 +192,7 @@ def test_schema_config_extends_resolves_relative_to_quests_dir(tmp_path):
 
     loaded = schema.SchemaConfig.load(tmp_path, {"extends": "base-schema.yaml"})
 
-    assert loaded.statuses == frozenset({"draft", "todo", "done"})
+    assert loaded.statuses == ("draft", "todo", "done")
 
 
 def test_schema_config_extends_chains_through_a_schema_only_file(tmp_path):
@@ -199,18 +201,24 @@ def test_schema_config_extends_chains_through_a_schema_only_file(tmp_path):
 
     loaded = schema.SchemaConfig.load(tmp_path, {"extends": "parent.yaml"})
 
-    assert loaded.statuses == frozenset({"draft", "todo", "done"})
-    assert loaded.types == frozenset({"task", "bug"})
+    assert loaded.statuses == ("draft", "todo", "done")
+    assert loaded.types == ("task", "bug")
 
 
 def test_schema_config_sibling_keys_fully_replace_not_merge(tmp_path):
     (tmp_path / "base-schema.yaml").write_text("statuses: [draft, todo, done]\n")
 
     loaded = schema.SchemaConfig.load(
-        tmp_path, {"extends": "base-schema.yaml", "statuses": ["only-this"]}
+        tmp_path,
+        {
+            "extends": "base-schema.yaml",
+            "statuses": ["only-this", "done"],
+        },
     )
 
-    assert loaded.statuses == frozenset({"only-this"})
+    # `done` is carried along only so `terminal_statuses` can still resolve --
+    # a vocabulary keeping none of the defaults is a hard error now.
+    assert loaded.statuses == ("only-this", "done")
 
 
 def test_schema_config_extends_missing_file_raises(tmp_path):

@@ -34,7 +34,7 @@ def test_full_lifecycle(quest_log, capsys):
 
     assert main(["show", quest_id]) == 0
     shown_after = capsys.readouterr().out
-    assert "status: completed" in shown_after
+    assert "status: done" in shown_after
     assert "priority: high" in shown_after
 
     assert main(["validate"]) == 0

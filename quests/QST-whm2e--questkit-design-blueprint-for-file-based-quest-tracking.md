@@ -7,7 +7,7 @@ status_changed: 2026-08-14
 modified: 2026-08-20
 type: epic
 tier: blueprint
-status: completed
+status: done
 priority: high
 effort: xl
 milestone: 0.1.0

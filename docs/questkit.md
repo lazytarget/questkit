@@ -309,7 +309,8 @@ $ quest new "Fix the garage door sensor" --type task --priority high --tag home
 ```
 quest list [--where EXPR ...] [--all] [--root DIR] [--in DIR]
            [--format table|json|csv|prompt] [--columns a,b,c]
-           [--sort field[:asc|desc]] [--limit N] [--offset N] [--out FILE]
+           [--sort field[:asc|desc][,field[:asc|desc] ...]]
+           [--limit N] [--offset N] [--out FILE]
 ```
 
 A dynamic filter/export engine rather than a fixed set of flags — this is
@@ -322,6 +323,18 @@ multi-log querying.
   - `field~value` — substring match on a scalar field, or membership match
     on a list field (`tags~frontend`).
   - `field:exists` — the field is present and non-blank/non-empty.
+  - `field!=value` — the negation of `=`. An **absent** field satisfies it: a
+    quest with no `agentic` genuinely is `agentic != afk`.
+  - `field>value`, `field<value`, `field>=value`, `field<=value` — comparison.
+    Numeric where both sides look numeric (frontmatter is untyped, so a count
+    may arrive as `20` or `"20"`), string otherwise. ISO dates need no special
+    case: they compare correctly as plain strings, so
+    `--where "status_changed<2026-08-05"` works with no date parsing.
+
+  Operators are matched in the order `:exists`, `!=`, `>=`, `<=`, `~`, `>`,
+  `<`, `=` — the compound ones **must** be tried before their single-character
+  prefixes, or `>=` gets shredded into `>` with a value that silently gains a
+  leading `=`.
 
   **`value` may be a comma-list for both `=` and `~`** — `status=todo,
   in-progress` or `tags~frontend,backend` — matched as OR: any one of the
@@ -358,16 +371,34 @@ multi-log querying.
   priority, title`, plus `project` when `--all`) for the `table`/`csv`
   renderers — any frontmatter field works, including custom schema
   fields (`--columns id,status,sprint,title`).
-- **`--sort field[:asc|desc]`** — stable string sort; quests missing the
-  sort field always sort last, regardless of direction.
+- **`--sort field[:asc|desc][,field[:asc|desc] ...]`** — multi-key, stable,
+  and ranked by each field's **declared vocabulary order** rather than
+  alphabetically. Quests missing the *first* key always sort last, regardless
+  of direction: with a `desc` sort they would otherwise lead the table, and "no
+  effort recorded" is not the largest effort.
+
+  Vocabularies (`statuses`, `priorities`, `efforts`, `tiers`, `types`) are
+  ordered sequences, so `--sort priority:asc` means critical-first. This is
+  load-bearing, not cosmetic — as sets they sorted lexicographically, so
+  `--sort priority:asc` returned `critical, deferred, high, low, medium` and
+  `--sort effort:asc` returned `l, m, s, xl, xs`. A field with no declared
+  vocabulary (a title, a free-text custom field) falls back to a string sort,
+  and a value outside its vocabulary sorts *last* rather than first, so a typo
+  cannot silently outrank `critical`.
+
+  Under `--all` the ranking uses the first resolved log's vocabulary. For a
+  single log that is exact; across logs declaring *different* vocabularies it
+  is an approximation until per-log grouping lands (`QST-iqwjm`). Merging two
+  independently declared orderings has no correct answer, so questkit does not
+  invent one.
 - **`--limit N` / `--offset N`** — applied after filtering and sorting.
 - **`--out FILE`** — the rendered output is still printed to stdout as
   normal, *and* written to `FILE` (tee semantics, not a silent redirect).
 
 ```bash
-$ quest list --where "status=completed" --where "tags~gdrive"
-QST-15xxa  completed  medium  GDrive: Parse and Apply gdriveignore
-QST-4idp1  completed  medium  GDrive: Document and Sheet Ingress Compilation
+$ quest list --where "status=done" --where "tags~gdrive"
+QST-15xxa  done       medium  GDrive: Parse and Apply gdriveignore
+QST-4idp1  done       medium  GDrive: Document and Sheet Ingress Compilation
 ...
 
 # tags~frontend,backend -- OR within the clause: either tag qualifies
@@ -415,9 +446,14 @@ $ quest set QST-x7k2m status=in-progress priority=high tags=home,urgent
 /home/.../quests/QST-x7k2m--fix-the-garage-door-sensor.md
 ```
 
-### `quest done <id> [--in DIR]`
+### `quest done <id> [--in DIR]` / `quest scrap <id> [--in DIR]`
 
-Exactly `quest set <id> status=completed` — a two-character-shorter way to
+`done` writes the log's **first** `terminal_statuses` entry, `scrap` its
+**last** — so a log declaring `terminal_statuses: [shipped, cancelled]` gets
+`shipped` and `cancelled` from the same two commands, with nothing hardcoded.
+Under the default vocabulary that is `done` and `scrapped`.
+
+Otherwise exactly `quest set <id> status=...` — a shorter way to
 write the single most common transition. Same id resolution as `set`.
 
 ### `quest mv <id> <dest> [--in DIR]`
@@ -512,15 +548,27 @@ $ quest init --project pensieve --git manual --hooks --base
 Checks every file matching the log's configured `pattern` (default
 `QST-*.md`) against the full rule set — see
 [§11](#11-git-hooks-and-validation) for exactly what's checked and why the
-hook checks a strict subset of it. Exits `0` with a summary line if clean,
-`1` with a `[!] path` / `error: ...` block per problem file otherwise.
+hook checks a strict subset of it.
+
+Findings come in two kinds, and only one of them affects the exit code:
+
+| Kind | Prefix | Exit code | Example |
+|------|--------|-----------|---------|
+| **Error** | `error:` | fails (`1`) | an out-of-vocabulary `status`, a `blocked_by` id that resolves nowhere |
+| **Note** | `note:` | never | filename slug drift |
+
+The split matters because filenames are immutable by design, so slug drift is
+what *supposed* to happen whenever a title is edited after creation. Reporting
+it as an error meant a supported operation made the flagship command red — and
+a log that is permanently "failing" is a log whose output nobody reads.
+`--no-notes` hides them; it does not change the exit code either way.
 
 ```bash
 $ quest validate
-[quest validate] 26 quest(s) checked, no errors
+[quest validate] 23 quest(s) checked, 0 error(s), 2 note(s)
 ```
 
-### `quest format [--in DIR]`
+### `quest format [PATH ...] [--in DIR] [--check]`
 
 Re-saves every file matching the log's `pattern`, applying `Quest.save()`'s
 normalization (list style, date-field quoting, quote style — see
@@ -539,6 +587,84 @@ $ quest format
 [quest format] quests/QST-03dh4--syncthing-custom-folder-groups.md: reformatted
 [quest format] 26 quest(s) checked, 1 reformatted
 ```
+
+Positional targets narrow it to specific files or log directories:
+
+```bash
+quest format quests/QST-3ehhu*.md                        # explicit files
+quest format 02-projects/family/quests 99-system/quests  # dirs, each using its own pattern
+quest format --check                                     # report only; exit 1 if anything would change
+```
+
+A directory target resolves **that directory's** config and globs **its**
+`pattern`. `pattern`/`prefix`/`id_length` are per-log settings, so a hardcoded
+`QST-*.md` would silently format nothing in a log that renamed its prefix — and
+report `0 quest(s) checked` as though the log were clean.
+
+`--check` writes nothing and exits `1` if any file would change, which makes it
+usable in CI. It shares its predicate with `Quest.render()`, the same code
+`save()` uses to decide whether to write, so it can never disagree with what a
+real run would do.
+
+**A no-op `quest format` touches no mtimes.** `Quest.save()` compares the
+rendered content against the file and returns whether it wrote. That is not
+just tidiness: the designated committer ([§10](#10-versioning-syncthing--git))
+gates on "has this log been quiet for N minutes", and a format run that touched
+every file would make that gate permanently see a hot log.
+
+### `quest migrate [--backfill FIELD=SOURCE | --rename-value FIELD:old=new] [options]`
+
+Frontmatter-aware corpus migrations. Two verbs, one per migration shape that
+actually mutates files:
+
+| Verb | Does | Guard |
+|------|------|-------|
+| `--backfill FIELD=SOURCE` | sets `FIELD` from `SOURCE` — another field, a `{{ macro }}`, or a literal — **only where `FIELD` is absent** | never overwrites an existing value |
+| `--rename-value FIELD:old=new` | rewrites one value of one field | **that field's value only** — never the body, never another field |
+
+```bash
+quest migrate --backfill status_changed=created -A --dry-run
+quest migrate --rename-value status:completed=done --in questkit
+quest migrate --backfill owner={{ env.USER }} --in family --commit
+```
+
+**Why this is a command and not a documented `sed`.** Quest bodies and
+`description:` values contain the words being renamed, in ordinary prose.
+Verified in questkit's own log:
+
+```
+QST-bmzl2  - [ ] Every quest in the Scope table is completed or explicitly scrapped
+QST-whm2e  ... Completed quests stay exactly where they were created, forever.
+```
+
+A line-oriented substitution corrupts both. Only a frontmatter-aware tool can
+rename a *value of a field* without touching text that happens to use the same
+word — and questkit is the only thing in the Realm that parses this format.
+
+**Field reference or literal?** Nothing in `FIELD=SOURCE` distinguishes
+`status_changed=created` ("copy the `created` field") from `owner=peter` ("the
+literal string peter"). The decision is made **once per log**, from that log's
+field vocabulary: `schema.CORE_FIELDS`, its declared custom fields, and the
+union of keys present in its quests. Per-log rather than per-file on purpose —
+deciding per file would make one command mean two things in one directory, with
+a quest missing `created` receiving the literal string `"created"` while its
+neighbour got a real date.
+
+Shared behavior:
+
+- **`--dry-run` prints a per-file diff and writes nothing.** Not optional for a
+  corpus-wide mutation.
+- Honors `--in` (repeatable), `-A`/`--all-logs` and `--root`.
+- Writes through `Quest.save()`, so a file the migration does not change keeps
+  its mtime — which matters across Syncthing.
+- **Neither `modified` nor `status_changed` is bumped.** A migration is not a
+  content edit, and renaming `completed`→`done` is the same status under a new
+  name rather than a transition. The migration that introduces the
+  loop-closure signals must not be the thing that launders them.
+- **`--commit` is opt-in and refuses outright on a dirty index.** With staged
+  changes there is no way to produce a commit containing only the migration,
+  and a run touching 129 files across 7 repositories is the wrong place to
+  discover that afterwards. Each log commits separately, in its own repo.
 
 ### `quest schema quest [field] [--format json|table] [--in DIR]`
 
@@ -559,7 +685,7 @@ added; there's only ever `quest` today).
 
 ```bash
 $ quest schema quest status
-["draft", "todo", "in-progress", "blocked", "parked", "completed", "scrapped"]
+["draft", "todo", "in-progress", "parked", "done", "scrapped"]
 
 $ quest schema quest sprint
 {"type": "string", "required": true}
@@ -579,11 +705,12 @@ you will never see a raw Python traceback from normal usage.
 | `id` | Yes | `QST-xxxxx` | 5-char lowercase base36, random (not sequential — see [§1](#1-purpose--design-philosophy)/README on why). Must match the filename's id prefix (`quest validate`, hard rule). |
 | `title` | Yes | string | Human-readable. Editing this after creation does **not** rename the file — see [§11](#11-git-hooks-and-validation) on slug drift. |
 | `description` | Situational | string, ≤200 chars | Required unless `status: draft`. `quest new` defaults it to the title if `--description` isn't given (once status isn't draft). |
-| `created` | Yes | `YYYY-MM-DD` | Set once, at creation. |
+| `created` | Yes | `YYYY-MM-DD` | Set once, at creation. Also the fallback for `status_changed`. |
 | `modified` | Yes | `YYYY-MM-DD` | Bumped by `quest set`/`done`/`mv` and by the `quest-bump-modified` hook on every commit that touches the file. Normalizes to a real, unquoted `date` value on save. |
-| `type` | Yes | enum | `feature \| task \| bug \| epic \| milestone \| chore` |
+| `type` | Yes | enum | `feature \| task \| bug \| epic \| chore` |
 | `tier` | No | enum | `spark \| brief \| blueprint` — spec-workflow weight, inherited unchanged from the Realm's three-tier model. Sits directly after `type` by convention. |
-| `status` | Yes | enum | `draft \| todo \| in-progress \| blocked \| parked \| completed \| scrapped` |
+| `status` | Yes | enum | `draft \| todo \| in-progress \| parked \| done \| scrapped` |
+| `status_changed` | No | date | the day `status` last changed. Written **only on a real transition**, so it measures staleness where `modified` cannot — `modified` is bumped by the `quest-bump-modified` hook on every commit. Absent means never changed; consumers fall back to `created`. |
 | `priority` | Yes | enum | `critical \| high \| medium \| low \| deferred` |
 | `effort` | No | enum | `xs \| s \| m \| l \| xl` |
 | `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (In The Realm specifically, the convention is `peter`/`jenika`, but that's a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
@@ -599,7 +726,8 @@ List fields render flow-style (`[]`) only when empty; any non-empty list
 always expands to block style (one item per line, even a single item) —
 matching Obsidian's own frontmatter writer (see the README's "Frontmatter
 formatting" section and [§11](#11-git-hooks-and-validation)). `created`/
-`modified`/`due` normalize to real, unquoted `date` values the same way.
+`status_changed`/`modified`/`due` normalize to real, unquoted `date` values the
+same way.
 This happens automatically on every save, there's no field-level control
 over it.
 
@@ -635,7 +763,8 @@ ignore:
   - "#include ../../99-system/templates/dot-files/.stignore-code"
 schema:
   extends: "../../.questkit.schema.yaml"
-  statuses: [draft, todo, in-progress, in-review, completed, scrapped]
+  statuses: [draft, todo, in-progress, in-review, shipped, cancelled]
+  terminal_statuses: [shipped, cancelled]
   fields:
     sprint:
       type: string
@@ -652,7 +781,7 @@ schema:
 | `project` | *(absent)* | If set: `quest new` auto-stamps every new quest's `project:` field with this value (unless `--project` overrides it per-call), and `quest validate` flags any quest whose own `project:` disagrees. If absent (as in the central/catch-all log): no auto-stamping, no drift-checking — quests there can carry any `project:` value, or none, purely as free-form metadata. |
 | `defaults.type` / `.status` / `.priority` | `task` / `draft` / `medium` | Used by `quest new` whenever the corresponding `--type`/`--status`/`--priority` flag isn't given. Loading a config that doesn't specify one of these three falls back to the same hardcoded defaults — `defaults:` in the file only needs to list the ones you want to override. |
 | `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list --all`, cross-log id resolution) walks this log's own tree — see [§9](#9-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention `syncthing.yaml`/`scaffold_syncthing.py` uses elsewhere in the Realm, so a log inside the Realm can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
-| `schema` | *(absent)* | Overrides/extends the built-in `type`/`status`/`tier`/`priority`/`effort` vocabularies and/or declares custom fields, for this log only. See the dedicated subsection below — absent entirely, a log behaves exactly as if this key didn't exist at all (full backward compatibility). |
+| `schema` | *(absent)* | Overrides/extends the built-in `type`/`status`/`tier`/`priority`/`effort` vocabularies, declares `terminal_statuses`, and/or declares custom fields, for this log only. See the dedicated subsection below — absent entirely, a log behaves exactly as if this key didn't exist at all (full backward compatibility). |
 
 Config values load through the exact same `ruamel.yaml` instance used for
 quest files (`preserve_quotes=True`, wide line width, `---` document-start
@@ -662,9 +791,34 @@ formatting conventions as quest files themselves.
 ### The `schema` block: dynamic vocabularies and custom fields
 
 Absent this key, a log's valid `type`/`status`/`tier`/`priority`/`effort`
-values are exactly the hardcoded frozensets in `schema.py` (see
+values are exactly the built-in vocabularies in `schema.py` (see
 [§7](#7-frontmatter-reference)) — nothing below changes anything for a log
 that doesn't opt in.
+
+**Vocabularies are ordered, and the order is the sort order.** Declaration
+order drives `--sort` (see [§6](#6-cli-reference)), so writing
+`priorities: [critical, high, medium, low, deferred]` is what makes
+`--sort priority:asc` mean critical-first. Membership checking is unaffected.
+
+**`terminal_statuses`** declares which statuses mean "finished". Four things
+need to know: the `OPEN` column of `quest logs`, the `blocked` computation,
+`stale`'s exclusion set, and what `quest done` writes. It is **ordered** —
+`quest done` writes the first entry, `quest scrap` the last.
+
+It defaults to `[done, scrapped]` intersected with whatever `statuses` the log
+declares, which in the default vocabulary is literally the tail of that list,
+so the two agree by construction rather than by discipline. A log that
+overrides `statuses:` and keeps **none** of the defaults, without declaring
+`terminal_statuses`, is a **hard error at config load**. Degrading would mean
+an `OPEN` column silently equal to `total` and a `blocked` field that is always
+`false` — a wrong answer delivered confidently, which is worse than failing.
+
+**Reserved names.** A schema may not declare an enum value or a custom field
+named `blocked`, `blocks`, `idle`, `age` or `archived`. Those are computed
+field names, and a status value sharing a name with a computed field would make
+`--where blocked=true` and `--where status=blocked` two different questions one
+word apart — with a quest able to satisfy either without the other. Enforced at
+config load.
 
 - **`extends: <path>`**, if present, must be the *first* key read
   conceptually (though YAML key order doesn't matter) — it names another
@@ -1170,7 +1324,7 @@ created: 2026-08-01
 modified: 2026-08-13
 type: bug
 tier: spark
-status: completed
+status: done
 priority: high
 effort: s
 owner: peter

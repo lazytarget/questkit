@@ -67,7 +67,7 @@ def test_make_log_writes_a_loadable_config(isolated, make_log):
 def test_make_log_passes_a_schema_block_through(isolated, make_log):
     log = make_log(isolated, schema={"statuses": ["draft", "todo", "done"]})
 
-    assert QuestLogConfig.load(log).schema.statuses == frozenset({"draft", "todo", "done"})
+    assert QuestLogConfig.load(log).schema.statuses == ("draft", "todo", "done")
 
 
 def test_write_schema_supports_dict_and_text_bodies(isolated, write_schema):

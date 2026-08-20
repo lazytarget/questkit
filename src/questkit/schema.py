@@ -9,14 +9,38 @@ from ruamel.yaml import YAML
 
 from .utils import slugify
 
-TYPES = frozenset({"feature", "task", "bug", "epic", "milestone", "chore"})
-TIERS = frozenset({"spark", "brief", "blueprint"})
-STATUSES = frozenset(
-    {"draft", "todo", "in-progress", "blocked", "parked", "completed", "scrapped"}
-)
-PRIORITIES = frozenset({"critical", "high", "medium", "low", "deferred"})
-EFFORTS = frozenset({"xs", "s", "m", "l", "xl"})
-AGENTIC_MODES = frozenset({"afk", "hitl"})
+# Vocabularies are **ordered tuples, not sets**, and that is load-bearing.
+# `list_cmd` sorts by declaration order, so `--sort priority:asc` has to mean
+# critical-first rather than alphabetical -- as a set it returned `critical,
+# deferred, high, low, medium`, which would rank a `deferred` quest second in
+# the `next` view. Membership checks stay O(n) on n <= 10, which is free.
+TYPES = ("feature", "task", "bug", "epic", "chore")
+TIERS = ("spark", "brief", "blueprint")
+
+# `done` sits second-to-last on purpose: `terminal_statuses` defaults to the
+# tail of this list, so the two agree by construction rather than by discipline.
+STATUSES = ("draft", "todo", "in-progress", "parked", "done", "scrapped")
+TERMINAL_STATUSES = ("done", "scrapped")
+
+PRIORITIES = ("critical", "high", "medium", "low", "deferred")
+EFFORTS = ("xs", "s", "m", "l", "xl")
+AGENTIC_MODES = ("afk", "hitl")
+
+# A schema may not declare an enum value or custom field colliding with one of
+# these. `--where blocked=true` and `--where status=blocked` would otherwise be
+# two different questions one word apart, and a quest could satisfy either
+# without the other. Enforced at config load, which is what makes `blocked`
+# leaving the status enum permanent rather than a tidy-up someone reverses.
+COMPUTED_FIELD_NAMES = ("blocked", "blocks", "idle", "age", "archived")
+
+# Which vocabulary each sortable field draws its order from.
+_FIELD_VOCABULARIES = {
+    "type": "types",
+    "status": "statuses",
+    "tier": "tiers",
+    "priority": "priorities",
+    "effort": "efforts",
+}
 
 _yaml = YAML()
 
@@ -83,6 +107,16 @@ class SchemaExtendsError(Exception):
     """Raised when a `schema.extends` chain is circular or points at a missing file."""
 
 
+class SchemaConfigError(Exception):
+    """Raised when a `schema:` block is internally inconsistent.
+
+    Loud at config load rather than degrading, because every case this covers
+    would otherwise produce a *confidently wrong* answer: an `OPEN` column
+    silently equal to `total`, a `blocked` field that is always false, or two
+    query expressions one word apart meaning different things.
+    """
+
+
 @dataclass(frozen=True)
 class FieldSpec:
     """A custom frontmatter field defined in a log's `.questkit.yaml` schema block."""
@@ -96,17 +130,35 @@ class FieldSpec:
 class SchemaConfig:
     """The active, merged schema for one quest log: vocabularies plus custom fields."""
 
-    types: frozenset = TYPES
-    statuses: frozenset = STATUSES
-    tiers: frozenset = TIERS
-    priorities: frozenset = PRIORITIES
-    efforts: frozenset = EFFORTS
+    types: tuple = TYPES
+    statuses: tuple = STATUSES
+    tiers: tuple = TIERS
+    priorities: tuple = PRIORITIES
+    efforts: tuple = EFFORTS
+    terminal_statuses: tuple = TERMINAL_STATUSES
     fields: dict = field(default_factory=dict)  # name -> FieldSpec, custom fields only
 
     @classmethod
     def default(cls) -> SchemaConfig:
         """The schema in effect when a log has no `schema:` block at all."""
         return cls()
+
+    def rank_of(self, field_name: str, value) -> int | None:
+        """Where `value` sits in its field's declared order, or None if unranked.
+
+        `None` means "this field has no vocabulary" (a title, a free-text
+        custom field), so the caller falls back to a string sort. An
+        out-of-vocabulary value on a *ranked* field sorts last rather than
+        first -- a typo must not silently outrank `critical`.
+        """
+        vocabulary = _FIELD_VOCABULARIES.get(field_name)
+        if vocabulary is None:
+            return None
+        values: tuple = getattr(self, vocabulary)
+        try:
+            return values.index(str(value))
+        except ValueError:
+            return len(values)
 
     @classmethod
     def load(cls, quests_dir: Path, schema_block: dict | None) -> SchemaConfig:
@@ -119,14 +171,77 @@ class SchemaConfig:
             )
             for name, spec in (merged.get("fields") or {}).items()
         }
+        vocabularies = {
+            "types": _as_tuple(merged, "types", TYPES),
+            "statuses": _as_tuple(merged, "statuses", STATUSES),
+            "tiers": _as_tuple(merged, "tiers", TIERS),
+            "priorities": _as_tuple(merged, "priorities", PRIORITIES),
+            "efforts": _as_tuple(merged, "efforts", EFFORTS),
+        }
+        _reject_computed_field_collisions(vocabularies, fields)
         return cls(
-            types=frozenset(merged["types"]) if "types" in merged else TYPES,
-            statuses=frozenset(merged["statuses"]) if "statuses" in merged else STATUSES,
-            tiers=frozenset(merged["tiers"]) if "tiers" in merged else TIERS,
-            priorities=frozenset(merged["priorities"]) if "priorities" in merged else PRIORITIES,
-            efforts=frozenset(merged["efforts"]) if "efforts" in merged else EFFORTS,
+            **vocabularies,
+            terminal_statuses=_resolve_terminal_statuses(merged, vocabularies["statuses"]),
             fields=fields,
         )
+
+
+def _as_tuple(merged: dict, key: str, fallback: tuple) -> tuple:
+    if key not in merged:
+        return fallback
+    return tuple(str(value) for value in merged[key])
+
+
+def _reject_computed_field_collisions(vocabularies: dict, fields: dict) -> None:
+    reserved = set(COMPUTED_FIELD_NAMES)
+    for name, values in vocabularies.items():
+        for value in values:
+            if value in reserved:
+                raise SchemaConfigError(
+                    f"'{name}' declares '{value}', which collides with the computed field "
+                    f"'{value}'. Computed field names are reserved "
+                    f"({', '.join(COMPUTED_FIELD_NAMES)}): a status value and a computed "
+                    "field cannot share a name, or --where would have two meanings for it."
+                )
+    for name in fields:
+        if name in reserved:
+            raise SchemaConfigError(
+                f"custom field '{name}' collides with the computed field '{name}'. "
+                f"Computed field names are reserved ({', '.join(COMPUTED_FIELD_NAMES)})."
+            )
+
+
+def _resolve_terminal_statuses(merged: dict, statuses: tuple) -> tuple:
+    """Which statuses mean "finished", for the four consumers that need to know.
+
+    `quest logs`' OPEN column, the `blocked` computation, `stale`'s exclusion
+    set, and what `quest done` writes. Ordered, because `quest done` writes the
+    first entry.
+
+    Defaults to the built-in pair intersected with whatever the log declared,
+    so a log that renamed only *part* of the vocabulary needs no declaration.
+    A log where no default survives and nothing is declared is a hard error:
+    degrading would give `quest logs` an OPEN column silently equal to total.
+    """
+    declared = merged.get("terminal_statuses")
+    if declared is not None:
+        resolved = tuple(str(value) for value in declared)
+        unknown = [value for value in resolved if value not in statuses]
+        if unknown:
+            raise SchemaConfigError(
+                f"terminal_statuses declares {unknown}, which are not in statuses "
+                f"({', '.join(statuses)})"
+            )
+        return resolved
+
+    surviving = tuple(value for value in TERMINAL_STATUSES if value in statuses)
+    if not surviving:
+        raise SchemaConfigError(
+            f"statuses ({', '.join(statuses)}) overrides the default vocabulary and keeps "
+            f"none of {list(TERMINAL_STATUSES)}, so questkit cannot tell which statuses mean "
+            "'finished'. Declare terminal_statuses explicitly."
+        )
+    return surviving
 
 
 def _resolve_schema_extends(
@@ -207,7 +322,7 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
     if agentic is not None:
         if agentic not in AGENTIC_MODES:
             errors.append(
-                ValidationError(quest.path, f"agentic '{agentic}' not in {sorted(AGENTIC_MODES)}")
+                ValidationError(quest.path, f"agentic '{agentic}' not in {list(AGENTIC_MODES)}")
             )
         elif agentic == "afk":
             errors.extend(_check_afk_readiness(quest))
@@ -279,10 +394,13 @@ def _blank(value) -> bool:
 
 
 def _check_enum(path, fm, name, allowed) -> list[ValidationError]:
+    # `list(allowed)`, not `sorted(allowed)`: the declared order is the
+    # meaningful one now, and sorting it back to alphabetical in the error
+    # message would tell the reader the wrong thing about their own schema.
     value = fm.get(name)
     if value is None or value in allowed:
         return []
-    return [ValidationError(path, f"{name} '{value}' not in {sorted(allowed)}")]
+    return [ValidationError(path, f"{name} '{value}' not in {list(allowed)}")]
 
 
 def _check_afk_readiness(quest) -> list[ValidationError]:

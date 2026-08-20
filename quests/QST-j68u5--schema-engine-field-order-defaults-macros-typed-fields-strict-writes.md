@@ -3,11 +3,11 @@ id: QST-j68u5
 title: "Schema engine: field order, defaults, macros, typed fields, strict writes"
 description: field_order normalization, schema.fields defaults with macros, --fill-defaults, enum-typed custom fields, generic --set, and strict CLI writes.
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 type: feature
 tier: blueprint
-status: todo
+status: in-progress
 priority: high
 effort: l
 milestone: 0.3.0
@@ -414,6 +414,9 @@ each was load-bearing in more than one place:
 
 ## Log
 
+- 2026-08-21: **rules 10-13 and 19 implemented (batch B1).** Vocabularies are now ordered tuples with a `rank_of()` lookup; `_apply_sort` parses comma-separated keys and sorts right-to-left through Python's stable sort, one pass per key. `terminal_statuses` resolves as declared-or-(defaults ∩ declared statuses), with a hard `SchemaConfigError` when a log keeps none of the defaults and declares nothing. `quest scrap` added, and `quest done` now reads `terminal_statuses[0]` instead of writing a hardcoded `completed`. The collision rule covers every vocabulary *and* custom field names.
+  Three things worth recording. `--sort` needs a schema, and `_apply_sort` had none — threaded through as the *first resolved log's* schema, which is exact for a single log and an approximation under `-A` across logs with divergent vocabularies; merging two independently declared orderings has no correct answer, so the honest fix is [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]]'s per-log grouping rather than inventing one here. Every error message and `quest schema` listing switched from `sorted()` to `list()` — printing a declared order alphabetically tells the reader the wrong thing about their own schema. And the `completed`→`done` migration ran on this log through the tool built in B0: 7 files renamed, with both verified prose collisions (`QST-bmzl2`'s "is completed or explicitly scrapped" and `QST-whm2e`'s "Completed quests stay exactly...") left untouched.
+  Rules 1-9 and 17-18 are B2; rules 5 and 14-16 are B3.
 - 2026-08-21: took the `--where` comparison operators from [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] as rule 19 — rule 15's `readiness:` grammar consumes `!=`, so they were scheduled three build-order items behind their first consumer.
 - 2026-08-21: `milestone:` stamped across all 23 quests in this log, including retroactive `0.1.0`/`0.2.0` on shipped work. Raises rule 14's `development`-before-`strict` constraint from 16 files to every file.
 - 2026-08-19: `agentic` demoted out of core and both its hardcoded guard rules replaced by a configurable `readiness:` block; `completed` renamed to `done`; vocabularies made ordered after finding `--sort priority` returns `critical, deferred, high, ...` and multi-key sort silently drops all but the first key.

@@ -7,7 +7,7 @@ status_changed: 2026-08-20
 modified: 2026-08-20
 type: bug
 tier: spark
-status: completed
+status: done
 priority: medium
 effort: xs
 milestone: 0.3.0

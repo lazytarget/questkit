@@ -7,14 +7,34 @@ import csv
 import io
 import json
 import sys
+from functools import partial
+from typing import Any
 
 from .. import schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import find_all_logs, resolve_log, resolve_sweep_root
 from ..quest import Quest
 
-DEFAULT_STATUSES = ("todo", "in-progress", "blocked")
+# `blocked` is gone: it left the status enum (a status value and a computed
+# field cannot share a name), and derived-blocked quests stay visible through
+# the `todo [blocked]` marking instead of a status nobody maintained by hand.
+# QST-37n0t moves this into `views.default`, removing the last hardcoded
+# status list rather than replacing it with a config key.
+DEFAULT_STATUSES = ("todo", "in-progress")
 DEFAULT_COLUMNS = ("id", "status", "priority", "title")
+
+# Checked in this order, and the order is the whole point: the compound
+# operators must be tried before their single-character prefixes, or `>=` is
+# shredded into `>` plus a value that silently gains a leading `=`.
+_OPERATORS = (
+    ("!=", "ne"),
+    (">=", "gte"),
+    ("<=", "lte"),
+    ("~", "contains"),
+    (">", "gt"),
+    ("<", "lt"),
+    ("=", "eq"),
+)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -22,11 +42,11 @@ def run(args: argparse.Namespace) -> int:
     if not any(field == "status" for field, _, _ in wheres):
         wheres.append(("status", "eq", ",".join(DEFAULT_STATUSES)))
 
-    rows = _collect_rows(args)
+    rows, sort_schema = _collect_rows(args)
     rows = [row for row in rows if all(_matches(row, f, op, v) for f, op, v in wheres)]
 
     if args.sort:
-        rows = _apply_sort(rows, args.sort)
+        rows = _apply_sort(rows, args.sort, sort_schema)
 
     if args.offset:
         rows = rows[args.offset :]
@@ -46,7 +66,18 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _collect_rows(args: argparse.Namespace) -> list[dict]:
+def _collect_rows(args: argparse.Namespace) -> tuple[list[dict], schema.SchemaConfig | None]:
+    """The rows in scope, plus the schema `--sort` should rank against.
+
+    The returned schema is the **first** resolved log's. For a single log --
+    the overwhelmingly common case -- that is exactly right. Across `-A` with
+    logs that declare *different* vocabularies it is an approximation, and the
+    honest fix is per-log grouping (QST-iqwjm), where each log sorts under its
+    own definition and the results concatenate. Deliberately not "merge the
+    vocabularies": there is no correct way to interleave two independently
+    declared orderings, and inventing one would be a wrong answer delivered
+    confidently.
+    """
     if args.all_logs:
         root = resolve_sweep_root(explicit=args.root)
         logs = find_all_logs(root)
@@ -54,21 +85,24 @@ def _collect_rows(args: argparse.Namespace) -> list[dict]:
         logs = [resolve_log(explicit=args.in_dir)]
 
     rows: list[dict] = []
+    sort_schema: schema.SchemaConfig | None = None
     for quests_dir in logs:
         try:
             config = QuestLogConfig.load(quests_dir)
-        except (ConfigVersionError, schema.SchemaExtendsError) as exc:
+        except (ConfigVersionError, schema.SchemaExtendsError, schema.SchemaConfigError) as exc:
             if not args.all_logs:
                 raise
             print(f"[quest list] skipping {quests_dir}: {exc}", file=sys.stderr)
             continue
+        if sort_schema is None:
+            sort_schema = config.schema
         project = config.project or quests_dir.name
         for path in sorted(quests_dir.glob(config.pattern)):
             quest = Quest.load(path)
             row = _to_plain(quest.frontmatter)
             row.setdefault("project", project)
             rows.append(row)
-    return rows
+    return rows, sort_schema
 
 
 def _to_plain(frontmatter) -> dict:
@@ -79,14 +113,13 @@ def _to_plain(frontmatter) -> dict:
 def _parse_where(expr: str) -> tuple[str, str, str | None]:
     if expr.endswith(":exists"):
         return expr[: -len(":exists")].strip(), "exists", None
-    if "~" in expr:
-        field, _, value = expr.partition("~")
-        return field.strip(), "contains", value.strip()
-    if "=" in expr:
-        field, _, value = expr.partition("=")
-        return field.strip(), "eq", value.strip()
+    for token, op in _OPERATORS:
+        if token in expr:
+            field_name, _, value = expr.partition(token)
+            return field_name.strip(), op, value.strip()
     raise ValueError(
-        f"malformed --where expression '{expr}' (expected field=value, field~value, or field:exists)"
+        f"malformed --where expression '{expr}' (expected field<op>value with op in "
+        f"{', '.join(token for token, _ in _OPERATORS)}, or field:exists)"
     )
 
 
@@ -112,21 +145,109 @@ def _matches(row: dict, field_name: str, op: str, value: str | None) -> bool:
         if isinstance(actual, list):
             return bool({str(v).lower() for v in actual} & wanted)
         return str(actual).lower() in wanted
+    if op == "ne":
+        wanted = set(_split_candidates(value or ""))
+        if isinstance(actual, list):
+            return not ({str(v).lower() for v in actual} & wanted)
+        # An absent field genuinely *is* `!= afk`, so this must not be false.
+        return str(actual).lower() not in wanted if actual is not None else True
+    if op in _COMPARISONS:
+        return _compare(actual, value or "", op)
     return False
+
+
+_COMPARISONS = {
+    "gt": lambda a, b: a > b,
+    "gte": lambda a, b: a >= b,
+    "lt": lambda a, b: a < b,
+    "lte": lambda a, b: a <= b,
+}
+
+
+def _compare(actual, value: str, op: str) -> bool:
+    """Numeric where both sides look numeric, string otherwise.
+
+    Frontmatter is untyped, so a count can arrive as `20` or `"20"` depending
+    on who wrote the file -- and the computed fields (`idle`, `blocks`) are
+    real ints. ISO dates need no special case at all: they compare correctly
+    as plain strings, which is why `--where status_changed<2026-08-05` works
+    with no date parsing anywhere.
+    """
+    if _is_blank(actual):
+        return False
+    left, right = str(actual), value
+    if _looks_numeric(left) and _looks_numeric(right):
+        return _COMPARISONS[op](float(left), float(right))
+    return _COMPARISONS[op](left.lower(), right.lower())
+
+
+def _looks_numeric(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _is_blank(value) -> bool:
     return value is None or value == "" or value == []
 
 
-def _apply_sort(rows: list[dict], sort_expr: str) -> list[dict]:
-    field_name, _, direction = sort_expr.partition(":")
-    field_name = field_name.strip()
-    reverse = direction.strip().lower() == "desc"
-    present = [r for r in rows if not _is_blank(r.get(field_name))]
-    missing = [r for r in rows if _is_blank(r.get(field_name))]
-    present.sort(key=lambda r: str(r.get(field_name)), reverse=reverse)
+def _parse_sort(sort_expr: str) -> list[tuple[str, bool]]:
+    """`"priority:asc,effort:desc"` -> `[("priority", False), ("effort", True)]`.
+
+    The old implementation was `sort_expr.partition(":")`, which on that input
+    gave field=`priority` and direction=`"asc,effort:desc"` -- so every key
+    after the first was silently dropped and `desc` never matched anything.
+    """
+    keys: list[tuple[str, bool]] = []
+    for part in sort_expr.split(","):
+        field_name, _, direction = part.strip().partition(":")
+        field_name = field_name.strip()
+        if field_name:
+            keys.append((field_name, direction.strip().lower() == "desc"))
+    return keys
+
+
+def _apply_sort(rows: list[dict], sort_expr: str, schema_config=None) -> list[dict]:
+    """Sort by every key given, honoring each field's *declared* vocabulary order.
+
+    `schema_config` is optional so the existing unit tests (and any caller
+    sorting a free-text field) keep working -- without it every key is a
+    string sort, which is the old behavior.
+
+    Rows missing the *first* sort key go last regardless of direction: with a
+    `desc` sort they would otherwise lead the table, and "no effort recorded"
+    is not the largest effort.
+    """
+    keys = _parse_sort(sort_expr)
+    if not keys:
+        return rows
+
+    primary = keys[0][0]
+    present = [r for r in rows if not _is_blank(r.get(primary))]
+    missing = [r for r in rows if _is_blank(r.get(primary))]
+
+    # Sorted right-to-left through Python's stable sort: one pass per key,
+    # least significant first. Cheaper to read than a composite key that has
+    # to reverse only some of its components.
+    for field_name, reverse in reversed(keys):
+        present.sort(key=partial(_sort_key, field_name=field_name, schema_config=schema_config), reverse=reverse)
     return present + missing
+
+
+def _sort_key(row: dict, field_name: str, schema_config) -> Any:
+    """Declared rank when the field has a vocabulary, lowercased string otherwise."""
+    value = row.get(field_name)
+    if schema_config is not None:
+        rank = schema_config.rank_of(field_name, value)
+        if rank is not None:
+            return rank
+    if _is_blank(value):
+        # Only reachable for a secondary key; the primary already partitioned
+        # blanks out. Sorts before any real value, which keeps the pass stable.
+        return ""
+    return str(value).lower()
 
 
 def _resolve_columns(args: argparse.Namespace) -> list[str]:
