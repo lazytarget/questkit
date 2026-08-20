@@ -10,6 +10,7 @@ from .commands import (
     format_cmd,
     init_cmd,
     list_cmd,
+    migrate_cmd,
     mv_cmd,
     new_cmd,
     schema_cmd,
@@ -114,6 +115,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="report what would change, write nothing, exit 1 if anything would",
     )
     p_format.set_defaults(func=format_cmd.run)
+
+    p_migrate = subparsers.add_parser("migrate", help="frontmatter-aware corpus migrations")
+    p_migrate.add_argument(
+        "--backfill",
+        metavar="FIELD=SOURCE",
+        help="set FIELD from SOURCE (a field, a {{ macro }}, or a literal) where FIELD is absent",
+    )
+    p_migrate.add_argument(
+        "--rename-value",
+        dest="rename_value",
+        metavar="FIELD:old=new",
+        help="rewrite one value of one field, never the body and never another field",
+    )
+    p_migrate.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
+    p_migrate.add_argument(
+        "-A", "--all-logs", dest="all_logs", action="store_true", help="every log under --root"
+    )
+    p_migrate.add_argument("--root", dest="root")
+    p_migrate.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="print a per-file diff and write nothing",
+    )
+    p_migrate.add_argument(
+        "--commit",
+        action="store_true",
+        help="commit per log afterwards; refuses on a dirty index",
+    )
+    p_migrate.set_defaults(func=migrate_cmd.run)
 
     p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")
     p_schema.add_argument("kind", choices=["quest"])

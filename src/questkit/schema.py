@@ -23,6 +23,32 @@ _yaml = YAML()
 # Checked for presence only; enum membership is checked separately below.
 _SCALAR_REQUIRED_FIELDS = ("id", "title", "created", "modified", "type", "status", "priority")
 
+# Every frontmatter field questkit itself understands, required or not. Distinct
+# from _SCALAR_REQUIRED_FIELDS, which is only the presence check: `due` and
+# `owner` are core fields that happen to be optional. Consumers need the full
+# vocabulary to tell a core field from a custom one or a typo -- `quest migrate`
+# uses it to tell `--backfill x=created` (a field reference) from
+# `--backfill x=peter` (a literal). QST-j68u5's `field_order` builds on this.
+CORE_FIELDS = (
+    "id",
+    "title",
+    "description",
+    "project",
+    "type",
+    "tier",
+    "status",
+    "priority",
+    "effort",
+    "owner",
+    "tags",
+    "created",
+    "modified",
+    "due",
+    "blocked_by",
+    "aliases",
+    "agentic",
+)
+
 DEFAULT_STATUS = "draft"
 DEFAULT_TYPE = "task"
 DEFAULT_PRIORITY = "medium"

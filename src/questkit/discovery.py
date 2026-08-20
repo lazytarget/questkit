@@ -131,6 +131,45 @@ def resolve_sweep_root(explicit: str | None = None, start: Path | None = None) -
     return find_git_root(start) or start
 
 
+def resolve_log_set(
+    in_dirs: list[str] | None = None,
+    all_logs: bool = False,
+    root: str | None = None,
+    start: Path | None = None,
+) -> list[Path]:
+    """The set of logs a command should operate on, from one of three sources.
+
+    Explicit `--in` (repeatable) wins, then `--all-logs` sweeping downward
+    from the resolved root, then the default walk-up to a single log. One
+    function rather than each command choosing between `resolve_log` and
+    `find_all_logs` + `resolve_sweep_root` -- which is how those two paths
+    drifted apart in the first place.
+
+    Resolved paths are de-duplicated: overlapping `--in` values, and (once
+    `--root` is repeatable) nested roots, would otherwise emit the same quest
+    twice, and duplicate ids in a JSON export are a silent data bug.
+
+    Lands with `quest migrate`, its first consumer. QST-iqwjm extends it with
+    project-name resolution (QST-fmk0p), repeatable `--root`, and the summary
+    block that reports the resolved scope.
+    """
+    if in_dirs:
+        return _dedupe_paths([resolve_log(explicit=value) for value in in_dirs])
+    if all_logs:
+        return find_all_logs(resolve_sweep_root(explicit=root, start=start))
+    return [resolve_log(start=start)]
+
+
+def _dedupe_paths(paths: list[Path]) -> list[Path]:
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for path in paths:
+        if path not in seen:
+            seen.add(path)
+            unique.append(path)
+    return unique
+
+
 def resolve_mutation_target(
     quest_id: str, explicit_in: str | None = None, start: Path | None = None
 ) -> tuple[Path, Path] | None:
