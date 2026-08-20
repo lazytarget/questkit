@@ -4,16 +4,16 @@ title: "quest brief: a self-contained work order, and the batch capture that fee
 description: Emit a lean, agent-agnostic Markdown work order for one quest, and accept a body or a batch of quests on stdin as the inbound half.
 project: questkit
 type: feature
-status: draft
+status: done
 priority: high
 tags:
   - questkit
   - cli
   - agentic
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
-agentic:
+agentic: afk
 aliases:
   - QST-xk7js
 blocked_by:
@@ -197,28 +197,29 @@ optional (`nargs="?"` plus a mutual-exclusion check).
 
 ## Acceptance Criteria
 
-- [ ] `quest brief <id>` emits the lean format above for a groomed quest
-- [ ] The schema block is omitted for a log using the default vocabulary, present otherwise
-- [ ] `DEPENDENCIES` resolves `blocked_by` to title, status and file path
-- [ ] `DEPENDENCIES` lists reverse dependencies via `blocks`
-- [ ] The brief sweeps all logs and prints its scope
-- [ ] `REPORT BACK` names the exact commands and the log's commit prefix
-- [ ] An ungroomed quest's brief collapses to header, location and warnings
-- [ ] `READY` and `STATE` are separate lines with separate verdicts
-- [ ] `READY` is computed from the log's `readiness:` rules, with no rule hardcoded in `brief`
-- [ ] A rule's own `message` is what prints on failure
-- [ ] A `household`-schema quest with only a description reports READY ✅
-- [ ] `brief` never fails on `agentic` specifically — only via a declared rule
-- [ ] A blocked quest still gets a full brief, with `STATE` naming the blocker
-- [ ] A completed or scrapped quest warns but still briefs
-- [ ] Only a `READY` failure produces the "not implementation-ready" verdict
-- [ ] Output contains no vendor-specific or model-specific text
-- [ ] `quest new --body -` reads the Markdown body from stdin
-- [ ] `quest new --batch -` creates N quests and prints their ids in input order
-- [ ] `--batch` with a positional title is a clear error
+- [x] `quest brief <id>` emits the lean format above for a groomed quest
+- [x] The schema block is omitted for a log using the default vocabulary, present otherwise
+- [x] `DEPENDENCIES` resolves `blocked_by` to title, status and file path
+- [x] `DEPENDENCIES` lists reverse dependencies via `blocks`
+- [x] The brief sweeps all logs and prints its scope
+- [x] `REPORT BACK` names the exact commands and the log's commit prefix
+- [x] An ungroomed quest's brief collapses to header, location and warnings
+- [x] `READY` and `STATE` are separate lines with separate verdicts
+- [x] `READY` is computed from the log's `readiness:` rules, with no rule hardcoded in `brief`
+- [x] A rule's own `message` is what prints on failure
+- [x] A `household`-schema quest with only a description reports READY ✅
+- [x] `brief` never fails on `agentic` specifically — only via a declared rule
+- [x] A blocked quest still gets a full brief, with `STATE` naming the blocker
+- [x] A completed or scrapped quest warns but still briefs
+- [x] Only a `READY` failure produces the "not implementation-ready" verdict
+- [x] Output contains no vendor-specific or model-specific text
+- [x] `quest new --body -` reads the Markdown body from stdin
+- [x] `quest new --batch -` creates N quests and prints their ids in input order
+- [x] `--batch` with a positional title is a clear error
 
 ## Log
 
+- 2026-08-20: implemented. `commands/brief_cmd.py` sweeps every log in scope (like `quest deps`), reuses `computed.annotate_rows` for `blocked`/`blocks`, and reads `schema.evaluate_readiness` verbatim for READY -- no rule is hardcoded here, so a `household` schema with one `description:exists` rule reports READY the same way `development`'s four-rule list does. A READY failure short-circuits to the collapsed grooming-input format before any of SPEC/ACCEPTANCE/DEPENDENCIES/REPORT BACK are computed. `gitutil.repo_status` (new: branch + dirty state, best-effort) feeds LOCATION. `new_cmd.py` was restructured around a `_NewSpec` dataclass and a `_create_quest()` helper shared by the single-quest path and the new `--batch -` path, so both go through identical id-generation/defaults/macro/strict-mode logic; `--body -`/literal reads a body override before that helper is called (falling back to `render_body()` when absent, exactly as before). 15 new tests in `tests/test_brief.py`, 8 in `tests/test_new_body_and_batch.py`.
 - 2026-08-19: READY rewired to the schema's `readiness:` list after `agentic` left the core; `brief` now hardcodes no readiness rule at all.
 - 2026-08-19: readiness split into READY (document quality) and STATE (right-now eligibility) — they fail for different reasons and a blocked quest must still be briefable.
 - 2026-08-19: captured. The default output was deliberately shrunk from an earlier verbose draft; the schema block's conditional presence is the principled half of that, not just the shorter one.

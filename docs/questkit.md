@@ -334,6 +334,34 @@ with a "captured" line dated today), and prints the created path.
   field is omitted entirely.
 - `--edit` opens `$EDITOR` on the new file afterward; silently skipped
   (with a message) if `$EDITOR` isn't set.
+- **`--body -`** reads the Markdown body from stdin instead of the packaged
+  default template — the missing inbound half to `quest brief`'s SPEC/
+  ACCEPTANCE sections, for an agent that already has the content written.
+  ```bash
+  quest new "Add --select" --status todo --body - <<'EOF'
+  ## Spec
+  ...
+  EOF
+  ```
+- **`--batch -`** reads a YAML list of quest entries from stdin and creates
+  one quest per entry, printing each id on its own line in input order.
+  Mutually exclusive with the positional `title` — put each entry's title
+  inside the entry itself; passing both is a clear error. Each entry may set
+  `title` (required), `type`/`tier`/`status`/`priority`/`project`/
+  `description`/`tags` (the same shorthand fields as the CLI flags), `set:`
+  (a map, for any declared custom field), and `body:` (a literal Markdown
+  string).
+  ```bash
+  quest new --batch - --in questkit <<'EOF'
+  - title: Add --select to quest list
+    type: feature
+    set: {effort: s}
+    tags: [cli, dx]
+    body: |
+      ## Spec
+      ...
+  EOF
+  ```
 - If the log's config has `git: auto`, the new file is committed
   immediately, pathspec-limited to just that file, with the message
   `quest(<log-dir-name>): new <id> <title>`.
@@ -634,6 +662,41 @@ what blocks it). Without an explicit `--in`, `deps` sweeps every log under
 qualified `project/QST-xxxxx` cross-log references (see the `blocked_by` row
 in [§7](#7-frontmatter-reference)) and label which log each node lives in
 (`[project]` in the output above).
+
+### `quest brief <id> [--in LOG ...] [--root DIR ...]`
+
+Emits a self-contained, agent-agnostic Markdown work order on stdout — plain
+Markdown, no vendor keys, no JSON envelope, no system-prompt framing. It
+describes the work, never the worker: `claude -p "$(quest brief X)"`, `codex
+exec "$(quest brief X)"`, `quest brief X | pbcopy`, or `quest brief X | less`
+for a human. Sweeps every log in scope (like `quest deps`) so
+`DEPENDENCIES` resolves cross-log references, and states that scope on
+stderr.
+
+Two separate verdicts, because they fail for different reasons and have
+different fixes:
+
+- **`READY`** — is this document executable as written? Entirely
+  schema-driven, from the log's own `readiness:` rules
+  ([§8](#8-questkityaml-configuration-reference)) — `brief` hardcodes no
+  rule, so a rule's own `message` is what prints on failure. A `READY`
+  failure **collapses the brief** to header, location and warnings: "NOT
+  implementation-ready. This is grooming input."
+- **`STATE`** — should anyone pick it up right now? Computed:
+  `blocked`/terminal/archived. A `STATE` failure is a **warning, never a
+  refusal** — `quest brief` still emits a full brief for a blocked quest,
+  naming the blocker, because the most common reason to brief one is to hand
+  an agent the thing that unblocks it. A completed or scrapped quest warns
+  loudly but still briefs (re-briefing a finished quest to understand what
+  was done is legitimate).
+
+For a groomed quest (READY passes), the full brief adds: a `SCHEMA` block
+(only when the log declares custom fields or overrides the default
+vocabulary — omitted when the reader can guess it), the quest's own `## Spec`
+(or `## Design`) and `## Acceptance Criteria` sections verbatim,
+`DEPENDENCIES` (`blocked_by` resolved to title/status/path, plus reverse
+`blocks` dependents), and `REPORT BACK` (the exact `quest set`/`quest done`
+commands and the log's commit prefix).
 
 ### `quest show <id> [--in DIR]`
 
@@ -1630,8 +1693,10 @@ The core ships the first four rules (universal — "a spec and acceptance
 criteria make work handoff-ready" is not an opinion about a domain); a
 `household`-style schema can override the list down to as few as it needs.
 `schema.evaluate_readiness(quest, schema_config)` returns every failing rule's
-own `message`, in declared order — this is what the future `quest brief`
-command's READY verdict reads from, once it ships.
+own `message`, in declared order — this is exactly what `quest brief`'s
+READY verdict reads from ([§6](#6-cli-reference)), with no rule hardcoded in
+`brief` itself. `agentic` is not special there either: it's just a
+conditional rule `development` happens to declare.
 
 ### Routing spoken language to quest creation
 

@@ -21,6 +21,21 @@ def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(args, cwd=cwd, check=True, capture_output=True)
 
 
+def repo_status(repo_root: Path) -> tuple[str | None, bool]:
+    """(branch name, is dirty) for a repo -- best-effort, never raises.
+
+    Used only for `quest brief`'s LOCATION block, which is informational: a
+    detached HEAD or a git binary that isn't there yet degrades to `None`/
+    `False` rather than failing the whole brief.
+    """
+    try:
+        branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo_root).stdout.decode().strip()
+        dirty = bool(_run(["git", "status", "--porcelain"], repo_root).stdout.strip())
+        return branch or None, dirty
+    except (subprocess.CalledProcessError, OSError):
+        return None, False
+
+
 def git_mv(repo_root: Path, src: Path, dest: Path) -> bool:
     """`git mv` src -> dest (both absolute, inside repo_root). Returns success.
 

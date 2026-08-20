@@ -70,6 +70,7 @@ quest list --format prompt                                   # compact, agent-fr
 quest stale                                                   # untouched status for 2+ weeks
 quest blocked                                                 # open dependency, ranked by blocks
 quest deps QST-x7k2m                                          # walk its dependency graph
+quest brief QST-x7k2m                                         # self-contained agent work order
 quest schema quest status                                    # valid values, so nothing's guessed
 ```
 

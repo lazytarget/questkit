@@ -7,6 +7,7 @@ import sys
 
 from .commands import (
     archive_cmd,
+    brief_cmd,
     deps_cmd,
     done_cmd,
     format_cmd,
@@ -99,7 +100,22 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = GroupedSubparsers(parser.add_subparsers(dest="command", required=True))
 
     p_new = subparsers.add("new", group="Capture", help="capture a new quest")
-    p_new.add_argument("title")
+    # nargs="?" rather than required, so --batch (which supplies its own
+    # titles, one per entry) doesn't need a dummy positional -- new_cmd.run
+    # rejects the two together with a clear message instead.
+    p_new.add_argument("title", nargs="?", default=None)
+    p_new.add_argument(
+        "--body",
+        dest="body",
+        metavar="- | TEXT",
+        help="'-' reads the Markdown body from stdin; otherwise the packaged default template",
+    )
+    p_new.add_argument(
+        "--batch",
+        dest="batch",
+        metavar="-",
+        help="'-' reads a YAML list of quest entries from stdin, creating one quest each",
+    )
     p_new.add_argument("--type", dest="type")
     p_new.add_argument("--tier", dest="tier")
     p_new.add_argument("--status", dest="status")
@@ -141,6 +157,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_blocked = subparsers.add("blocked", group="Query", view=True, help="quests with an open dependency")
     _add_list_options(p_blocked)
     p_blocked.set_defaults(func=list_cmd.run, view="blocked")
+
+    p_brief = subparsers.add(
+        "brief", group="Query", help="emit a self-contained work order for a quest"
+    )
+    p_brief.add_argument("id")
+    p_brief.add_argument(
+        "--in", dest="in_dirs", action="append", metavar="LOG", help="repeatable; bounds the sweep"
+    )
+    p_brief.add_argument("--root", dest="root", action="append", help="repeatable")
+    p_brief.set_defaults(func=brief_cmd.run)
 
     p_show = subparsers.add("show", group="Query", help="show a quest by id")
     p_show.add_argument("id")
