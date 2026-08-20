@@ -53,13 +53,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="repeatable filter: field=value / field~value / field:exists",
     )
     p_list.add_argument(
-        "--all",
+        "-A", "--all-logs",
         dest="all_logs",
         action="store_true",
         help="aggregate quests from every log found downward from --root",
     )
     p_list.add_argument(
-        "--root", dest="root", help="starting directory for --all (default: QST_ROOT, git root, or cwd)"
+        "--root",
+        dest="root",
+        action="append",
+        help="repeatable; starting directory for -A (default: QST_ROOT, git root, or cwd)",
+    )
+    p_list.add_argument(
+        "--quiet", "-q",
+        action="store_true",
+        help="silence the summary block on stderr",
     )
     p_list.add_argument(
         "--format", dest="format", choices=["table", "json", "csv", "prompt"], default="table"
@@ -84,7 +92,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--limit", dest="limit", type=int)
     p_list.add_argument("--offset", dest="offset", type=int)
     p_list.add_argument("--out", dest="out", metavar="FILE", help="also write rendered output to FILE")
-    p_list.add_argument("--in", dest="in_dir")
+    p_list.add_argument(
+        "--in", dest="in_dirs", action="append", metavar="LOG", help="repeatable; name or path"
+    )
     p_list.set_defaults(func=list_cmd.run)
 
     p_show = subparsers.add_parser("show", help="show a quest by id")
@@ -98,7 +108,13 @@ def build_parser() -> argparse.ArgumentParser:
     # command and gets the message naming the positional form, instead of
     # argparse's "the following arguments are required: field=value".
     p_set.add_argument("assignments", nargs="*", metavar="field=value")
-    p_set.add_argument("--in", dest="in_dir")
+    p_set.add_argument(
+        "--in",
+        dest="in_dirs",
+        action="append",
+        metavar="LOG",
+        help="repeatable; bounds the id search to these logs (name or path)",
+    )
     # `set` takes positional assignments while `new` takes `--set`, and the
     # asymmetry has a cause: `new` has a positional title, so
     # `quest new "fix thing" type=bug` is genuinely ambiguous, while `set`'s
@@ -110,12 +126,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_done = subparsers.add_parser("done", help="mark a quest done")
     p_done.add_argument("id")
-    p_done.add_argument("--in", dest="in_dir")
+    p_done.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_done.set_defaults(func=done_cmd.run)
 
     p_scrap = subparsers.add_parser("scrap", help="mark a quest scrapped")
     p_scrap.add_argument("id")
-    p_scrap.add_argument("--in", dest="in_dir")
+    p_scrap.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
     p_scrap.set_defaults(func=done_cmd.run_scrap)
 
     p_mv = subparsers.add_parser("mv", help="move a quest to a different quest log")
@@ -182,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_migrate.add_argument(
         "-A", "--all-logs", dest="all_logs", action="store_true", help="every log under --root"
     )
-    p_migrate.add_argument("--root", dest="root")
+    p_migrate.add_argument("--root", dest="root", action="append")
     p_migrate.add_argument(
         "--dry-run",
         dest="dry_run",

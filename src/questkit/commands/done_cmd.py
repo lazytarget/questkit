@@ -32,7 +32,7 @@ def _terminate(args: argparse.Namespace, index: int) -> int:
     alternative is threading a resolved target through `set_cmd`'s signature
     for one caller.
     """
-    found = resolve_mutation_target(args.id, explicit_in=args.in_dir)
+    found = resolve_mutation_target(args.id, explicit_in=args.in_dirs)
     if found is None:
         print(f"[quest] no quest matching id '{args.id}' found")
         return 1

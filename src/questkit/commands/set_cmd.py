@@ -24,7 +24,7 @@ def run(args: argparse.Namespace) -> int:
         print(f"[quest] nothing to set. Use: quest set {args.id} field=value [field=value ...]")
         return 1
 
-    found = resolve_mutation_target(args.id, explicit_in=args.in_dir)
+    found = resolve_mutation_target(args.id, explicit_in=args.in_dirs)
     if found is None:
         print(f"[quest] no quest matching id '{args.id}' found")
         return 1
