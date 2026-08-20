@@ -1,7 +1,7 @@
 ---
 id: QST-bmzl2
 title: "questkit v3: loop closure, multi-log UX, and agent handoff"
-description: "Umbrella epic for questkit v3: close the work loop, make multi-log targeting legible, and make an agent handoff format real."
+description: "Umbrella epic for questkit v3: close the work loop, make multi-log targeting legible, and make an agent handoff format real. (v3)"
 created: 2026-08-19
 modified: 2026-08-19
 type: epic
@@ -19,6 +19,7 @@ tags:
 blocked_by: []
 aliases:
   - QST-bmzl2
+agentic: afk
 ---
 
 ## Description
@@ -77,12 +78,12 @@ Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informa
 
 ## Positioning decisions
 
-| Question | Decision |
-|----------|----------|
-| What is questkit? | A quest **tracker**. Recurrence and non-ticket collections never widen the quest schema. |
-| Who is it for? | **Personal-first**, structured so open-sourcing stays cheap (portfolio). Realm-agnostic discipline retained. |
-| Who uses it? | Solo + agents + **family via Obsidian**. `owner` stays free text. The CLI is not the family's surface. |
-| Capture or loop? | **Loop.** Capture already works; that is the one thing questkit demonstrably nailed. |
+| Question          | Decision                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| What is questkit? | A quest **tracker**. Recurrence and non-ticket collections never widen the quest schema.                     |
+| Who is it for?    | **Personal-first**, structured so open-sourcing stays cheap (portfolio). Realm-agnostic discipline retained. |
+| Who uses it?      | Solo + agents + **family via Obsidian**. `owner` stays free text. The CLI is not the family's surface.       |
+| Capture or loop?  | **Loop.** Capture already works; that is the one thing questkit demonstrably nailed.                         |
 
 ## Out of scope
 

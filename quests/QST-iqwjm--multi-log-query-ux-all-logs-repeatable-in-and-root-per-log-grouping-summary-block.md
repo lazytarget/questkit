@@ -19,6 +19,7 @@ blocked_by:
   - QST-fmk0p
 aliases:
   - QST-iqwjm
+agentic: afk
 ---
 
 ## Description

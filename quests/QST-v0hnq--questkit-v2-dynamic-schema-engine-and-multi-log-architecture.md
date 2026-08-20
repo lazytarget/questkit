@@ -1,7 +1,7 @@
 ---
 id: QST-v0hnq
 title: "questkit v2: dynamic schema engine and multi-log architecture"
-description: Design and implement a dynamic per-log schema engine, global-ID cross-log mutation resolution, an ambiguity guard for capture, an overhauled multi-log quest list query engine, and a new quest schema introspection command.
+description: Design and implement a dynamic per-log schema engine, global-ID cross-log mutation resolution, an ambiguity guard for capture, an overhauled multi-log quest list query engine, and a new quest schema introspection command. (v2)
 created: 2026-08-13
 modified: 2026-08-14
 type: feature

@@ -1,7 +1,7 @@
 ---
 id: QST-whm2e
 title: Questkit — Design Blueprint for File-Based Quest Tracking
-description: Design blueprint for questkit, a standalone Markdown+frontmatter quest tracker replacing Beans and Trello across The Realm.
+description: Design blueprint for questkit, a standalone Markdown+frontmatter quest tracker replacing Beans and Trello across The Realm. (v1)
 created: 2026-08-13
 modified: 2026-08-14
 type: epic

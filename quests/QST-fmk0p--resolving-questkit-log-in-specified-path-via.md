@@ -1,7 +1,7 @@
 ---
 id: QST-fmk0p
-title: "Resolve a quest log by project name via --in"
-description: "Let --in accept a log's project name, not just a path, so targeting the right log stops depending on remembering a deep nested path."
+title: Resolve a quest log by project name via --in
+description: Let --in accept a log's project name, not just a path, so targeting the right log stops depending on remembering a deep nested path.
 created: 2026-08-16
 modified: 2026-08-19
 type: feature
@@ -18,6 +18,7 @@ tags:
 blocked_by: []
 aliases:
   - QST-fmk0p
+agentic: afk
 ---
 
 ## Description

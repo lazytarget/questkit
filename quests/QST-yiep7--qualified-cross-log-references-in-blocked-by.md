@@ -1,7 +1,7 @@
 ---
 id: QST-yiep7
-title: "Qualified cross-log references in blocked_by"
-description: "Let a reference declare its own scope as project/QST-xxxxx, so cross-log dependencies work without making validation device-dependent."
+title: Qualified cross-log references in blocked_by
+description: Let a reference declare its own scope as project/QST-xxxxx, so cross-log dependencies work without making validation device-dependent.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -18,6 +18,7 @@ blocked_by:
   - QST-fmk0p
 aliases:
   - QST-yiep7
+agentic: hitl
 ---
 
 ## Description

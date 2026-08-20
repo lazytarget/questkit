@@ -1,7 +1,7 @@
 ---
 id: QST-3ehhu
-title: "quest logs — inventory every quest log under a root"
-description: "Add a 'quest logs' command that lists every quest log discoverable from the sweep root, with per-log project, counts and git mode, and aggregates config warnings."
+title: quest logs — inventory every quest log under a root
+description: Add a 'quest logs' command that lists every quest log discoverable from the sweep root, with per-log project, counts and git mode, and aggregates config warnings.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -19,6 +19,7 @@ blocked_by:
   - QST-fmk0p
 aliases:
   - QST-3ehhu
+agentic: afk
 ---
 
 ## Description

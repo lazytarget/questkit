@@ -1,5 +1,3 @@
-# Obsidian Bases view for this quest log. Bases is a fairly new Obsidian
-# file format -- treat this as a starting point and adjust once opened.
 views:
   - type: table
     name: Kanban
@@ -7,6 +5,7 @@ views:
       and:
         - file.ext == "md"
         - file.name.startsWith("QST-")
+        - project == "questkit"
     groupBy:
       property: status
       direction: ASC

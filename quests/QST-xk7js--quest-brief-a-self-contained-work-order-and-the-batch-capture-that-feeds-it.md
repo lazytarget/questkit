@@ -1,12 +1,12 @@
 ---
 id: QST-xk7js
 title: "quest brief: a self-contained work order, and the batch capture that feeds it"
-description: "Emit a lean, agent-agnostic Markdown work order for one quest, and accept a body or a batch of quests on stdin as the inbound half."
+description: Emit a lean, agent-agnostic Markdown work order for one quest, and accept a body or a batch of quests on stdin as the inbound half.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
 tier: brief
-status: todo
+status: draft
 priority: high
 effort: m
 project: questkit
@@ -18,6 +18,7 @@ blocked_by:
   - QST-b9lqo
 aliases:
   - QST-xk7js
+agentic:
 ---
 
 ## Description

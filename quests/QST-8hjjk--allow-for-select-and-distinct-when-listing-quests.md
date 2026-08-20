@@ -1,7 +1,7 @@
 ---
 id: QST-8hjjk
-title: "Allow for --select and --distinct when listing quests"
-description: "Add field projection, de-duplication and a row count to quest list, so aggregate questions are answerable without post-processing in jq."
+title: Allow for --select and --distinct when listing quests
+description: Add field projection, de-duplication and a row count to quest list, so aggregate questions are answerable without post-processing in jq.
 created: 2026-08-16
 modified: 2026-08-19
 type: feature
@@ -17,6 +17,7 @@ tags:
 blocked_by: []
 aliases:
   - QST-8hjjk
+agentic: afk
 ---
 
 ## Description

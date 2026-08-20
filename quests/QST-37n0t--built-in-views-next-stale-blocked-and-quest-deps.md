@@ -1,7 +1,7 @@
 ---
 id: QST-37n0t
-title: "Built-in views (next, stale, blocked) and quest deps"
-description: "Ship the loop-closing views as schema-defined prefills exposed as subcommands, plus a real dependency-graph walk."
+title: Built-in views (next, stale, blocked) and quest deps
+description: Ship the loop-closing views as schema-defined prefills exposed as subcommands, plus a real dependency-graph walk.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -18,6 +18,7 @@ blocked_by:
   - QST-b9lqo
 aliases:
   - QST-37n0t
+agentic: afk
 ---
 
 ## Description

@@ -1,7 +1,7 @@
 ---
 id: QST-lc3d7
-title: "Check for duplicates when adding with same title"
-description: "Warn at capture time when a new quest's title collides with an existing one in the same log, without ever blocking the capture."
+title: Check for duplicates when adding with same title
+description: Warn at capture time when a new quest's title collides with an existing one in the same log, without ever blocking the capture.
 created: 2026-08-16
 modified: 2026-08-19
 type: feature
@@ -17,6 +17,7 @@ tags:
 blocked_by: []
 aliases:
   - QST-lc3d7
+agentic: afk
 ---
 
 ## Description

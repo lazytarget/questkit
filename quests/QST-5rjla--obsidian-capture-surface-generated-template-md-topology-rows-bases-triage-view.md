@@ -1,7 +1,7 @@
 ---
 id: QST-5rjla
 title: "Obsidian capture surface: generated _template.md, topology rows, Bases triage view"
-description: "Give the family log a creation surface that is not the CLI, by generating the Obsidian template from the schema instead of hand-writing it."
+description: Give the family log a creation surface that is not the CLI, by generating the Obsidian template from the schema instead of hand-writing it.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -18,6 +18,7 @@ blocked_by:
   - QST-j68u5
 aliases:
   - QST-5rjla
+agentic: afk
 ---
 
 ## Description
@@ -106,7 +107,6 @@ ever read.
 - [ ] `template.py` is removed
 - [ ] `topology.yaml` rows land it in the Realm root and pensieve vaults, creating `.templates/`
 - [ ] `quest init --base` emits a "Needs attention" view
-- [ ] `family` has a `quests.base`
 - [ ] A quest created from the template in Obsidian mobile passes `quest validate`
 
 ## Log

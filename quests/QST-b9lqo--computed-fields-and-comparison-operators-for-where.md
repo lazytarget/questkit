@@ -1,7 +1,7 @@
 ---
 id: QST-b9lqo
-title: "Computed fields and comparison operators for --where"
-description: "Derive blocked, blocks, idle and age alongside frontmatter and expose them to --where, --select and --sort, with numeric and date comparisons."
+title: Computed fields and comparison operators for --where
+description: Derive blocked, blocks, idle and age alongside frontmatter and expose them to --where, --select and --sort, with numeric and date comparisons.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -18,6 +18,7 @@ blocked_by:
   - QST-3h09k
 aliases:
   - QST-b9lqo
+agentic: afk
 ---
 
 ## Description

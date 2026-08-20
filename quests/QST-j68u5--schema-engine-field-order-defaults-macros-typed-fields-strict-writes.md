@@ -1,7 +1,7 @@
 ---
 id: QST-j68u5
 title: "Schema engine: field order, defaults, macros, typed fields, strict writes"
-description: "field_order normalization, schema.fields defaults with macros, --fill-defaults, enum-typed custom fields, generic --set, and strict CLI writes."
+description: field_order normalization, schema.fields defaults with macros, --fill-defaults, enum-typed custom fields, generic --set, and strict CLI writes.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -20,6 +20,7 @@ blocked_by:
   - QST-3h09k
 aliases:
   - QST-j68u5
+agentic: afk
 ---
 
 ## Description

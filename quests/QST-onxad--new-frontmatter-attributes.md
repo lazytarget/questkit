@@ -1,7 +1,7 @@
 ---
 id: QST-onxad
-title: "New frontmatter attributes"
-description: "Decide how a language hint reaches agents — resolved as a schema-declared field with a default, not a new core field."
+title: New frontmatter attributes
+description: Decide how a language hint reaches agents — resolved as a schema-declared field with a default, not a new core field.
 created: 2026-08-16
 modified: 2026-08-19
 type: feature
@@ -17,6 +17,7 @@ blocked_by:
   - QST-j68u5
 aliases:
   - QST-onxad
+agentic: afk
 ---
 
 ## Description

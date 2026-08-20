@@ -1,7 +1,7 @@
 ---
 id: QST-e6g6t
-title: "quest commit and the realm-01 designated committer"
-description: "Own the commit convention in the app, give it a bounded pathspec, and make one always-on host the sole git writer for the quest-only logs."
+title: quest commit and the realm-01 designated committer
+description: Own the commit convention in the app, give it a bounded pathspec, and make one always-on host the sole git writer for the quest-only logs.
 created: 2026-08-19
 modified: 2026-08-19
 type: feature
@@ -19,6 +19,7 @@ blocked_by:
   - QST-mjuau
 aliases:
   - QST-e6g6t
+agentic: afk
 ---
 
 ## Description
