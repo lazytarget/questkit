@@ -44,15 +44,44 @@ class Quest:
             frontmatter = CommentedMap()
         return cls(path=path, frontmatter=frontmatter, body=body)
 
-    def save(self) -> None:
+    def render(self) -> str:
+        """The exact file content `save()` would write, without writing it.
+
+        Split out from `save()` so `quest format --check` and
+        `quest migrate --dry-run` can ask "what would change" using the same
+        code path that answers "what changed". Anything short of running the
+        real normalization passes and ruamel's own dump would drift from
+        `save()` and turn `--check` into a guess.
+
+        Note this normalizes `self.frontmatter` in place, as `save()` always
+        has -- the passes are idempotent, so calling it twice is harmless.
+        """
         _normalize_list_styles(self.frontmatter)
         _normalize_date_fields(self.frontmatter)
         _normalize_quote_styles(self.frontmatter)
         buf = io.StringIO()
         _yaml.dump(self.frontmatter, buf)
         body = self.body.strip("\n")
-        content = f"---\n{buf.getvalue()}---\n\n{body}\n"
+        return f"---\n{buf.getvalue()}---\n\n{body}\n"
+
+    def save(self) -> bool:
+        """Normalize and write. Returns True only if the file's bytes changed.
+
+        The comparison lives here rather than in each caller for a reason:
+        `format_cmd` and `hooks.format_main` both used to read the file, save
+        unconditionally, then re-read to find out whether anything happened --
+        so the third caller was going to get it wrong too. Writing
+        unconditionally also has three real costs. An mtime-based quiescence
+        gate becomes unusable, which is what the designated committer polls
+        for; a `git: auto` log accumulates empty commits; and Syncthing
+        propagates files whose content never changed, which on a fleet with 15
+        `.git` directories is how conflict litter starts.
+        """
+        content = self.render()
+        if self.path.exists() and self.path.read_text(encoding="utf-8") == content:
+            return False
         self.path.write_text(content, encoding="utf-8")
+        return True
 
     def get(self, key, default=None):
         return self.frontmatter.get(key, default)

@@ -101,7 +101,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_format = subparsers.add_parser(
         "format", help="reformat quest frontmatter to match the current normalization rules"
     )
+    p_format.add_argument(
+        "targets",
+        nargs="*",
+        metavar="PATH",
+        help="quest files or log directories (default: the resolved log)",
+    )
     p_format.add_argument("--in", dest="in_dir")
+    p_format.add_argument(
+        "--check",
+        action="store_true",
+        help="report what would change, write nothing, exit 1 if anything would",
+    )
     p_format.set_defaults(func=format_cmd.run)
 
     p_schema = subparsers.add_parser("schema", help="introspect the active schema (for agents)")

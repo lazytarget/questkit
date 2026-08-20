@@ -7,7 +7,7 @@ status_changed: 2026-08-19
 modified: 2026-08-20
 type: feature
 tier: brief
-status: todo
+status: in-progress
 priority: high
 effort: s
 milestone: 0.3.0

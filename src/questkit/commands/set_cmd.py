@@ -19,12 +19,24 @@ def run(args: argparse.Namespace) -> int:
     quests_dir, path = found
 
     quest = Quest.load(path)
+    changed: list[str] = []
     for assignment in args.assignments:
         if "=" not in assignment:
             print(f"[quest] ignoring malformed assignment '{assignment}' (expected field=value)")
             continue
         key, _, value = assignment.partition("=")
-        quest.frontmatter[key.strip()] = _coerce(key.strip(), value.strip())
+        key = key.strip()
+        new_value = _coerce(key, value.strip())
+        # Compare the *coerced* value: `tags=a,b` becomes a list, so comparing
+        # the raw string would report a change on every re-assertion.
+        if _same(quest.frontmatter.get(key), new_value):
+            continue
+        quest.frontmatter[key] = new_value
+        changed.append(key)
+
+    if not changed:
+        print(f"[quest] {path}: no change")
+        return 0
 
     quest.frontmatter["modified"] = today()
     quest.save()
@@ -35,6 +47,25 @@ def run(args: argparse.Namespace) -> int:
         auto_commit(quests_dir, path, f"quest({quests_dir.name}): update {quest.get('id')}")
 
     return 0
+
+
+def _same(current, new_value) -> bool:
+    """Whether an assignment is a no-op.
+
+    Compared via `str()` on scalars because frontmatter values come back
+    typed: `created`/`modified` normalize to real `date` objects on save, so a
+    `date(2026, 8, 20) != "2026-08-20"` comparison would call every date
+    assignment a change and rewrite the file. Lists compare element-wise for
+    the same reason -- `tags` round-trips as a ruamel `CommentedSeq`, which is
+    not `==` to a plain list of the same strings in every ruamel version.
+    """
+    if isinstance(new_value, list):
+        if not isinstance(current, list):
+            return False
+        return [str(v) for v in current] == [str(v) for v in new_value]
+    if current is None:
+        return False
+    return str(current) == str(new_value)
 
 
 def _coerce(key, value):

@@ -38,14 +38,14 @@ def format_main(argv: list[str] | None = None) -> int:
     for raw_path in paths:
         path = Path(raw_path)
         try:
-            before = path.read_text(encoding="utf-8")
             quest = Quest.load(path)
         except (OSError, QuestFileError) as exc:
             print(f"[!] {exc}")
             continue
-        quest.save()
-        after = path.read_text(encoding="utf-8")
-        if after != before:
+        # `save()` reports whether it wrote, so the read-save-reread dance
+        # this used to do is gone -- and the hook no longer touches the mtime
+        # of every staged file on every commit.
+        if quest.save():
             print(f"[quest-format] {path}: reformatted")
     return 0
 

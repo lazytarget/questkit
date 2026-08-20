@@ -94,3 +94,32 @@ def test_validate_main_still_works_unchanged(tmp_path, capsys):
 
     assert validate_main([str(path)]) == 0
     assert capsys.readouterr().out == ""
+
+
+def test_format_main_leaves_an_already_normalized_file_untouched(tmp_path, capsys):
+    """The hook runs on every commit, so it must not touch mtimes needlessly."""
+    path = tmp_path / "QST-abcde--example.md"
+    _write(path, "---\nid: QST-abcde\ntitle: T\n---\n\n## Description\n")
+    format_main([str(path)])
+    capsys.readouterr()
+    mtime_before = path.stat().st_mtime_ns
+
+    format_main([str(path)])
+
+    assert capsys.readouterr().out == ""
+    assert path.stat().st_mtime_ns == mtime_before
+
+
+def test_format_main_reports_only_the_files_it_actually_rewrote(tmp_path, capsys):
+    needs = tmp_path / "QST-aaaaa--needs.md"
+    clean = tmp_path / "QST-bbbbb--clean.md"
+    _write(needs, "---\nid: QST-aaaaa\ntitle: 'Some: Title'\n---\n\n## Description\n")
+    _write(clean, "---\nid: QST-bbbbb\ntitle: T\n---\n\n## Description\n")
+    format_main([str(clean)])
+    capsys.readouterr()
+
+    format_main([str(needs), str(clean)])
+
+    out = capsys.readouterr().out
+    assert "QST-aaaaa--needs.md: reformatted" in out
+    assert "QST-bbbbb--clean.md" not in out

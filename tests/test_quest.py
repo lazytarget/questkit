@@ -1,5 +1,7 @@
 """Tests for the Quest frontmatter/body round trip and id lookup."""
 
+import os
+
 from questkit.quest import Quest, find_by_id
 
 
@@ -88,6 +90,101 @@ def test_save_converts_single_quotes_to_double(tmp_path):
     assert 'title: "Some: Title"' in text
     assert '- "a: b"' in text
     assert "'" not in text
+
+
+# --- write-only-on-change -------------------------------------------------------
+#
+# `save()` used to write unconditionally. That makes an mtime-based quiescence
+# gate unusable (the designated committer polls for it), produces empty commits
+# in `git: auto` logs, and churns Syncthing for files whose bytes never changed.
+
+
+def test_save_returns_false_and_leaves_the_file_alone_when_nothing_changed(tmp_path):
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text(
+        "---\nid: QST-abcde\ntitle: Example\nstatus: todo\n---\n\n## Description\n\nBody.\n"
+    )
+    Quest.load(path).save()  # settle into normalized form first
+    before = path.read_text()
+    mtime_before = path.stat().st_mtime_ns
+
+    wrote = Quest.load(path).save()
+
+    assert wrote is False
+    assert path.read_text() == before
+    assert path.stat().st_mtime_ns == mtime_before
+
+
+def test_save_returns_true_and_writes_when_content_changed(tmp_path):
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text("---\nid: QST-abcde\nstatus: todo\n---\n\n## Description\n")
+    Quest.load(path).save()
+
+    quest = Quest.load(path)
+    quest.set("status", "in-progress")
+    wrote = quest.save()
+
+    assert wrote is True
+    assert "status: in-progress" in path.read_text()
+
+
+def test_save_returns_true_for_a_brand_new_file(tmp_path):
+    from ruamel.yaml.comments import CommentedMap
+
+    fm = CommentedMap()
+    fm["id"] = "QST-abcde"
+    path = tmp_path / "QST-abcde--example.md"
+
+    assert Quest(path=path, frontmatter=fm, body="## Description\n").save() is True
+
+
+def test_save_reports_a_write_when_only_normalization_changes(tmp_path):
+    """A file that needs normalizing has changed, even if no field was touched."""
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text("---\nid: QST-abcde\ncreated: '2026-05-25'\n---\n\n## Description\n")
+
+    assert Quest.load(path).save() is True
+    assert Quest.load(path).save() is False
+
+
+def test_save_is_idempotent_across_repeated_calls(tmp_path):
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text(
+        "---\nid: QST-abcde\ntitle: 'Some: Title'\ntags:\n  - a\n---\n\n## Description\n"
+    )
+
+    first = Quest.load(path).save()
+    settled = path.read_text()
+
+    assert first is True
+    for _ in range(3):
+        assert Quest.load(path).save() is False
+        assert path.read_text() == settled
+
+
+def test_save_writes_when_the_body_alone_changed(tmp_path):
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text("---\nid: QST-abcde\n---\n\n## Description\n\nOriginal.\n")
+    Quest.load(path).save()
+
+    quest = Quest.load(path)
+    quest.body = "## Description\n\nRewritten.\n"
+
+    assert quest.save() is True
+    assert "Rewritten." in path.read_text()
+
+
+def test_save_does_not_follow_up_a_no_op_with_an_atime_only_touch(tmp_path):
+    """The no-op path must not open the file for writing at all."""
+    path = tmp_path / "QST-abcde--example.md"
+    path.write_text("---\nid: QST-abcde\n---\n\n## Description\n")
+    Quest.load(path).save()
+    os.chmod(path, 0o444)  # read-only: a write attempt would raise
+
+    try:
+        assert Quest.load(path).save() is False
+    finally:
+        os.chmod(path, 0o644)
 
 
 def test_find_by_id_matches_full_filename(tmp_path):
