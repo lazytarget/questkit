@@ -31,12 +31,21 @@ def run(args: argparse.Namespace) -> int:
         # the raw string would report a change on every re-assertion.
         if _same(quest.frontmatter.get(key), new_value):
             continue
-        quest.frontmatter[key] = new_value
+        quest.set(key, new_value)
         changed.append(key)
 
     if not changed:
         print(f"[quest] {path}: no change")
         return 0
+
+    # Only a real transition stamps `status_changed` -- and only if the caller
+    # did not set it explicitly in the same invocation. An agent re-asserting a
+    # status it already holds took the `_same` path above and never gets here,
+    # which is the whole point: `modified` is laundered by the bump hook on
+    # every commit, so a status timestamp that moved on every write would
+    # measure nothing.
+    if "status" in changed and "status_changed" not in changed:
+        quest.set("status_changed", today())
 
     quest.frontmatter["modified"] = today()
     quest.save()

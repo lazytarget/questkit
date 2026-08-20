@@ -20,6 +20,7 @@ any automatic migration on load. Migrations are always explicit.
 from __future__ import annotations
 
 import argparse
+import copy
 import difflib
 import subprocess
 import sys
@@ -119,10 +120,20 @@ def _backfill(expr: str):
             # literal string "created" written into it.
             if _is_absent(quest.frontmatter.get(source)):
                 return False
-            value = quest.frontmatter[source]
+            # Deep-copied, not referenced. Assigning the source field's own
+            # object makes it appear twice in one document, and ruamel then
+            # emits a YAML anchor/alias pair -- the real corpus dry-run
+            # produced `status_changed: *id001`. That round-trips fine through
+            # a YAML parser and is useless to everything else: Obsidian's
+            # Properties panel, `grep`, and a human reading the file. For a
+            # list value it is worse than cosmetic, since the two fields would
+            # then share one mutable object.
+            value = copy.deepcopy(quest.frontmatter[source])
         else:
             value = source
-        quest.frontmatter[field_name] = value
+        # `Quest.set` places a newly-introduced key at its conventional
+        # position rather than appending it -- the same rule `quest set` uses.
+        quest.set(field_name, value)
         return True
 
     return _apply

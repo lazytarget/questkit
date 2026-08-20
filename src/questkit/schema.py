@@ -42,12 +42,37 @@ CORE_FIELDS = (
     "owner",
     "tags",
     "created",
+    "status_changed",
     "modified",
     "due",
     "blocked_by",
     "aliases",
     "agentic",
 )
+
+# What each core field is, for `quest schema quest <field>`. An agent reading
+# the schema cold needs to know that `status_changed` is not just another date:
+# it is the one that survives the bump hook. QST-j68u5 extends this to every
+# core field as part of `field_order`.
+CORE_FIELD_SPECS = {
+    "created": {"type": "date", "required": True, "doc": "the day the quest was captured"},
+    "status_changed": {
+        "type": "date",
+        "required": False,
+        "doc": (
+            "the day `status` last changed. Written only on a real transition, so it "
+            "measures staleness where `modified` cannot -- `modified` is bumped by the "
+            "quest-bump-modified hook on every commit. Absent means never changed: "
+            "consumers fall back to `created`."
+        ),
+    },
+    "modified": {
+        "type": "date",
+        "required": True,
+        "doc": "the day the file last changed, including formatting-only commits",
+    },
+    "due": {"type": "date", "required": False, "doc": "an external deadline, if any"},
+}
 
 DEFAULT_STATUS = "draft"
 DEFAULT_TYPE = "task"

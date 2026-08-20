@@ -19,8 +19,12 @@ _yaml.width = 4096  # keep fields like `description` on one line -- greppability
 # than 80-column wrapping for a frontmatter file.
 
 # Fields whose value is a plain YYYY-MM-DD date, per the frontmatter schema.
-_DATE_FIELDS = ("created", "modified", "due")
+_DATE_FIELDS = ("created", "status_changed", "modified", "due")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# Where a newly-introduced key belongs. Only for fields whose position carries
+# meaning; everything else appends.
+_INSERT_AFTER = {"status_changed": "created"}
 
 
 class QuestFileError(Exception):
@@ -87,7 +91,28 @@ class Quest:
         return self.frontmatter.get(key, default)
 
     def set(self, key, value) -> None:
-        self.frontmatter[key] = value
+        """Set a field, placing a *newly introduced* key at its conventional position.
+
+        Appending would be valid YAML and wrong for a human reader:
+        `created`, `status_changed` and `modified` read as a timeline, so a
+        `status_changed` landing after `blocked_by` is noise. Found on the
+        real corpus -- the rule first lived in `set_cmd`, so `quest migrate`,
+        the command that introduces the field to 122 files, did not have it.
+        One rule, every writer.
+
+        QST-j68u5 generalizes this into a schema-declared `field_order`; this
+        is the minimum that keeps the file readable until then.
+        """
+        if key in self.frontmatter:
+            self.frontmatter[key] = value
+            return
+
+        anchor = _INSERT_AFTER.get(key)
+        keys = list(self.frontmatter.keys())
+        if anchor is None or anchor not in keys:
+            self.frontmatter[key] = value
+            return
+        self.frontmatter.insert(keys.index(anchor) + 1, key, value)
 
 
 def _split_frontmatter(text: str, path: Path) -> tuple[str, str]:
@@ -169,6 +194,26 @@ def _double_quote(value):
         for index, item in enumerate(value):
             value[index] = _double_quote(item)
     return value
+
+
+def effective_status_changed(frontmatter) -> str | None:
+    """`status_changed`, falling back to `created` when it is absent or blank.
+
+    Null-safe by design rather than by backfill: the field is optional, and
+    every consumer (`idle`, `stale`, `quest brief`) has to answer for a quest
+    that predates it. Returning `created` is the honest answer -- a quest
+    whose status has never been recorded as changing has not moved since it
+    was created.
+
+    Deliberately not `modified`: that field is bumped by the pre-commit hook
+    on every commit, so falling back to it would reintroduce the exact
+    laundering `status_changed` exists to prevent.
+    """
+    for key in ("status_changed", "created"):
+        value = frontmatter.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return None
 
 
 def find_by_id(quests_dir: Path, quest_id: str) -> Path | None:

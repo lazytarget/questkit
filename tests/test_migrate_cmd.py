@@ -372,3 +372,69 @@ def test_commit_with_dry_run_is_refused(isolated, make_log, run):
     )
 
     assert result.code == 1
+
+
+# --- field placement -------------------------------------------------------------
+
+
+def test_backfill_places_status_changed_between_created_and_modified(
+    isolated, make_log, write_quest, run, absent
+):
+    """Found on the real corpus: the field was appended after `blocked_by`.
+
+    The ordered-insertion rule lived in set_cmd, so migrate -- the command that
+    introduces this field to 122 files -- did not get it.
+    """
+    log = make_log(isolated)
+    path = write_quest(log, "QST-aaaaa", created="2026-01-05", status_changed=absent)
+
+    run("migrate", "--backfill", "status_changed=created", "--in", str(log))
+
+    keys = list(Quest.load(path).frontmatter.keys())
+    assert keys.index("created") < keys.index("status_changed") < keys.index("modified")
+
+
+def test_backfill_of_an_unordered_field_appends(isolated, make_log, write_quest, run, absent):
+    log = make_log(isolated)
+    path = write_quest(log, "QST-aaaaa", owner=absent)
+
+    run("migrate", "--backfill", "owner=peter", "--in", str(log))
+
+    assert list(Quest.load(path).frontmatter.keys())[-1] == "owner"
+
+
+def test_backfill_from_a_field_writes_a_value_not_a_yaml_alias(
+    isolated, make_log, write_quest, run, absent
+):
+    """Found on the real corpus: the file read `status_changed: *id001`.
+
+    Assigning the source field's own object makes it appear twice in one
+    document, so ruamel emits a YAML anchor/alias pair. It round-trips
+    correctly through a YAML parser and is useless to everything else --
+    Obsidian's Properties panel, `grep`, and a human reading the file.
+    """
+    log = make_log(isolated)
+    path = write_quest(log, "QST-aaaaa", created="2026-01-05", status_changed=absent)
+
+    run("migrate", "--backfill", "status_changed=created", "--in", str(log))
+
+    text = path.read_text()
+    assert "status_changed: 2026-01-05" in text
+    assert "*id" not in text
+    assert "&id" not in text
+
+
+def test_backfill_from_a_list_field_does_not_alias_or_share_the_list(
+    isolated, make_log, write_quest, run, absent
+):
+    """A shared *mutable* value is worse than an alias: editing one edits both."""
+    log = make_log(isolated)
+    path = write_quest(log, "QST-aaaaa", tags=["a", "b"], categories=absent)
+
+    run("migrate", "--backfill", "categories=tags", "--in", str(log))
+
+    text = path.read_text()
+    assert "*id" not in text
+    quest = Quest.load(path)
+    assert list(quest.get("categories")) == ["a", "b"]
+    assert quest.get("categories") is not quest.get("tags")

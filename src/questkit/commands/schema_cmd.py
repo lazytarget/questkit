@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 
+from .. import schema
 from ..config import QuestLogConfig
 from ..discovery import resolve_log
 
@@ -34,6 +35,12 @@ def run(args: argparse.Namespace) -> int:
             name: {"type": spec.type, "required": spec.required}
             for name, spec in sorted(schema_config.fields.items())
         },
+        # Core fields are part of the schema an agent has to satisfy, so they
+        # belong in the introspection output alongside the enums -- listing
+        # only the *custom* fields implied the rest were guessable.
+        "core_fields": {
+            name: dict(spec) for name, spec in sorted(schema.CORE_FIELD_SPECS.items())
+        },
     }
 
     data: object
@@ -46,6 +53,8 @@ def run(args: argparse.Namespace) -> int:
         elif args.field in schema_config.fields:
             spec = schema_config.fields[args.field]
             data = {"type": spec.type, "required": spec.required}
+        elif args.field in schema.CORE_FIELD_SPECS:
+            data = dict(schema.CORE_FIELD_SPECS[args.field])
         else:
             print(f"[quest schema] unknown schema field '{args.field}'")
             return 1
