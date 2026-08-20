@@ -101,17 +101,17 @@ def _matches(row: dict, field_name: str, op: str, value: str | None) -> bool:
     if op == "exists":
         return not _is_blank(actual)
     if op == "contains":
-        candidates = _split_candidates(value)
+        candidates = _split_candidates(value or "")
         if isinstance(actual, list):
             actual_values = [str(v).lower() for v in actual]
             return any(c in actual_values for c in candidates)
         actual_str = str(actual or "").lower()
         return any(c in actual_str for c in candidates)
     if op == "eq":
-        candidates = set(_split_candidates(value))
+        wanted = set(_split_candidates(value or ""))
         if isinstance(actual, list):
-            return bool({str(v).lower() for v in actual} & candidates)
-        return str(actual).lower() in candidates
+            return bool({str(v).lower() for v in actual} & wanted)
+        return str(actual).lower() in wanted
     return False
 
 

@@ -36,6 +36,7 @@ def run(args: argparse.Namespace) -> int:
         },
     }
 
+    data: object
     if args.field is None:
         data = full
     else:
