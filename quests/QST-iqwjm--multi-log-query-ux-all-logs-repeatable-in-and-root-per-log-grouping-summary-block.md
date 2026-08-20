@@ -128,6 +128,7 @@ QST-ut83f  todo   low     make help per target
 view   stale (built-in; questkit override active)
 where  status=todo,in-progress,draft  ·  idle>14
        (status filter is a default — override with --where status:exists)
+scope  archived: exclude  (3 archived quests hidden — see --archived)
 sort   idle:desc
 page   rows 1-12 of 12
 logs   2 logs, 12 quests
@@ -153,6 +154,7 @@ With multiple roots the `logs` block gains one row per root.
 - [ ] `quest list --format json | jq '.[].title'` succeeds unchanged
 - [ ] The summary block goes to stderr and `--quiet` silences it
 - [ ] The summary names the injected default status filter and its override idiom
+- [ ] The summary names the `--archived` scope and how many quests it hid, so an all-archived log never returns silently empty
 - [ ] The `logs` block prints one row per root
 - [ ] `quest next -A --limit 3` returns 3 rows total, not 3 per log
 
