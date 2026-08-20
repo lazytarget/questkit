@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any
 
-from .. import query, schema
+from .. import computed, query, schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import resolve_log_set
 from ..quest import Quest
@@ -211,8 +211,9 @@ def _collect_rows(
 
     rows: list[dict] = []
     sort_schema: schema.SchemaConfig | None = None
-    valid_fields: set[str] = set(schema.CORE_FIELDS)
+    valid_fields: set[str] = set(schema.CORE_FIELDS) | set(computed.DERIVED_FIELD_NAMES)
     logs_info: list[LogInfo] = []
+    terminal_by_log: dict[str, tuple] = {}
     for quests_dir in logs:
         try:
             config = QuestLogConfig.load(quests_dir)
@@ -225,6 +226,7 @@ def _collect_rows(
             sort_schema = config.schema
         valid_fields |= set(config.schema.fields)
         project = config.project or quests_dir.name
+        terminal_by_log[project] = config.schema.terminal_statuses
         logs_info.append(
             LogInfo(
                 quests_dir=quests_dir,
@@ -238,6 +240,7 @@ def _collect_rows(
             row.setdefault("project", project)
             row[_LOG_KEY] = project
             rows.append(row)
+    computed.annotate_rows(rows, terminal_by_log, _LOG_KEY)
     return rows, sort_schema, frozenset(valid_fields), logs_info
 
 
@@ -295,7 +298,7 @@ def _apply_sort(rows: list[dict], sort_expr: str, schema_config=None) -> list[di
 
 
 def _sort_key(row: dict, field_name: str, schema_config) -> Any:
-    """Declared rank when the field has a vocabulary, lowercased string otherwise."""
+    """Declared rank when the field has a vocabulary, numeric or lowercased-string otherwise."""
     value = row.get(field_name)
     if schema_config is not None:
         rank = schema_config.rank_of(field_name, value)
@@ -305,6 +308,13 @@ def _sort_key(row: dict, field_name: str, schema_config) -> Any:
         # Only reachable for a secondary key; the primary already partitioned
         # blanks out. Sorts before any real value, which keeps the pass stable.
         return ""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        # `idle`/`blocks`/`age` are real ints -- a string sort would rank "9"
+        # after "10", which is wrong for exactly the fields --where's numeric
+        # comparison already treats specially.
+        return value
     return str(value).lower()
 
 
@@ -364,12 +374,25 @@ def _render_table_grouped(rows: list[dict], columns: list[str], logs_info: list[
 def _render_table(rows: list[dict], columns: list[str]) -> str:
     if not rows:
         return "(no matching quests)"
-    widths = {c: max([len(c)] + [len(_cell_str(r.get(c))) for r in rows]) for c in columns}
+    widths = {c: max([len(c)] + [len(_cell_value(r, c)) for r in rows]) for c in columns}
     header = "  ".join(c.upper().ljust(widths[c]) for c in columns)
     lines = [header]
     for r in rows:
-        lines.append("  ".join(_cell_str(r.get(c)).ljust(widths[c]) for c in columns))
+        lines.append("  ".join(_cell_value(r, c).ljust(widths[c]) for c in columns))
     return "\n".join(lines)
+
+
+def _cell_value(row: dict, column: str) -> str:
+    """The table's rendered cell -- like `_cell_str`, plus the `[blocked]` marker.
+
+    Table-only: JSON/CSV already expose `blocked` as its own field, so
+    stamping it into `status` there would duplicate the fact in a shape
+    downstream tools have to unpick.
+    """
+    value = _cell_str(row.get(column))
+    if column == "status" and row.get("blocked"):
+        value = f"{value} [blocked]"
+    return value
 
 
 def _render_csv(rows: list[dict], columns: list[str]) -> str:

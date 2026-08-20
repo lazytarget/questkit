@@ -393,9 +393,34 @@ multi-log querying.
   freshly-`draft`-captured quest still doesn't show up until groomed past
   draft. (`blocked` left the core status enum in v0.3 — see
   [§4](#7-frontmatter-reference) — so it can no longer appear in this list; a
-  quest with an open dependency is marked in the table instead once computed
-  fields land.) Override the filter with an explicit `--where "status=..."`,
-  or use `--where "status:exists"` as the "show every status" escape hatch.
+  quest with an open dependency is marked in the table instead, via the
+  computed `blocked` field below.) Override the filter with an explicit
+  `--where "status=..."`, or use `--where "status:exists"` as the "show every
+  status" escape hatch.
+
+- **Computed fields** — `blocked`, `blocks`, `idle`, `age` — are derived once
+  per query over the whole active row set and behave like any other field for
+  `--where`, `--select` and `--sort`. They are **read-only**: `quest set <id>
+  blocked=true` is an error.
+
+  | Field | Type | Meaning |
+  |-------|------|---------|
+  | `blocked` | bool | any `blocked_by` reference resolves to a quest that is neither terminal nor archived |
+  | `blocks` | int | how many non-terminal, non-archived quests list this one in their own `blocked_by` |
+  | `idle` | int | days since `status_changed` (falling back to `created` when absent) |
+  | `age` | int | days since `created` |
+
+  Both `blocked` and `blocks` resolve each referenced quest against **that
+  quest's own log's** `terminal_statuses` — a cross-log reference (see
+  [§14](#14-known-limitations-and-open-questions)) is judged by the log it
+  actually lives in, not the querying log's vocabulary. A blocked row's
+  `status` cell in table output reads `todo [blocked]`; JSON/CSV expose
+  `blocked` as its own field instead, so nothing there is duplicated.
+
+  ```bash
+  quest list --where "idle>14"                 # stale: untouched status for 2+ weeks
+  quest list --where "blocked=true" --sort blocks:desc
+  ```
 - **`-A` / `--all-logs`** aggregates quests from every log found by recursive
   descent from `--root` (repeatable; or `QST_ROOT`, or the git root, or cwd —
   see [§9](#9-multi-zone-setup)), instead of resolving to just one log. No

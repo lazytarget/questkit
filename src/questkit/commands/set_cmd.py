@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from .. import computed
 from ..config import QuestLogConfig
 from ..discovery import resolve_mutation_target
 from ..gitutil import auto_commit
@@ -38,6 +39,11 @@ def run(args: argparse.Namespace) -> int:
             continue
         key, _, value = assignment.partition("=")
         key = key.strip()
+        if key in computed.DERIVED_FIELD_NAMES:
+            print(
+                f"[quest] '{key}' is a computed field (derived from the corpus), and read-only"
+            )
+            return 1
         new_value = _coerce(key, value.strip())
         # Compare the *coerced* value: `tags=a,b` becomes a list, so comparing
         # the raw string would report a change on every re-assertion.

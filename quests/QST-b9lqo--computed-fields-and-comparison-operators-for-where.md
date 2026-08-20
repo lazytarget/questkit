@@ -4,14 +4,14 @@ title: Computed fields and comparison operators for --where
 description: Derive blocked, blocks, idle and age alongside frontmatter and expose them to --where, --select and --sort, with numeric and date comparisons.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: high
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 agentic: afk
 aliases:
@@ -123,19 +123,20 @@ at config load.
 
 ## Acceptance Criteria
 
-- [ ] `blocked`, `blocks`, `idle`, `age` are available to `--where`, `--select` and `--sort`
-- [ ] `--where idle>14` filters numerically
-- [ ] Default `quest list` renders blocked rows as `todo [blocked]`
-- [ ] `quest set <id> blocked=true` errors — computed fields are read-only
-- [ ] `blocked` resolves against the log's `terminal_statuses`, not a hardcoded pair
-- [ ] `blocks` excludes terminal and archived quests from its count
-- [ ] `blocks` and `blocked` honor the stored `archived` field
-- [ ] `blocks` counts reverse edges across the active log set, and the summary states that scope
-- [ ] A quest with no `status_changed` gets `idle` from `created`
-- [ ] The comparison operators are already in place from [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 19, and each computed field works with them
+- [x] `blocked`, `blocks`, `idle`, `age` are available to `--where`, `--select` and `--sort`
+- [x] `--where idle>14` filters numerically
+- [x] Default `quest list` renders blocked rows as `todo [blocked]`
+- [x] `quest set <id> blocked=true` errors — computed fields are read-only
+- [x] `blocked` resolves against the log's `terminal_statuses`, not a hardcoded pair
+- [x] `blocks` excludes terminal and archived quests from its count
+- [x] `blocks` and `blocked` honor the stored `archived` field
+- [x] `blocks` counts reverse edges across the active log set, and the summary states that scope
+- [x] A quest with no `status_changed` gets `idle` from `created`
+- [x] The comparison operators are already in place from [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 19, and each computed field works with them
 
 ## Log
 
+- 2026-08-20: implemented. `src/questkit/computed.py` annotates the whole active row set in one pass (`annotate_rows`), called from `list_cmd._collect_rows` after every log's quests are loaded, keyed by the same `_LOG_KEY` used for table grouping — so `blocked`/`blocks` resolve each referenced quest against *its own* log's `terminal_statuses`, not the querying log's. `_sort_key` gained a numeric branch (`idle`/`blocks`/`age` are real ints, not strings). Table rendering marks a blocked row's status cell `todo [blocked]`; JSON/CSV expose `blocked` as its own field instead. `quest set`/`quest new --set` reject any assignment naming a `computed.DERIVED_FIELD_NAMES` entry. 14 new tests in `tests/test_computed_fields.py`.
 - 2026-08-21: comparison operators moved out to [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 19. They were three build-order items behind their first consumer (`readiness:` is written in `!=`), and `_parse_where` has no dependency on derivation, so the split is clean. Corrected a stale `[completed, scrapped]` reference to `[done, scrapped]`.
 - 2026-08-19: `blocked` removed from the core status enum so the computed field owns the name outright.
 - 2026-08-19: captured. The corpus check that motivated it: 0 uses of `status: blocked`, 8 quests genuinely blocked by an open dependency.
