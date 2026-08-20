@@ -18,6 +18,7 @@ tags:
   - cli
 blocked_by:
   - QST-mjuau
+  - QST-lc3co
 aliases:
   - QST-3h09k
 agentic: afk
@@ -87,4 +88,5 @@ consumes it ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]).
 
 ## Log
 
+- 2026-08-21: added [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] to `blocked_by`. The backfill acceptance criterion names `quest migrate` outright, so the dependency was real but undeclared — and `migrate` sat at build-order #15 while this quest sat at #2. It now ships at #2 and this one at #3.
 - 2026-08-19: captured. Sequenced deliberately ahead of `--fill-defaults`.

@@ -258,8 +258,9 @@ readiness:
 Three constructs, each earning its place:
 
 - **`where:` reuses the `--where` grammar verbatim**, computed fields included —
-  one expression language, not two. It needs `!=` added alongside the `>`/`<`
-  operators in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]].
+  one expression language, not two. It needs `!=`, which is why the comparison
+  operators are rule 19 of this quest rather than a forward dependency on
+  [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]].
 - **`when:`** guards a rule so it applies conditionally. It exists for exactly one
   reason: it is how "AFK implies spec + criteria" becomes *configuration* instead
   of a hardcoded branch.
@@ -329,6 +330,20 @@ negotiable: the `development` schema must exist, and this log must adopt it,
 **before** `strict` is enforced. Otherwise the release that introduces strict
 validation fails validation on its own tracker.
 
+**19. `--where` gains `!=`, `>`, `<`, `>=`, `<=`.**
+
+Check order: `:exists`, `!=`, `>=`, `<=`, `~`, `>`, `<`, `=` — the compound
+operators **must** be tested before `=`, or `>=` is shredded into `>` plus a
+stray `=` and the value silently gains a leading `=`. ISO dates compare correctly
+as plain strings, so `--where status_changed<2026-08-05` needs no date parsing.
+
+These were originally scoped in [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]], because the
+motivating example of a comparison is `idle>14` and `idle` is a computed field.
+But rule 15's `readiness:` grammar is written in `!=`, and `b9lqo` sits three
+build-order items later — so the operators arrived after their first consumer.
+`_parse_where` knows nothing about derivation, so the split is clean: the
+operators land here, the fields they make interesting stay there.
+
 ### Alternatives
 
 | Option | Verdict | Reason |
@@ -392,10 +407,14 @@ each was load-bearing in more than one place:
 - [ ] questkit's own log adopts `schema: development` **before** `strict: true` is enforced
 - [ ] `quest list --where milestone=0.3.0` returns this epic's build order
 - [ ] `archived` is a core boolean field, sorting into the alphabetical tail of `field_order`
+- [ ] `--where status!=draft` filters correctly and `!=` is not shredded by the `=` branch
+- [ ] `>=` and `<=` parse correctly and are not shredded by the `=` branch
+- [ ] `--where status_changed<2026-08-05` filters lexically on ISO dates
 - [ ] `quest schema quest` reflects everything above
 
 ## Log
 
+- 2026-08-21: took the `--where` comparison operators from [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] as rule 19 — rule 15's `readiness:` grammar consumes `!=`, so they were scheduled three build-order items behind their first consumer.
 - 2026-08-21: `milestone:` stamped across all 23 quests in this log, including retroactive `0.1.0`/`0.2.0` on shipped work. Raises rule 14's `development`-before-`strict` constraint from 16 files to every file.
 - 2026-08-19: `agentic` demoted out of core and both its hardcoded guard rules replaced by a configurable `readiness:` block; `completed` renamed to `done`; vocabularies made ordered after finding `--sort priority` returns `critical, deferred, high, ...` and multi-key sort silently drops all but the first key.
 - 2026-08-19: rules 10-14 added after grilling terminal statuses, the `blocked` status/computed-field collision, and the milestone/planned-version question.

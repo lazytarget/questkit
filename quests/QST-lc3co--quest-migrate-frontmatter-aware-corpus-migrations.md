@@ -123,4 +123,5 @@ Shared behavior:
 
 ## Log
 
+- 2026-08-21: moved from build-order #15 to **#2**. It was scheduled twelve items behind the quest that renames `status: completed`, and behind [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]], whose acceptance criteria name `quest migrate --backfill` outright — so every migration it exists to perform was scheduled before the tool. Its `blocked_by` (`QST-mjuau` alone) always said #2.
 - 2026-08-19: captured. Split out of [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] once v3 accumulated three corpus migrations rather than one, and once the prose-collision hazard was verified in this log.

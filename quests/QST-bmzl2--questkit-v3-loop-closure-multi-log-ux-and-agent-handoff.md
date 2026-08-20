@@ -59,24 +59,30 @@ behind each — is in [docs/planning/plan_questkit_v3.md](../docs/planning/plan_
 
 Ordered by dependency. Each item is its own quest.
 
-| # | Quest | Theme |
-|---|-------|-------|
-| 1 | [[QST-mjuau--quest-save-writes-only-when-the-rendered-content-changes]] | correctness — blocks the committer |
-| 2 | [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] | loop closure |
-| 3 | [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] | schema |
-| 4 | [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] | multi-log |
-| 5 | [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]] | multi-log |
-| 6 | [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]] | multi-log |
-| 7 | [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] | multi-log |
-| 8 | [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] | loop closure |
-| 9 | [[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]] | query |
-| 10 | [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] | agent handoff |
-| 11 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | loop closure |
-| 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | automation |
-| 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | capture surface |
-| 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | multi-log |
-| 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | migration |
-| 16 | [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] | dx |
+| # | Quest | Theme | Batch |
+|---|-------|-------|-------|
+| 1 | [[QST-mjuau--quest-save-writes-only-when-the-rendered-content-changes]] | correctness — blocks the committer | B0 |
+| 2 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | migration | B0 |
+| 3 | [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] | loop closure | B0 |
+| 4 | [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] | schema | B1-B3 |
+| 5 | [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] | multi-log | B4 |
+| 6 | [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]] | multi-log | B4 |
+| 7 | [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]] | multi-log | B4 |
+| 8 | [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] | multi-log | B5 |
+| 9 | [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] | loop closure | B1 + B5 |
+| 10 | [[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]] | query | B4 |
+| 11 | [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] | agent handoff | B7 |
+| 12 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | loop closure | B5 |
+| 13 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | automation | B7 |
+| 14 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | capture surface | B7 |
+| 15 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | multi-log | B6 |
+| 16 | [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] | dx | B7 |
+
+`quest migrate` moved from #15 to #2: it was scheduled behind every migration it
+exists to perform, while #3's acceptance criteria named it outright. The
+`--where` comparison operators split out of #9 into #4, where `readiness:`
+consumes `!=`. Batch groupings and their rationale are in
+[the plan's §12](../docs/planning/plan_questkit_v3.md).
 
 Independent, no ordering constraint: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
@@ -93,10 +99,10 @@ required for v3 to be coherent: duplicate detection is an independent nicety, an
 `language` needs the `household` schema, which is the *second* schema to be
 written.
 
-**If 0.3 needs to shrink, items 12-14 are the cut line** — `quest commit` and the
+**If 0.3 needs to shrink, items 13-15 are the cut line** — `quest commit` and the
 realm-01 timer, the Obsidian capture surface, and archival. Each is genuinely
 useful and none of the earlier items depend on them, so they move to `0.4.0` as a
-block without leaving anything half-built. Items 1-11 are not separable: they are
+block without leaving anything half-built. Items 1-12 are not separable: they are
 the loop-closure story, and cutting any one of them leaves a command specified
 against machinery that does not exist.
 

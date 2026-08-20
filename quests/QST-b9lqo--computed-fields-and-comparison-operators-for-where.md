@@ -41,9 +41,10 @@ That is correct behavior from the human, and a gap in the tool.
 
 ### Scope
 
-**In:** the four computed fields, comparison operators, blocked marking in table
-output.
-**Out:** the views themselves ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]), `--select`/`--distinct` ([[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]]).
+**In:** the four computed fields and blocked marking in table output.
+**Out:** the views themselves ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]), `--select`/`--distinct` ([[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]]), and — as of
+2026-08-21 — **the comparison operators**, which ship earlier with
+[[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] (see below).
 
 ### Approach
 
@@ -69,13 +70,19 @@ and worst on the oldest quests — a quest whose three dependents are all `done`
 would read as high-priority with nothing waiting on it. The raw historical graph
 is `quest deps --blocks`, which is a view, not a ranking input.
 
-**`--where` gains `!=`, `>`, `<`, `>=`, `<=`**, parsed **before** `=` so `>=` is
-not shredded into `>` plus a stray `=`. Check order: `:exists`, `!=`, `>=`, `<=`,
-`~`, `>`, `<`, `=`. ISO dates compare correctly as plain strings, so
-`--where status_changed<2026-08-05` needs no date parsing at all. `!=` is also
-what the schema's `readiness:` rules use
-([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 15) — one expression
-language, two consumers.
+**The comparison operators moved out of this quest.** `--where` gains `!=`, `>`,
+`<`, `>=`, `<=` — parsed **before** `=` so `>=` is not shredded into `>` plus a
+stray `=`, with the check order `:exists`, `!=`, `>=`, `<=`, `~`, `>`, `<`, `=`.
+ISO dates compare correctly as plain strings, so
+`--where status_changed<2026-08-05` needs no date parsing at all.
+
+They were scoped here because the natural example of one is `idle>14`, a computed
+field. But `!=` is what the schema's `readiness:` rules are written in
+([[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 15), which put the operators
+three build-order items *after* their first consumer. `_parse_where` knows nothing
+about derivation, so the two halves separate cleanly: **the operators ship with
+rule 19 of [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]]**, and this quest keeps
+the fields that make them interesting. One expression language either way.
 
 **`blocked` is now unambiguous.** [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] removes `blocked`
 from the core `status` enum and makes it a schema validation error for any log to
@@ -109,8 +116,8 @@ what makes [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-ca
 ## Open Questions
 
 None. The terminal-status question this depended on is resolved in
-[[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] (rule 10): `terminal_statuses` is a declarable,
-ordered schema key defaulting to `[completed, scrapped]`, and a log that
+[[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] (rule 11): `terminal_statuses` is a declarable,
+ordered schema key defaulting to `[done, scrapped]`, and a log that
 overrides `statuses:` without a surviving default must declare it or fail loudly
 at config load.
 
@@ -118,18 +125,17 @@ at config load.
 
 - [ ] `blocked`, `blocks`, `idle`, `age` are available to `--where`, `--select` and `--sort`
 - [ ] `--where idle>14` filters numerically
-- [ ] `--where status_changed<2026-08-05` filters lexically on ISO dates
-- [ ] `>=` and `<=` parse correctly and are not shredded by the `=` branch
 - [ ] Default `quest list` renders blocked rows as `todo [blocked]`
 - [ ] `quest set <id> blocked=true` errors — computed fields are read-only
 - [ ] `blocked` resolves against the log's `terminal_statuses`, not a hardcoded pair
 - [ ] `blocks` excludes terminal and archived quests from its count
 - [ ] `blocks` and `blocked` honor the stored `archived` field
-- [ ] `--where status!=draft` filters correctly and `!=` is not shredded by the `=` branch
 - [ ] `blocks` counts reverse edges across the active log set, and the summary states that scope
 - [ ] A quest with no `status_changed` gets `idle` from `created`
+- [ ] The comparison operators are already in place from [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 19, and each computed field works with them
 
 ## Log
 
+- 2026-08-21: comparison operators moved out to [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 19. They were three build-order items behind their first consumer (`readiness:` is written in `!=`), and `_parse_where` has no dependency on derivation, so the split is clean. Corrected a stale `[completed, scrapped]` reference to `[done, scrapped]`.
 - 2026-08-19: `blocked` removed from the core status enum so the computed field owns the name outright.
 - 2026-08-19: captured. The corpus check that motivated it: 0 uses of `status: blocked`, 8 quests genuinely blocked by an open dependency.
