@@ -265,7 +265,8 @@ def test_all_logs_sweeps_every_log_under_the_root(multi_log, run):
     result = run("migrate", "--rename-value", "status:completed=done", "-A")
 
     assert result.code == 0
-    assert Quest.load(multi_log["alpha"] / "QST-a2aaa--a-quest.md").get("status") == "done"
+    migrated = next(multi_log["alpha"].glob("QST-a2aaa*.md"))
+    assert Quest.load(migrated).get("status") == "done"
 
 
 def test_summary_names_logs_files_changed_and_skipped(isolated, make_log, write_quest, run):

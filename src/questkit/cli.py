@@ -97,6 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_validate = subparsers.add_parser("validate", help="validate quests against the schema")
     p_validate.add_argument("--in", dest="in_dir")
+    p_validate.add_argument(
+        "--notes",
+        dest="notes",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="show informational notes (never affects the exit code)",
+    )
     p_validate.set_defaults(func=validate_cmd.run)
 
     p_format = subparsers.add_parser(

@@ -30,6 +30,7 @@ def run(args: argparse.Namespace) -> int:
 
     checked = 0
     total_errors = 0
+    total_notes = 0
     for path in sorted(quests_dir.glob(config.pattern)):
         checked += 1
         try:
@@ -42,19 +43,38 @@ def run(args: argparse.Namespace) -> int:
         errors = schema.validate_quest(quest, config.schema)
         errors.extend(_project_drift(quest, config))
         errors.extend(_check_references(quest, quests_dir))
-        errors.extend(schema.check_slug_drift(quest))
-        if errors:
+        # Notes are a separate channel, not a severity flag on an error: they
+        # never count toward the exit code, so anything routed here is
+        # something a commit must not be blocked on. Slug drift is the first
+        # such check; project-drift heuristics and orphan detection are the
+        # obvious next ones.
+        notes = schema.check_slug_drift(quest)
+
+        total_errors += len(errors)
+        total_notes += len(notes)
+
+        shown = errors + (notes if args.notes else [])
+        if shown:
             print(f"[!] {path}")
             for error in errors:
                 print(f"      error: {error.message}")
-            total_errors += len(errors)
+            if args.notes:
+                for note in notes:
+                    print(f"      note: {note.message}")
 
-    if total_errors == 0:
-        print(f"[quest validate] {checked} quest(s) checked, no errors")
-        return 0
+    print(f"[quest validate] {_summary(checked, total_errors, total_notes)}")
+    return 1 if total_errors else 0
 
-    print(f"[quest validate] {checked} quest(s) checked, {total_errors} error(s)")
-    return 1
+
+def _summary(checked: int, errors: int, notes: int) -> str:
+    """Report both counts, so a clean-but-noted log does not read as failing.
+
+    The old summary said "N error(s)" and nothing else, so a log with one
+    drifted filename and no real problem looked broken.
+    """
+    if not errors and not notes:
+        return f"{checked} quest(s) checked, no errors"
+    return f"{checked} quest(s) checked, {errors} error(s), {notes} note(s)"
 
 
 def _project_drift(quest, config: QuestLogConfig) -> list[schema.ValidationError]:

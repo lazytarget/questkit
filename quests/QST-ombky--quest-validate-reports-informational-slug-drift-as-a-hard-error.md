@@ -3,11 +3,11 @@ id: QST-ombky
 title: quest validate reports informational slug drift as a hard error
 description: check_slug_drift documents itself as informational and is excluded from the pre-commit hook, but validate_cmd counts it toward the exit code.
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-20
 modified: 2026-08-20
 type: bug
 tier: spark
-status: in-progress
+status: completed
 priority: medium
 effort: xs
 milestone: 0.3.0
@@ -59,14 +59,15 @@ the same channel, so this is a structure, not a special case for one rule.
 
 ## Acceptance Criteria
 
-- [ ] Slug drift prints as `note:`, not `error:`
-- [ ] A log whose only finding is drift exits 0
-- [ ] A log with a real error still exits 1, and still prints its notes
-- [ ] The summary line counts errors and notes separately
-- [ ] `--report` omits the file when only notes exist
-- [ ] questkit's own log validates clean
-- [ ] The pre-commit hook's behavior is unchanged (it already excludes drift)
+- [x] Slug drift prints as `note:`, not `error:`
+- [x] A log whose only finding is drift exits 0
+- [x] A log with a real error still exits 1, and still prints its notes
+- [x] The summary line counts errors and notes separately
+- [x] `--report` omits the file when only notes exist
+- [x] questkit's own log validates clean
+- [x] The pre-commit hook's behavior is unchanged (it already excludes drift)
 
 ## Log
 
+- 2026-08-21: implemented (batch B0). Sequenced first in the batch rather than treated as independent: "the corpus validates clean" is the gate every later batch checks itself against, and questkit's own log was the only thing failing it — on exactly the two retitles this check was documented to tolerate. `--notes/--no-notes` uses `argparse.BooleanOptionalAction` so one declaration gives both. A fixture lesson came out of it too: `write_quest` now defaults its slug from the title, because a test about something else should not have to know that passing `slug="broken"` also produces a drift note — which is precisely how one of these tests first miscounted.
 - 2026-08-19: captured. Found while grooming [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] — the retitle that caused the drift is exactly the supported operation the check was documented to tolerate.

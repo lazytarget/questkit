@@ -34,6 +34,7 @@ import pytest
 from ruamel.yaml import YAML
 
 from questkit.cli import main
+from questkit.utils import slugify
 
 _yaml = YAML()
 _yaml.indent(mapping=2, sequence=4, offset=2)
@@ -118,9 +119,14 @@ def write_quest():
     sections.
     """
 
-    def _write(log: Path, quest_id: str, *, slug: str = "a-quest", body: str | None = None, **fields) -> Path:
+    def _write(log: Path, quest_id: str, *, slug: str | None = None, body: str | None = None, **fields) -> Path:
         frontmatter: dict = {"id": quest_id}
         merged = {**_QUEST_DEFAULTS, **fields}
+        # Default the slug *from the title*, so a fixture file never trips the
+        # slug-drift check by accident -- a test about something else should not
+        # have to know that `slug="broken"` also produces a drift note.
+        if slug is None:
+            slug = slugify(str(merged.get("title") or "a-quest"))
         for key, value in merged.items():
             if value is _ABSENT:
                 continue
