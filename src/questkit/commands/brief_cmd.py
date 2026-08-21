@@ -195,15 +195,24 @@ def _dependencies(own_row: dict | None, by_id: dict, corpus: list[dict]) -> list
 
 
 def _report_back(quest: Quest, quests_dir, config: QuestLogConfig) -> list[str]:
+    """`quest done` is always safe -- it reads the schema's own terminal_statuses
+    ([[QST-lcsza]] etc. already rely on this). The "start work" line has no
+    such schema-driven equivalent: a renamed vocabulary (household.yaml's
+    waiting/doing in place of todo/in-progress) has no declared concept of
+    which status means "actively being worked". Rather than guess wrong --
+    "-progress" not existing in that log's statuses would tell someone to run
+    a command that fails -- the line is only ever emitted when the literal
+    value is actually one of this schema's own declared statuses.
+    """
     quest_id = quest.get("id")
     terminal = config.schema.terminal_statuses
     project = config.project or quests_dir.name
-    return [
-        "REPORT BACK",
-        f"  quest set {quest_id} status=in-progress",
-        f"  quest done {quest_id}   # writes status={terminal[0]}",
-        f"  Notable decisions → the quest's ## Log. Commit prefix: quest({project}):",
-    ]
+    lines = ["REPORT BACK"]
+    if "in-progress" in config.schema.statuses:
+        lines.append(f"  quest set {quest_id} status=in-progress")
+    lines.append(f"  quest done {quest_id}   # writes status={terminal[0]}")
+    lines.append(f"  Notable decisions → the quest's ## Log. Commit prefix: quest({project}):")
+    return lines
 
 
 def _state_line(quest: Quest, own_row: dict | None, by_id: dict, config: QuestLogConfig) -> list[str]:

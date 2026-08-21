@@ -175,6 +175,25 @@ def test_report_back_names_exact_commands_and_the_commit_prefix(isolated, make_l
     assert "quest(proj):" in result.out
 
 
+def test_report_back_omits_the_start_work_line_when_the_schema_renamed_in_progress(
+    isolated, make_log, write_quest, run
+):
+    """A schema that renamed `in-progress` (e.g. household.yaml's `doing`) has
+    no declared equivalent -- REPORT BACK must never suggest a status value
+    that isn't actually in this log's own vocabulary."""
+    log = make_log(
+        isolated,
+        project="household",
+        schema={"statuses": ["draft", "waiting", "doing", "done", "scrapped"]},
+    )
+    write_quest(log, "QST-aaaaa", status="waiting", body=_SPEC_BODY)
+
+    result = run("brief", "QST-aaaaa", "--in", str(log))
+
+    assert "status=in-progress" not in result.out
+    assert "quest done QST-aaaaa" in result.out
+
+
 def test_schema_block_is_omitted_for_a_default_vocabulary_log(isolated, make_log, write_quest, run):
     log = make_log(isolated, project="proj")
     write_quest(log, "QST-aaaaa", status="todo", body=_SPEC_BODY)
