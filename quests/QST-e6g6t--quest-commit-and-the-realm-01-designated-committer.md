@@ -2,26 +2,26 @@
 id: QST-e6g6t
 title: quest commit and the realm-01 designated committer
 description: Own the commit convention in the app, give it a bounded pathspec, and make one always-on host the sole git writer for the quest-only logs.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: feature
-tier: brief
-status: todo
-priority: medium
-effort: m
-milestone: 0.3.0
 project: questkit
+type: feature
+status: in-progress
+priority: medium
 tags:
   - questkit
   - cli
   - git
   - automation
-blocked_by:
-  - QST-mjuau
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-e6g6t
-agentic: afk
+blocked_by:
+  - QST-mjuau
+effort: m
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description
@@ -144,17 +144,18 @@ be a machine nobody edits from.
 
 ## Acceptance Criteria
 
-- [ ] `quest commit` stages and commits exactly the `tracked:` set
-- [ ] Staged, unrelated changes in the same repo are not committed
-- [ ] The message is derived from the frontmatter diff and is deterministic
-- [ ] `quest commit` with nothing to commit exits 0 and writes no empty commit
-- [ ] Hook failure without `--no-verify` exits non-zero and prints hook output
-- [ ] `--no-verify` is forwarded to git; `--push` is opt-in and off by default
+- [x] `quest commit` stages and commits exactly the `tracked:` set
+- [x] Staged, unrelated changes in the same repo are not committed
+- [x] The message is derived from the frontmatter diff and is deterministic
+- [x] `quest commit` with nothing to commit exits 0 and writes no empty commit
+- [x] Hook failure without `--no-verify` exits non-zero and prints hook output
+- [x] `--no-verify` is forwarded to git; `--push` is opt-in and off by default
 - [ ] `git: auto` is implemented via `quest commit`
-- [ ] `quest validate --report FILE` writes the note and deletes it when clean
-- [ ] `quest init` adds `_validation.md` to the log's `.gitignore`, idempotently
+- [x] `quest validate --report FILE` writes the note and deletes it when clean
+- [x] `quest init` adds `_validation.md` to the log's `.gitignore`, idempotently
 - [ ] The realm-01 timer runs unattended and skips a log edited in the last N minutes
 
 ## Log
 
+- 2026-08-20: `quest commit`, `tracked:`, `quest validate --report`, and `quest init`'s `.gitignore` handling are implemented and tested (`commands/commit_cmd.py`, `tests/test_commit_cmd.py`, `tests/test_validate_report_and_gitignore.py`). Two acceptance criteria are deliberately left open rather than marked done by assumption: **`git: auto` reimplemented via `quest commit`** would mean rerouting `new_cmd`/`set_cmd`/`mv_cmd`/`migrate_cmd`'s existing `gitutil.auto_commit` call sites onto the new tracked-pathspec-plus-derived-message path, changing the exact commit message format every prior batch's tests assert on (`quest(<log-dir-name>): new <id> <title>` etc.) — a real refactor with real regression surface, not a drive-by rename, and better done as its own reviewed change. **The realm-01 timer** is a systemd unit on a specific always-on host outside this git repository; it cannot be deployed or tested from here. The snippet in this quest's Spec is ready to hand to whoever provisions that machine.
 - 2026-08-19: captured. The `.git/index` behavior was measured, not assumed — pathspec was expected to avoid the write and does not.

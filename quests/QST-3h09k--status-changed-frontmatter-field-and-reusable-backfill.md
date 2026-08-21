@@ -2,25 +2,26 @@
 id: QST-3h09k
 title: status_changed frontmatter field and reusable backfill
 description: Add a status_changed date written only on real status transitions, so staleness measures work progress instead of file churn.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: feature
-tier: brief
-status: todo
-priority: high
-effort: s
-milestone: 0.3.0
 project: questkit
+type: feature
+status: done
+priority: high
 tags:
   - questkit
   - schema
   - cli
-blocked_by:
-  - QST-mjuau
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-3h09k
-agentic: afk
+blocked_by:
+  - QST-mjuau
+  - QST-lc3co
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description
@@ -76,15 +77,17 @@ consumes it ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]).
 
 ## Acceptance Criteria
 
-- [ ] `quest set <id> status=in-progress` sets `status_changed` to today
-- [ ] Re-setting the same status changes neither `status_changed` nor `modified`
-- [ ] `quest done` sets `status_changed`
-- [ ] The backfill seeds every quest lacking the field from `created`, and is idempotent
-- [ ] The backfill runs via `quest migrate --backfill status_changed=created` ([[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]])
-- [ ] Field order places `status_changed` between `created` and `modified`
-- [ ] A quest with no `status_changed` is treated as `created` by every consumer
-- [ ] `quest schema quest status_changed` describes it
+- [x] `quest set <id> status=in-progress` sets `status_changed` to today
+- [x] Re-setting the same status changes neither `status_changed` nor `modified`
+- [x] `quest done` sets `status_changed`
+- [x] The backfill seeds every quest lacking the field from `created`, and is idempotent
+- [x] The backfill runs via `quest migrate --backfill status_changed=created` ([[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]])
+- [x] Field order places `status_changed` between `created` and `modified`
+- [x] A quest with no `status_changed` is treated as `created` by every consumer
+- [x] `quest schema quest status_changed` describes it
 
 ## Log
 
+- 2026-08-21: implemented (batch B0). Two things the spec did not anticipate, both found by running the real corpus rather than by tests. First, the ordered-insertion rule was written in `set_cmd`, so `quest migrate` — the command that introduces this field to 122 files — appended it after `blocked_by` instead. Moved into `Quest.set()`, so every writer shares one rule. Second, backfilling from `created` assigned the source field's own object, which makes it appear twice in one document and ruamel then emits a YAML anchor/alias pair: the dry-run produced `status_changed: *id001`. That parses back correctly and is useless to Obsidian's Properties panel, to `grep`, and to a human — so the value is deep-copied. Also settled that `quest new` never writes the field: a new quest is *born* at its status rather than transitioning to it, so `created` is the honest answer and the fallback already returns it.
+- 2026-08-21: added [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] to `blocked_by`. The backfill acceptance criterion names `quest migrate` outright, so the dependency was real but undeclared — and `migrate` sat at build-order #15 while this quest sat at #2. It now ships at #2 and this one at #3.
 - 2026-08-19: captured. Sequenced deliberately ahead of `--fill-defaults`.

@@ -2,24 +2,24 @@
 id: QST-lc3co
 title: "quest migrate: frontmatter-aware corpus migrations"
 description: One migration command with backfill, value-rename and field-move verbs, because sed on frontmatter corrupts prose and every schema change needs the same three jobs.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: feature
-tier: brief
-status: todo
-priority: high
-effort: s
-milestone: 0.3.0
 project: questkit
+type: feature
+status: done
+priority: high
 tags:
   - questkit
   - cli
   - schema
-blocked_by:
-  - QST-mjuau
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
 aliases:
   - QST-lc3co
+blocked_by:
+  - QST-mjuau
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description
@@ -109,18 +109,20 @@ Shared behavior:
 
 ## Acceptance Criteria
 
-- [ ] `--backfill status_changed=created` fills only files missing the field, and is idempotent
-- [ ] `--rename-value status:completed=done` rewrites the frontmatter value only
-- [ ] The same run leaves the word "completed" untouched in bodies and in `description:`
-- [ ] `--commit` is opt-in and refuses outright on a dirty index
-- [ ] `--commit` produces one commit per log, in that log's own repo
-- [ ] `--dry-run` prints a per-file diff and writes nothing
-- [ ] Migrations honor `--in` (repeatable), `-A` and `--root`
-- [ ] A no-op migration changes no file mtimes
-- [ ] `modified` and `status_changed` are not bumped by any migration
-- [ ] A summary names logs touched, files changed and files skipped
-- [ ] Tests cover: absent field, present field, prose collision, multi-log scoping
+- [x] `--backfill status_changed=created` fills only files missing the field, and is idempotent
+- [x] `--rename-value status:completed=done` rewrites the frontmatter value only
+- [x] The same run leaves the word "completed" untouched in bodies and in `description:`
+- [x] `--commit` is opt-in and refuses outright on a dirty index
+- [x] `--commit` produces one commit per log, in that log's own repo
+- [x] `--dry-run` prints a per-file diff and writes nothing
+- [x] Migrations honor `--in` (repeatable), `-A` and `--root`
+- [x] A no-op migration changes no file mtimes
+- [x] `modified` and `status_changed` are not bumped by any migration
+- [x] A summary names logs touched, files changed and files skipped
+- [x] Tests cover: absent field, present field, prose collision, multi-log scoping
 
 ## Log
 
+- 2026-08-21: implemented (batch B0). One design question the spec left open turned out to matter: nothing in `FIELD=SOURCE` distinguishes a field reference from a literal — `status_changed=created` copies a field, `owner=peter` writes a string. Resolved by deciding **once per log** from the log's field vocabulary (`schema.CORE_FIELDS` + declared custom fields + the union of keys present in its quests), not per file. Per-file resolution would make one command mean two things in one directory: a quest missing `created` would get the literal string `"created"` written into it while its neighbour got a real date. The ambiguous case (wanting the literal `"created"` in a log that has a `created` field) loses to the field reference, which `--dry-run` makes visible. This also forced `schema.CORE_FIELDS` into existence — there was no canonical list of the fields questkit knows, only the required-presence subset, so `due` and `owner` were invisible. [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]]'s `field_order` builds on it. Also added `macros.py` (its first consumer) and `discovery.resolve_log_set()`, which [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]] extends rather than replaces.
+- 2026-08-21: moved from build-order #15 to **#2**. It was scheduled twelve items behind the quest that renames `status: completed`, and behind [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]], whose acceptance criteria name `quest migrate --backfill` outright — so every migration it exists to perform was scheduled before the tool. Its `blocked_by` (`QST-mjuau` alone) always said #2.
 - 2026-08-19: captured. Split out of [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] once v3 accumulated three corpus migrations rather than one, and once the prose-collision hazard was verified in this log.

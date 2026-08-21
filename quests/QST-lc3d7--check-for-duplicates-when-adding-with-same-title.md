@@ -2,24 +2,24 @@
 id: QST-lc3d7
 title: Check for duplicates when adding with same title
 description: Warn at capture time when a new quest's title collides with an existing one in the same log, without ever blocking the capture.
-created: 2026-08-16
-status_changed: 2026-08-19
-modified: 2026-08-20
+project: questkit
 type: feature
-tier: spark
 status: todo
 priority: low
-effort: xs
-milestone: 0.4.0
-project: questkit
 tags:
   - questkit
   - cli
   - dx
-blocked_by: []
+created: 2026-08-16
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-lc3d7
-agentic: afk
+blocked_by: []
+effort: xs
+milestone: 0.4.0
+tier: spark
 ---
 
 ## Description

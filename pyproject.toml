@@ -18,6 +18,7 @@ dependencies = [
 dev = [
   "pytest>=8.0.0",
   "ruff>=0.4.0",
+  "mypy>=1.10",
   "pre-commit>=3.7.0",
 ]
 
@@ -43,3 +44,16 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
 ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/questkit"]
+warn_redundant_casts = true
+warn_unused_ignores = true
+# ruamel.yaml's CommentedMap is a dict subclass with no useful stubs, and
+# frontmatter is untyped by nature -- `disallow_untyped_defs` would mean
+# annotating every `_check_*(path, fm, ...)` helper with `Any`, which buys
+# nothing. The value here is catching the real class of bug mypy already
+# found: `str | None` flowing into a `str` parameter.
+disallow_untyped_defs = false
+ignore_missing_imports = true

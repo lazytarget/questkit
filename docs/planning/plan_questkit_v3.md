@@ -209,7 +209,14 @@ readiness:
 ```
 
 Three constructs. **`where:` reuses the `--where` grammar verbatim**, computed
-fields included — one expression language, not two (it needs `!=` added).
+fields included — one expression language, not two.
+
+**That makes the comparison operators a prerequisite here, not in §5.** `--where`
+gains `!=`, `>`, `<`, `>=`, `<=`, with the check order `:exists`, `!=`, `>=`,
+`<=`, `~`, `>`, `<`, `=` so that `>=` is never shredded into `>` plus a stray
+`=`. ISO dates compare correctly as plain strings, so no date parsing is needed.
+The operators were originally scoped with the computed fields, which read as
+natural (`idle>14`) but put them three items *after* their first consumer.
 **`when:`** guards a rule conditionally, and exists for exactly one reason: it is
 how "AFK implies spec + criteria" becomes configuration instead of a hardcoded
 branch. **`sections:` / `checklist:`** are the only body-aware predicates,
@@ -302,7 +309,10 @@ They behave like any other field for `--where`, `--select` and `--sort`, and are
 
 **This is the right layer.** An earlier framing gave each view its own bespoke logic, justified by "things `--where` cannot express". Pushing the derivation down one level is better: one computation, many consumers. The same `blocked` value marks the default list, defines the `blocked` view, filters `next`, and gives `quest brief` a priority signal.
 
-`--where` gains `!=`, `>`, `<`, `>=`, `<=`, parsed before `=` so `>=` is not shredded. ISO dates compare correctly as strings, so no date parsing is needed. `!=` is also what `readiness:` rules use — one grammar, two consumers.
+The comparison operators these fields are queried with (`!=`, `>`, `<`, `>=`,
+`<=`) ship **earlier**, with the schema engine — `readiness:` consumes `!=`, and
+`_parse_where` knows nothing about derivation, so the two halves are separable.
+See §4.
 
 → [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]
 
@@ -549,22 +559,48 @@ the Obsidian link graph this system exists to build.
 
 | # | Quest | Why here |
 |---|-------|----------|
-| 1 | [[QST-mjuau--quest-save-writes-only-when-the-rendered-content-changes]] | live bug in two call sites; blocks the committer |
-| 2 | [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] | must precede `--fill-defaults` or the signal is lost permanently |
-| 3 | [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] | one shippable unit |
-| 4 | [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] | the resolver three other quests need |
-| 5 | [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]] | enforces `project:` uniqueness |
-| 6 | [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]] | |
-| 7 | [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] | rides on #4's resolver |
-| 8 | [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] | needs `status_changed` |
-| 9 | [[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]] | |
-| 10 | [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] | needs `blocks` |
-| 11 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | needs computed fields |
-| 12 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | |
-| 13 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | needs the schema engine |
-| 14 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | needs `quest logs` |
-| 15 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | runs the corpus migrations |
+| 1 | [[QST-mjuau--quest-save-writes-only-when-the-rendered-content-changes]] | live bug in two call sites; blocks the committer and every migration |
+| 2 | [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] | **the tool every later item's migration needs** — see below |
+| 3 | [[QST-3h09k--status-changed-frontmatter-field-and-reusable-backfill]] | must precede `--fill-defaults` or the signal is lost permanently |
+| 4 | [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] | one shippable unit; renames a status value, so #2 must exist |
+| 5 | [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] | the resolver three other quests need |
+| 6 | [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]] | enforces `project:` uniqueness |
+| 7 | [[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-log-grouping-summary-block]] | |
+| 8 | [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] | rides on #5's resolver |
+| 9 | [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] | needs `status_changed`; its `--where` operators ship early with #4 |
+| 10 | [[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]] | |
+| 11 | [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] | needs `blocks` |
+| 12 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | needs computed fields |
+| 13 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | |
+| 14 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | needs the schema engine |
+| 15 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | needs `quest logs` |
 | 16 | [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] | 10 commands become 22 |
+
+**Two corrections to an earlier ordering, both found while batching the work.**
+`quest migrate` sat at #15 while #3 renamed `status: completed` and #2's
+acceptance criteria named `quest migrate --backfill` outright — the tool that
+repairs 129 files was scheduled twelve items after the first item that breaks
+them. It moves to #2, which is also where its own `blocked_by` always pointed.
+And `b9lqo`'s comparison operators are consumed by #4's `readiness:` rules, so
+the operators ship with #4 while the computed fields stay at #9; they are
+separable because `_parse_where` knows nothing about derivation.
+
+### Batches
+
+The build order is a dependency ordering, not a commit plan. Implementation
+groups it into eight batches, each one a vertical slice that leaves the corpus
+validating clean:
+
+| Batch | Items | Why these travel together |
+|-------|-------|---------------------------|
+| B0 | 1, 2, 3 + `ombky` | `save() -> bool` is the primitive the other three need; `ombky` is what makes "the corpus validates clean" an achievable gate for every later batch |
+| B1 | 4 (rules 10-13) + 9's operators | ordered vocabularies, multi-key sort, the status enum, and the `--where` operators — all `schema.py` + `_apply_sort` + `done_cmd` |
+| B2 | 4 (rules 1-4, 7-9, 17-18) | the schema write path, and `development` adopted **before** strict |
+| B3 | 4 (rules 5, 14-16) | strict and `readiness:`, landing on a corpus that already satisfies them |
+| B4 | 5, 6, 7, 10 | all four rewrite `discovery.resolve_*` and `list_cmd._collect_rows`/`_render*`; #7's rule 5b is *specified in terms of* #10's `--select` |
+| B5 | 8, 9, 12 | `blocked`/`blocks` are meaningless until refs resolve, and the views are pure consumers of both |
+| B6 | 15 | the `archived` field lands in B2; this is only the commands and `--archived` |
+| B7 | 11, 13, 14, 16 | the declared cut line, plus help grouping last so it sees the final command list |
 
 Independent: [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]], [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]], [[QST-onxad--new-frontmatter-attributes]].
 
@@ -581,10 +617,10 @@ is what makes the bump honest.
 | `0.3.0` | 18 | this epic and its whole build order |
 | `0.4.0` | 2 | duplicate detection, and `language` (which needs `household`) |
 
-**If 0.3 needs to shrink, items 12-14 are the cut line** — `quest commit` and the
+**If 0.3 needs to shrink, items 13-15 are the cut line** — `quest commit` and the
 realm-01 timer, the Obsidian capture surface, and archival. Each is useful and
 nothing earlier depends on them, so they move as a block without leaving anything
-half-built. Items 1-11 are not separable: they are the loop-closure story, and
+half-built. Items 1-12 are not separable: they are the loop-closure story, and
 cutting one leaves a command specified against machinery that does not exist.
 
 ## 13. Open questions
@@ -605,13 +641,24 @@ QST-bmzl2:114  - [ ] Every quest in the Scope table is completed or explicitly s
 QST-whm2e:65   ... Completed quests stay exactly where they were created, forever.
 ```
 
-Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. Roughly 90 lines plus tests — most of the machinery is inherited from quests already scheduled. `--commit` is opt-in and refuses on a dirty index; each log commits separately in its own repo, making this the first command that writes to multiple repositories in one invocation.
+Only a frontmatter-aware tool can rename a *value of a field* without touching text that happens to use the same word. **So the tool ships second, before anything that mutates a vocabulary** — it was originally scheduled at #15, behind every migration it exists to perform. Roughly 90 lines plus tests — most of the machinery is inherited from quests already scheduled. `--commit` is opt-in and refuses on a dirty index; each log commits separately in its own repo, making this the first command that writes to multiple repositories in one invocation.
+
+**Deferred, 2026-08-21.** The corpus-wide runs are held until 0.3 is finalized;
+only questkit's own log migrates during implementation. The other five logs
+(`realm-common`, `grocy-ecosystem`, `pensieve`, `career-transition`,
+`realm-system`) total 122 files across four separate repositories, some syncing
+to family devices, and there is no reason to propagate that before the
+vocabulary it targets has stopped moving. The commands are unchanged when the
+time comes — `--dry-run` first, then `--commit`.
 
 **Ordering constraint, and it is not negotiable.** `development` must exist and questkit's own log must adopt it **before** `strict: true` is enforced. `agentic` leaving core put 16 files behind that constraint; `milestone:` now puts **all 23** — every quest in the log. Get the sequence wrong and the release that introduces strict validation fails validation on its own tracker.
 
 ## 14. Provenance
 
-Closed out 2026-08-21 with `milestone:` stamped across the log, and with a repair
+Revised 2026-08-21 for implementation: `quest migrate` moved from #15 to #2 (it
+was scheduled behind every migration it performs), the `--where` comparison
+operators split out of `b9lqo` to land with their first consumer in `j68u5`, and
+the build order grouped into the eight batches recorded in §12. Closed out 2026-08-21 with `milestone:` stamped across the log, and with a repair
 to QST-j68u5, whose Alternatives and Acceptance Criteria sections had been
 duplicated by an edit that sliced on a heading string that also appears inside one
 of its code blocks. Revised again 2026-08-21: archival reversed to a core per-quest `archived:` field

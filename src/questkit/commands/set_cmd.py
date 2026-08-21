@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
+from .. import computed
 from ..config import QuestLogConfig
 from ..discovery import resolve_mutation_target
 from ..gitutil import auto_commit
@@ -12,19 +14,65 @@ from ..timeutil import today
 
 
 def run(args: argparse.Namespace) -> int:
-    found = resolve_mutation_target(args.id, explicit_in=args.in_dir)
+    if getattr(args, "rejected_set", None):
+        first = args.rejected_set[0]
+        print(
+            f"[quest] `quest set` takes positional assignments, not --set. "
+            f"Use: quest set {args.id} {first}"
+        )
+        return 1
+
+    if not args.assignments:
+        print(f"[quest] nothing to set. Use: quest set {args.id} field=value [field=value ...]")
+        return 1
+
+    found = resolve_mutation_target(args.id, explicit_in=args.in_dirs)
     if found is None:
         print(f"[quest] no quest matching id '{args.id}' found")
         return 1
     quests_dir, path = found
 
     quest = Quest.load(path)
+    # Archival affects listing, never id resolution or mutation -- `set`
+    # (and everything sugared over it: `done`, `scrap`, `archive`,
+    # `unarchive`) still finds and writes an archived quest, just with a
+    # warning so a stale reference into a wound-up project doesn't silently
+    # resurrect it.
+    if quest.get("archived"):
+        print(f"[quest] warning: {args.id} is archived", file=sys.stderr)
+
+    changed: list[str] = []
     for assignment in args.assignments:
         if "=" not in assignment:
             print(f"[quest] ignoring malformed assignment '{assignment}' (expected field=value)")
             continue
         key, _, value = assignment.partition("=")
-        quest.frontmatter[key.strip()] = _coerce(key.strip(), value.strip())
+        key = key.strip()
+        if key in computed.DERIVED_FIELD_NAMES:
+            print(
+                f"[quest] '{key}' is a computed field (derived from the corpus), and read-only"
+            )
+            return 1
+        new_value = _coerce(key, value.strip())
+        # Compare the *coerced* value: `tags=a,b` becomes a list, so comparing
+        # the raw string would report a change on every re-assertion.
+        if _same(quest.frontmatter.get(key), new_value):
+            continue
+        quest.set(key, new_value)
+        changed.append(key)
+
+    if not changed:
+        print(f"[quest] {path}: no change")
+        return 0
+
+    # Only a real transition stamps `status_changed` -- and only if the caller
+    # did not set it explicitly in the same invocation. An agent re-asserting a
+    # status it already holds took the `_same` path above and never gets here,
+    # which is the whole point: `modified` is laundered by the bump hook on
+    # every commit, so a status timestamp that moved on every write would
+    # measure nothing.
+    if "status" in changed and "status_changed" not in changed:
+        quest.set("status_changed", today())
 
     quest.frontmatter["modified"] = today()
     quest.save()
@@ -37,7 +85,28 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _same(current, new_value) -> bool:
+    """Whether an assignment is a no-op.
+
+    Compared via `str()` on scalars because frontmatter values come back
+    typed: `created`/`modified` normalize to real `date` objects on save, so a
+    `date(2026, 8, 20) != "2026-08-20"` comparison would call every date
+    assignment a change and rewrite the file. Lists compare element-wise for
+    the same reason -- `tags` round-trips as a ruamel `CommentedSeq`, which is
+    not `==` to a plain list of the same strings in every ruamel version.
+    """
+    if isinstance(new_value, list):
+        if not isinstance(current, list):
+            return False
+        return [str(v) for v in current] == [str(v) for v in new_value]
+    if current is None:
+        return False
+    return str(current) == str(new_value)
+
+
 def _coerce(key, value):
     if key == "tags":
         return [v.strip() for v in value.split(",") if v.strip()]
+    if key == "archived":
+        return value.strip().lower() in ("true", "1", "yes")
     return value

@@ -2,26 +2,26 @@
 id: QST-iqwjm
 title: "Multi-log query UX: --all-logs, repeatable --in and --root, per-log grouping, summary block"
 description: "Make the scope of every query legible: rename --all, allow multiple logs and roots, group results per log, and print the filters in effect."
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: feature
-tier: brief
-status: todo
-priority: high
-effort: m
-milestone: 0.3.0
 project: questkit
+type: feature
+status: done
+priority: high
 tags:
   - questkit
   - cli
   - dx
   - multi-log
-blocked_by:
-  - QST-fmk0p
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-iqwjm
-agentic: afk
+blocked_by:
+  - QST-fmk0p
+effort: m
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description
@@ -140,25 +140,35 @@ With multiple roots the `logs` block gains one row per root.
 
 ## Acceptance Criteria
 
-- [ ] `-A` / `--all-logs` works; `--all` is gone and the docs are updated
-- [ ] Multiple `--root` de-duplicates logs discovered under overlapping roots
-- [ ] `QST_ROOT` accepts `os.pathsep`-separated paths
-- [ ] Multiple `--in` works on `list` and every view, resolving names and paths
-- [ ] Multiple `--in` on a mutation command searches only those logs
-- [ ] Table output groups by log when >1 log is in scope
-- [ ] The column header repeats under every group separator
-- [ ] The group separator names the log and its row count
-- [ ] `--select` computes one column set for the whole result, blank where a log lacks the field
-- [ ] `--select` naming a field absent from every log in scope is a hard error
-- [ ] `--select` naming a field absent from some logs prints a stderr note naming them
-- [ ] JSON and CSV remain flat arrays, ordered by log
-- [ ] `quest list --format json | jq '.[].title'` succeeds unchanged
-- [ ] The summary block goes to stderr and `--quiet` silences it
-- [ ] The summary names the injected default status filter and its override idiom
-- [ ] The summary names the `--archived` scope and how many quests it hid, so an all-archived log never returns silently empty
-- [ ] The `logs` block prints one row per root
-- [ ] `quest next -A --limit 3` returns 3 rows total, not 3 per log
+- [x] `-A` / `--all-logs` works; `--all` is gone and the docs are updated
+- [x] Multiple `--root` de-duplicates logs discovered under overlapping roots
+- [x] `QST_ROOT` accepts `os.pathsep`-separated paths
+- [x] Multiple `--in` works on `list` and every view, resolving names and paths
+- [x] Multiple `--in` on a mutation command searches only those logs
+- [x] Table output groups by log when >1 log is in scope
+- [x] The column header repeats under every group separator
+- [x] The group separator names the log and its row count
+- [x] `--select` computes one column set for the whole result, blank where a log lacks the field
+- [x] `--select` naming a field absent from every log in scope is a hard error
+- [x] `--select` naming a field absent from some logs prints a stderr note naming them
+- [x] JSON and CSV remain flat arrays, ordered by log
+- [x] `quest list --format json | jq '.[].title'` succeeds unchanged
+- [x] The summary block goes to stderr and `--quiet` silences it
+- [x] The summary names the injected default status filter and its override idiom
+- [x] The summary names the `--archived` scope and how many quests it hid, so an all-archived log never returns silently empty
+- [x] The `logs` block prints one row per root
+- [x] `quest next -A --limit 3` returns 3 rows total, not 3 per log
 
 ## Log
 
+- 2026-08-21: implemented (batch B4) with three items deliberately deferred to later batches, noted below. `list_cmd._collect_rows` now goes through the one `discovery.resolve_log_set()` instead of its own branch on `args.all_logs`/`args.in_dir` -- the consolidation the quest asked for. `resolve_sweep_root` (singular) survives as a one-line wrapper over the new plural `resolve_sweep_roots()`, so every existing caller (`resolve_mutation_target`, `resolve_by_name_or_path`'s default) is unaffected. `resolve_by_name_or_path` itself grew a `root: Path | list[Path] | None` parameter rather than a second function, since every existing single-root call site (from `QST-fmk0p`) already passes a bare `Path`.
+
+  **A real design problem surfaced building per-log grouping**: after `--select` projects a row down to just the requested fields, the row loses whatever told it which log it came from -- so grouping breaks, and worse, `--distinct` would start treating identical values from different logs as distinct if the log identity leaked back in as a hidden dedup key. Solved with one internal bookkeeping key, `_LOG_KEY` (`"__log__"`), carried through projection but stripped before JSON output and excluded from the `--distinct` equality check, and never a legal `--select` name (it isn't in `CORE_FIELDS` or any schema). One key, three call sites that had to agree with each other.
+
+  **Deferred, and revisit when the dependency lands:**
+  - The summary's `view` line and per-log independent `--sort` ranking -- both are properties of a *view definition* ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]), which does not exist yet. Plain `--sort` sorts the full result globally exactly as before this quest; grouping only reclusters the *already-sorted* rows by log for table display, it does not re-sort within each group.
+  - The summary's `--archived` scope line -- no `archived` query flag exists until archival ships ([[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]).
+  - `quest next -A --limit 3` returning 3 total rather than 3-per-log -- `next` does not exist until B5.
+
+  Extended repeatable `--in` beyond `list` to `set`/`done`/`scrap` (via `resolve_mutation_target` accepting a list), since the spec explicitly calls out mutation commands as "a bounded search set with no silent sweep past it." `new`/`mv`/`show`/`schema`/`format`/`validate` keep single-target `--in` -- a repeatable `--in` on `new` has no coherent meaning (which of several logs would it write to?), and the others already gained name resolution from `QST-fmk0p` without needing to become multi-valued.
 - 2026-08-19: captured. Grouping replaced an earlier proposal to force a global ranking across logs — concatenating per-log results means each log evaluates its own view definition, which is strictly more correct.

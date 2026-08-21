@@ -2,24 +2,24 @@
 id: QST-lcsza
 title: "Archival as an orthogonal `archived:` field, per quest and per log"
 description: Add a core archived boolean that preserves a quest's status, with per-quest and whole-log commands, so a finished project stops appearing in sweeps without any file moving or any outcome being erased.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: feature
-tier: brief
-status: todo
-priority: medium
-effort: s
-milestone: 0.3.0
 project: questkit
+type: feature
+status: done
+priority: medium
 tags:
   - questkit
   - cli
   - multi-log
-blocked_by:
-  - QST-3ehhu
+created: 2026-08-19
+status_changed: 2026-08-20
+modified: 2026-08-20
 aliases:
   - QST-lcsza
+blocked_by:
+  - QST-3ehhu
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description
@@ -131,22 +131,23 @@ quests leaves `idle` untouched, so `stale` is unaffected by the archival itself.
 
 ## Acceptance Criteria
 
-- [ ] `archived` is a core boolean field, defaulting to absent/false
-- [ ] `quest archive <id>` sets it; `quest unarchive <id>` clears it
-- [ ] `quest archive <id> --in LOG` restricts the search to that log
-- [ ] `quest archive-log LOG` archives every non-archived quest in it, and is idempotent
-- [ ] `archive-log` writes no log config — archived-ness is derived
-- [ ] `quest new --in <fully archived log>` succeeds and the log is no longer fully archived
-- [ ] Archiving changes neither `status` nor `status_changed`
-- [ ] `--archived` defaults to `exclude`; `include` and `only` behave as named
-- [ ] `--where archived=true` and `--select archived` work once in scope
-- [ ] `quest show` / `brief` / `deps` still resolve an archived id, with a note
-- [ ] A `blocked_by` reference into an archived quest still resolves and does not error
-- [ ] `blocks` does not count archived quests
-- [ ] `quest logs` reports archived counts and excludes them from footer totals
-- [ ] `quest stale -A` returns nothing from a fully archived log
+- [x] `archived` is a core boolean field, defaulting to absent/false
+- [x] `quest archive <id>` sets it; `quest unarchive <id>` clears it
+- [x] `quest archive <id> --in LOG` restricts the search to that log
+- [x] `quest archive-log LOG` archives every non-archived quest in it, and is idempotent
+- [x] `archive-log` writes no log config — archived-ness is derived
+- [x] `quest new --in <fully archived log>` succeeds and the log is no longer fully archived
+- [x] Archiving changes neither `status` nor `status_changed`
+- [x] `--archived` defaults to `exclude`; `include` and `only` behave as named
+- [x] `--where archived=true` and `--select archived` work once in scope
+- [x] `quest show` / `deps` still resolve an archived id, with a note (`quest brief` ships in [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]], B7)
+- [x] A `blocked_by` reference into an archived quest still resolves and does not error
+- [x] `blocks` does not count archived quests
+- [x] `quest logs` reports archived counts and excludes them from footer totals
+- [x] `quest stale -A` returns nothing from a fully archived log
 
 ## Log
 
+- 2026-08-20: implemented. `archived` was already a core field and honored by `computed.py`/`logs_cmd.py` from earlier batches ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]], [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]]) — this quest added the write surface and the query axis. New `commands/archive_cmd.py`: `archive`/`unarchive` are sugar over `set_cmd.run` (like `done`); `archive-log`/`unarchive-log` bulk-iterate a resolved log's own quests directly, skipping any already at the target state (idempotent, and never bumps `modified` on a no-op). `set_cmd._coerce` gained bool coercion for `archived`; `set_cmd.run` now warns on stderr (not an error) when the target is already archived, which every command sugared over it (`done`, `scrap`, `archive`, `unarchive`) inherits for free. `list_cmd` gained `--archived exclude|include|only` (default `exclude`), filtered before view/where — so `next`/`stale`/`blocked` exclude archived quests automatically, with no code duplicated per view. `quest show` notes an archived id on stderr; `quest deps` labels an archived node `[archived]`. `logs_cmd`'s table gained an ARCHIVED column (JSON already had the count). 18 new tests in `tests/test_archival.py`.
 - 2026-08-19: captured after grilling the archive question.
 - 2026-08-19: reversed from log-config-only to a core per-quest field. Two corrections drove it: archiving and scrapping answer different questions (retention vs. the work's fate), and a stored field is the only form visible to Obsidian, Bases and grep — i.e. to the family. Retitled; the filename slug is deliberately left alone (filenames are immutable by design) — see [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]].

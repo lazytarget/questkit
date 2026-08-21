@@ -2,24 +2,24 @@
 id: QST-mjuau
 title: Quest.save() writes only when the rendered content changes
 description: quest format and quest set rewrite files unconditionally, churning mtimes across Syncthing and destroying the quiescence signal a timed committer needs.
-created: 2026-08-19
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: bug
-tier: spark
-status: todo
-priority: high
-effort: s
-milestone: 0.3.0
 project: questkit
+type: bug
+status: done
+priority: high
 tags:
   - questkit
   - cli
   - sync
-blocked_by: []
+created: 2026-08-19
+status_changed: 2026-08-19
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-mjuau
-agentic: afk
+blocked_by: []
+effort: s
+milestone: 0.3.0
+tier: spark
 ---
 
 ## Description
@@ -92,16 +92,16 @@ reuse it rather than writing a second one.
 
 ## Acceptance Criteria
 
-- [ ] `quest format` run twice reports 0 reformatted on the second run
-- [ ] File mtimes are unchanged by a no-op `quest format`
-- [ ] `quest set <id> status=<its current value>` writes nothing and does not bump `modified`
-- [ ] `quest set` with a real change bumps `modified` exactly once
-- [ ] A `git: auto` log produces no empty commits from a no-op `quest set`
-- [ ] `quest format` accepts multiple space-separated files
-- [ ] `quest format <dir>` expands to that log's own `pattern`, not a hardcoded glob
-- [ ] `quest format --check` writes nothing and exits 1 when a file would change, 0 otherwise
-- [ ] The `quest-format` pre-commit hook uses the same return value, not a re-read
+- [x] `quest format` run twice reports 0 reformatted on the second run
+- [x] File mtimes are unchanged by a no-op `quest format`
+- [x] `quest set <id> status=<its current value>` writes nothing and does not bump `modified`
+- [x] `quest set` with a real change bumps `modified` exactly once
+- [x] A `git: auto` log produces no empty commits from a no-op `quest set`
+- [x] `quest format` accepts multiple space-separated files
+- [x] `quest format <dir>` expands to that log's own `pattern`, not a hardcoded glob
+- [x] `quest format --check` writes nothing and exits 1 when a file would change, 0 otherwise
+- [x] The `quest-format` pre-commit hook uses the same return value, not a re-read
 
 ## Log
 
-- 2026-08-19: captured. Found while designing the timed committer — the unconditional write is what makes a mtime-based quiescence gate unusable.
+- 2026-08-21: implemented (batch B0). `save()` now returns `bool`, with the rendering split out into `Quest.render()` so `--check` and `migrate --dry-run` can ask "what would change" through the same code that answers "what changed" — anything else drifts from `save()` and turns `--check` into a guess. `format` grew positional targets and `--check`; `set_cmd` compares each assignment against the *coerced* current value, which matters because `tags=a,b` becomes a list and dates round-trip as `date` objects, so a `str`-vs-typed comparison would call every date assignment a change. The hook's read-save-reread dance is gone. One test-design note worth keeping: the "does not bump `modified`" assertions had to backdate `modified` first — a fresh quest's `modified` is already today, so a same-day test cannot tell "did not bump" from "bumped to the value it already had", and would pass against the bug.

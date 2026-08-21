@@ -2,24 +2,24 @@
 id: QST-8hjjk
 title: Allow for --select and --distinct when listing quests
 description: Add field projection, de-duplication and a row count to quest list, so aggregate questions are answerable without post-processing in jq.
-created: 2026-08-16
-status_changed: 2026-08-19
-modified: 2026-08-20
-type: feature
-tier: brief
-status: todo
-priority: medium
-effort: s
-milestone: 0.3.0
 project: questkit
+type: feature
+status: done
+priority: medium
 tags:
   - questkit
   - cli
   - dx
-blocked_by: []
+created: 2026-08-16
+status_changed: 2026-08-20
+modified: 2026-08-20
+agentic: afk
 aliases:
   - QST-8hjjk
-agentic: afk
+blocked_by: []
+effort: s
+milestone: 0.3.0
+tier: brief
 ---
 
 ## Description
@@ -70,17 +70,18 @@ quest list -A --select project,status --distinct --format csv
 
 ## Acceptance Criteria
 
-- [ ] `quest list -A --select project --distinct` prints one row per project
-- [ ] `--select` applies to table, csv, json and prompt
-- [ ] `--select` preserves the order given
-- [ ] `--select` with an unknown field errors, naming the valid fields
-- [ ] `--distinct` without `--select` errors rather than no-opping
-- [ ] `--count` honors `--where`/`--select`/`--distinct` and ignores `--limit`/`--offset`
-- [ ] `--count` prints a bare integer suitable for `$( )`
-- [ ] `--columns` is gone and its doc references are updated
-- [ ] `--select` works with computed fields once [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] lands
+- [x] `quest list -A --select project --distinct` prints one row per project
+- [x] `--select` applies to table, csv, json and prompt
+- [x] `--select` preserves the order given
+- [x] `--select` with an unknown field errors, naming the valid fields
+- [x] `--distinct` without `--select` errors rather than no-opping
+- [x] `--count` honors `--where`/`--select`/`--distinct` and ignores `--limit`/`--offset`
+- [x] `--count` prints a bare integer suitable for `$( )`
+- [x] `--columns` is gone and its doc references are updated
+- [x] `--select` works with computed fields once [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] lands
 
 ## Log
 
+- 2026-08-21: implemented (batch B4). Rows are projected to the selected fields exactly once, up front in `run()` -- `_project(row, fields)` -- so `json` and `prompt` inherit `--select` for free rather than needing per-renderer branches; the old `--columns` only ever reached `table`/`csv`. `--distinct` collapses on the already-projected row's values (tuple-ifying any list field first, since `tags` is unhashable), preserving first-seen order. `--count` short-circuits before sort/limit/offset, matching the spec's "these are different questions" framing exactly. One test caught a real gap early: repeatable multi-log `--in` doesn't exist yet on `quest list` (it is `QST-iqwjm`'s job) -- `--in` twice silently keeps only the last value, since the flag isn't `action="append"`. Adjusted the multi-log `--distinct` test to use `--all` instead of chasing that quest's scope.
 - 2026-08-16: captured
 - 2026-08-19: groomed as part of [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]. Added `--count` and the `--columns` retirement.

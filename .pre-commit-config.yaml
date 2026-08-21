@@ -1,7 +1,44 @@
+# questkit is its own quest tracker, so its hooks must run the **working tree**,
+# not a pinned release of itself.
+#
+# This file used to pin `ssh://.../questkit.git` at a rev, exactly as every
+# consuming repo does. That is correct for a consumer and self-defeating here:
+# any change to a vocabulary means this repo's own quests are validated by the
+# *previous* release, which does not know the new values. Renaming
+# `status: completed` to `done` was unlandable -- the hook rejected the very
+# files the commit was migrating, and the rev that would accept them cannot
+# exist until after the commit.
+#
+# `language: system` + `.venv/bin/...` resolves it: `.venv` is an editable
+# install (see docs §4.1), so the hooks always exercise the code being
+# committed. Requires that dev venv to exist, which developing questkit
+# requires anyway.
+#
+# Consuming repos should keep pinning a released rev -- they want a stable
+# contract, not questkit's HEAD.
 repos:
-  - repo: ssh://git@gitea.lab.peteraslund.me:2222/peter/questkit.git
-    rev: 19540f174a88f707a40fea361b5338ba490d11f2
+  - repo: local
     hooks:
       - id: quest-format
+        name: quest-format
+        description: Normalize quest frontmatter formatting (arrays, date quoting, quote style).
+        entry: .venv/bin/quest-format
+        language: system
+        files: (^|/)QST-[^/]+\.md$
+        pass_filenames: true
+
       - id: quest-validate
+        name: quest-validate
+        description: Validate quest frontmatter against the questkit schema.
+        entry: .venv/bin/quest-validate
+        language: system
+        files: (^|/)QST-[^/]+\.md$
+        pass_filenames: true
+
       - id: quest-bump-modified
+        name: quest-bump-modified
+        description: Bump a quest's `modified` date to today when it changes.
+        entry: .venv/bin/quest-bump-modified
+        language: system
+        files: (^|/)QST-[^/]+\.md$
+        pass_filenames: true

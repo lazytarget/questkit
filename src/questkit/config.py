@@ -42,6 +42,7 @@ class QuestLogConfig:
     defaults: dict = field(default_factory=lambda: dict(_DEFAULT_FIELD_DEFAULTS))
     ignore: list = field(default_factory=list)  # raw entries, may include '#include <path>'
     schema: schema.SchemaConfig = field(default_factory=schema.SchemaConfig.default)
+    tracked: list | None = None  # None = the default set, derived from `pattern`
 
     @classmethod
     def load(cls, quests_dir: Path) -> QuestLogConfig:
@@ -66,12 +67,24 @@ class QuestLogConfig:
             project=data.get("project"),
             defaults={**_DEFAULT_FIELD_DEFAULTS, **(data.get("defaults") or {})},
             ignore=list(data.get("ignore") or []),
-            schema=schema.SchemaConfig.load(quests_dir, data.get("schema")),
+            schema=schema.SchemaConfig.load(quests_dir, _schema_block(data.get("schema"))),
+            tracked=list(data["tracked"]) if "tracked" in data else None,
         )
 
     def resolved_ignores(self, quests_dir: Path) -> list[str]:
         """This log's `ignore:` entries, with any `#include <path>` directives expanded."""
         return _resolve_ignore_entries(self.ignore, base_dir=quests_dir)
+
+    def resolved_tracked(self) -> list[str]:
+        """The pathspec `quest commit` stages and commits, in effect.
+
+        Deliberately excludes `_validation.md` -- it's derived state whose
+        transport is Syncthing, not git; a designated-committer machine
+        would otherwise commit its own transient findings on every run.
+        """
+        if self.tracked is not None:
+            return list(self.tracked)
+        return [self.pattern, CONFIG_FILENAME, ".gitignore", "_template.md", "quests.base"]
 
     def save(self, quests_dir: Path) -> None:
         config_path = quests_dir / CONFIG_FILENAME
@@ -88,6 +101,18 @@ class QuestLogConfig:
         with config_path.open("w", encoding="utf-8") as handle:
             handle.write("---\n")
             _yaml.dump(data, handle)
+
+
+def _schema_block(value) -> dict | None:
+    """`schema: development` is shorthand for `schema: {extends: development}`.
+
+    The common case by far -- four logs sharing one named schema and adding
+    nothing -- so it should not require a nested block whose only key is
+    `extends`.
+    """
+    if isinstance(value, str):
+        return {"extends": value}
+    return value
 
 
 def config_exists(quests_dir: Path) -> bool:
