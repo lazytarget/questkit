@@ -12,7 +12,7 @@ tags:
   - cli
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-08-20
+modified: 2026-08-22
 agentic: afk
 aliases:
   - QST-3h09k
@@ -85,9 +85,11 @@ consumes it ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]).
 - [x] Field order places `status_changed` between `created` and `modified`
 - [x] A quest with no `status_changed` is treated as `created` by every consumer
 - [x] `quest schema quest status_changed` describes it
+- [x] A raw text edit (Obsidian, or anything bypassing the CLI) that changes `status` without touching `status_changed` gets it backfilled by the `quest-bump-modified` hook at commit time, diffed against `HEAD`
 
 ## Log
 
+- 2026-08-22: closed the raw-edit gap found while shipping v0.3: `quest set`/`quest done` stamp `status_changed` themselves, but a status change made by hand-editing the file (Obsidian, or any tool bypassing the CLI) went through unnoticed -- `quest-bump-modified` only ever bumped `modified`, which is laundered by every touch and therefore useless as the same signal. Extended that hook (`hooks._backfill_status_changed`) to diff the staged `status` against what's actually committed at `HEAD` (`git show HEAD:<path>`, parsed via the new `Quest.from_text()`) and backfill `status_changed` to today when it changed there but not in the file. Leaves the field alone when there's no `HEAD` version to diff (a brand-new quest), when `status` didn't change, or when `status_changed` *also* differs from `HEAD` (something already set it deliberately -- the CLI in the same change, or a `quest migrate --backfill`). `commit_cmd.py`'s own ad-hoc HEAD-frontmatter reader now shares the same `Quest.from_text()` path instead of duplicating the parsing.
 - 2026-08-21: implemented (batch B0). Two things the spec did not anticipate, both found by running the real corpus rather than by tests. First, the ordered-insertion rule was written in `set_cmd`, so `quest migrate` — the command that introduces this field to 122 files — appended it after `blocked_by` instead. Moved into `Quest.set()`, so every writer shares one rule. Second, backfilling from `created` assigned the source field's own object, which makes it appear twice in one document and ruamel then emits a YAML anchor/alias pair: the dry-run produced `status_changed: *id001`. That parses back correctly and is useless to Obsidian's Properties panel, to `grep`, and to a human — so the value is deep-copied. Also settled that `quest new` never writes the field: a new quest is *born* at its status rather than transitioning to it, so `created` is the honest answer and the fallback already returns it.
 - 2026-08-21: added [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] to `blocked_by`. The backfill acceptance criterion names `quest migrate` outright, so the dependency was real but undeclared — and `migrate` sat at build-order #15 while this quest sat at #2. It now ships at #2 and this one at #3.
 - 2026-08-19: captured. Sequenced deliberately ahead of `--fill-defaults`.

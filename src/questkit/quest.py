@@ -41,7 +41,14 @@ class Quest:
 
     @classmethod
     def load(cls, path: Path) -> Quest:
-        text = path.read_text(encoding="utf-8")
+        return cls.from_text(path, path.read_text(encoding="utf-8"))
+
+    @classmethod
+    def from_text(cls, path: Path, text: str) -> Quest:
+        """Parse already-read file content -- the same parsing `load()` does,
+        split out for a caller reading a version other than what's on disk
+        (e.g. `git show HEAD:<path>`, in `hooks.py`'s status-transition
+        backfill and `commit_cmd.py`'s message-building)."""
         raw_yaml, body = _split_frontmatter(text, path)
         frontmatter = _yaml.load(raw_yaml)
         if frontmatter is None:

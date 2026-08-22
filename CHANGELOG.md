@@ -23,7 +23,10 @@ format real. Full design record: `docs/planning/plan_questkit_v3.md`.
   is honored.
 - **`status_changed`** — a staleness signal written only on a real status
   transition, so it measures idleness where `modified` (bumped by every commit)
-  cannot.
+  cannot. Written by `quest set`/`quest done`/etc., and backfilled by the
+  `quest-bump-modified` hook (diffed against `HEAD`) when a raw text edit —
+  Obsidian, or anything bypassing the CLI — changed `status` without touching
+  the field itself.
 - **Qualified cross-log references** in `blocked_by`: `project/QST-xxxxx`, in
   addition to a bare id. Resolves against the named log when present in a sweep;
   downgrades to a note (never an error) when the log simply isn't synced to this

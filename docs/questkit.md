@@ -1155,7 +1155,7 @@ you will never see a raw Python traceback from normal usage.
 | `type` | Yes | enum | `feature \| task \| bug \| epic \| chore` |
 | `tier` | No | enum | `spark \| brief \| blueprint` — spec-workflow weight, inherited unchanged from the Realm's three-tier model. Sits directly after `type` by convention. |
 | `status` | Yes | enum | `draft \| todo \| in-progress \| parked \| done \| scrapped` |
-| `status_changed` | No | date | the day `status` last changed. Written **only on a real transition**, so it measures staleness where `modified` cannot — `modified` is bumped by the `quest-bump-modified` hook on every commit. Absent means never changed; consumers fall back to `created`. |
+| `status_changed` | No | date | the day `status` last changed. Written **only on a real transition** — by `quest set`/`quest done`/etc. when the CLI made the change, or backfilled by the `quest-bump-modified` hook (see [§11](#11-git-hooks-and-validation)) when a raw text edit changed `status` without touching this field. Either way it measures staleness where `modified` cannot — `modified` is bumped by that same hook on every commit, changed or not. Absent means never changed; consumers fall back to `created`. |
 | `priority` | Yes | enum | `critical \| high \| medium \| low \| deferred` |
 | `effort` | No | enum | `xs \| s \| m \| l \| xl` |
 | `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (In The Realm specifically, the convention is `peter`/`jenika`, but that's a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
@@ -1557,6 +1557,24 @@ re-litigating it:
   commit's own behavior then applies: a hook that modifies files fails
   that run so you can review/re-stage — this is standard pre-commit UX,
   not something questkit does specially.
+
+  **It also backfills `status_changed`** when a raw text edit (Obsidian, or
+  anyone bypassing the CLI) changed `status` without touching that field
+  itself — the same gap the CLI's own `set_cmd` closes for `quest
+  set`/`quest done`, extended to the case `set_cmd` can't see at all: a
+  hand-edited file arriving at `git commit`. It compares the staged content
+  against what's actually committed at `HEAD` (via `git show
+  HEAD:<path>`), not some in-memory snapshot — so a status changed five
+  days ago in Obsidian and only committed today still gets caught. Three
+  cases leave it alone rather than guessing:
+  - **No `HEAD` version to diff against** (not a git repo, no commits yet,
+    or this quest is brand new) — a quest with no prior status has nothing
+    to have transitioned *from*; the field staying absent is correct.
+  - **`status` didn't change** from `HEAD` — nothing to backfill.
+  - **`status_changed` *also* differs** from `HEAD` — something (the CLI in
+    the same change, a `quest migrate --backfill`) already set it
+    deliberately, and overwriting a deliberate value would fight it rather
+    than help.
 
 ### Hard rules vs informational — the split that matters
 

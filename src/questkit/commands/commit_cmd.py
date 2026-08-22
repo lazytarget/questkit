@@ -14,12 +14,9 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fnmatch
-import io
 import subprocess
 import sys
 from pathlib import Path
-
-from ruamel.yaml import YAML
 
 from ..config import QuestLogConfig
 from ..discovery import resolve_log_set
@@ -174,13 +171,8 @@ def _read_head_field(git_root: Path, relpath: str, name: str):
     )
     if result.returncode != 0:
         return None
-    text = result.stdout.decode(errors="replace")
-    if not text.startswith("---"):
-        return None
-    _, _, rest = text.partition("---")
-    front, _, _ = rest.partition("---")
     try:
-        data = YAML().load(io.StringIO(front))
-    except Exception:
+        historical = Quest.from_text(git_root / relpath, result.stdout.decode(errors="replace"))
+    except QuestFileError:
         return None
-    return (data or {}).get(name)
+    return historical.get(name)

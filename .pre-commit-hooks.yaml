@@ -16,7 +16,7 @@
 
 - id: quest-bump-modified
   name: quest-bump-modified
-  description: Bump a quest's `modified` date to today when it changes.
+  description: Bump `modified` to today, and backfill `status_changed` when a raw edit changed `status`.
   entry: quest-bump-modified
   language: python
   files: (^|/)QST-[^/]+\.md$

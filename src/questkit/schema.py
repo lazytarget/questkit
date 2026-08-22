@@ -112,10 +112,13 @@ CORE_FIELD_SPECS = {
         "type": "date",
         "required": False,
         "doc": (
-            "the day `status` last changed. Written only on a real transition, so it "
-            "measures staleness where `modified` cannot -- `modified` is bumped by the "
-            "quest-bump-modified hook on every commit. Absent means never changed: "
-            "consumers fall back to `created`."
+            "the day `status` last changed. Written only on a real transition -- by "
+            "`quest set`/`quest done`/etc. when the CLI made the change, or backfilled by "
+            "the quest-bump-modified hook when a raw text edit (Obsidian, or anything "
+            "else bypassing the CLI) changed `status` without touching this field itself. "
+            "Either way it measures staleness where `modified` cannot -- `modified` is "
+            "bumped by that same hook on every commit, changed or not. Absent means never "
+            "changed: consumers fall back to `created`."
         ),
     },
     "modified": {
