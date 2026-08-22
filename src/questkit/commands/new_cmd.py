@@ -43,8 +43,18 @@ class _NewSpec:
     project: str | None = None
     description: str | None = None
     tags: list = field(default_factory=list)
+    # (name, value) pairs. Values keep their native YAML type from a batch
+    # entry (a `blocked_by` list stays a list); the CLI path always yields
+    # strings, since `--set k=v` can't express anything else.
     sets: list = field(default_factory=list)
     body: str | None = None
+
+
+def _parse_set_assignment(assignment: str) -> tuple[str, str]:
+    if "=" not in assignment:
+        raise ValueError(f"malformed --set '{assignment}' (expected field=value)")
+    key, _, value = assignment.partition("=")
+    return key.strip(), value.strip()
 
 
 def run(args: argparse.Namespace) -> int:
@@ -80,7 +90,7 @@ def run(args: argparse.Namespace) -> int:
         project=args.project,
         description=args.description,
         tags=list(args.tags or []),
-        sets=list(args.sets or []),
+        sets=[_parse_set_assignment(s) for s in (args.sets or [])],
         body=body,
     )
     path = _create_quest(quests_dir, config, spec)
@@ -125,7 +135,7 @@ def _run_batch(quests_dir: Path, config: QuestLogConfig, args: argparse.Namespac
             project=entry.get("project"),
             description=entry.get("description"),
             tags=list(entry.get("tags") or []),
-            sets=[f"{k}={v}" for k, v in (entry.get("set") or {}).items()],
+            sets=[(str(k), v) for k, v in (entry.get("set") or {}).items()],
             body=entry.get("body"),
         )
         path = _create_quest(quests_dir, config, spec)
@@ -215,10 +225,7 @@ def _undeclared_set_names(spec: _NewSpec, schema_config) -> set[str]:
     filter, fails no validation, and is only ever found by grep months later
     is exactly the failure mode `strict` exists to make loud.
     """
-    names = set()
-    for assignment in spec.sets:
-        key, _, _ = assignment.partition("=")
-        names.add(key.strip())
+    names = {key for key, _ in spec.sets}
     return names - schema_config.declared_field_names
 
 
@@ -234,11 +241,8 @@ def _explicit_assignments(spec: _NewSpec) -> dict:
         value = getattr(spec, name, None)
         if value is not None:
             explicit[name] = value
-    for assignment in spec.sets:
-        if "=" not in assignment:
-            raise ValueError(f"malformed --set '{assignment}' (expected field=value)")
-        key, _, value = assignment.partition("=")
-        explicit[key.strip()] = value.strip()
+    for key, value in spec.sets:
+        explicit[key] = value
     return explicit
 
 

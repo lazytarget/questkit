@@ -77,6 +77,23 @@ def test_batch_entry_set_maps_to_custom_fields(isolated, make_log, run, monkeypa
     assert Quest.load(path).get("component") == "api"
 
 
+def test_batch_entry_set_keeps_native_yaml_types(quest_log, run):
+    """A YAML list in a batch entry's `set:` map must survive as a real list,
+    not a stringified repr -- QST-tok0k arrived as blocked_by: "[\'QST-x\']"."""
+    batch = """
+- title: With a native list value
+  type: task
+  status: todo
+  set: {blocked_by: [QST-aaaaa, QST-bbbbb]}
+"""
+    with _with_stdin(batch):
+        result = run("new", "--batch", "-")
+
+    assert result.code == 0
+    path = next(quest_log.glob("QST-*with-a-native-list-value*.md"))
+    assert list(Quest.load(path).get("blocked_by")) == ["QST-aaaaa", "QST-bbbbb"]
+
+
 def test_batch_entry_body_is_used_verbatim(quest_log, run):
     batch = """
 - title: With a body
