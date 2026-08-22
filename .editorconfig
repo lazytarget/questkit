@@ -1,0 +1,65 @@
+# top-most EditorConfig file
+root = true
+
+# ---------------------------------------------------------------------------
+# Defaults for all files (cross-platform: Windows, macOS, Linux)
+# ---------------------------------------------------------------------------
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# ---------------------------------------------------------------------------
+# Markdown (preserve trailing spaces: they are meaningful line breaks)
+# ---------------------------------------------------------------------------
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+indent_style = space
+indent_size = 2
+
+# ---------------------------------------------------------------------------
+# YAML / TOML / JSON
+# ---------------------------------------------------------------------------
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.{toml,json,jsonc}]
+indent_style = space
+indent_size = 2
+
+# ---------------------------------------------------------------------------
+# Shell / PowerShell
+# ---------------------------------------------------------------------------
+[*.sh]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+
+[*.{ps1,psm1,psd1}]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+
+# ---------------------------------------------------------------------------
+# Windows batch / CMD
+# ---------------------------------------------------------------------------
+[*.{bat,cmd}]
+end_of_line = crlf
+
+# ---------------------------------------------------------------------------
+# Makefiles require real tabs
+# ---------------------------------------------------------------------------
+[Makefile]
+indent_style = tab
