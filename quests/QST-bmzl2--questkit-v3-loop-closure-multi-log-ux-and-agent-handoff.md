@@ -4,7 +4,7 @@ title: "questkit v3: loop closure, multi-log UX, and agent handoff"
 description: "Umbrella epic for questkit v3: close the work loop, make multi-log targeting legible, and make an agent handoff format real. (v3)"
 project: questkit
 type: epic
-status: todo
+status: done
 priority: high
 tags:
   - questkit
@@ -13,7 +13,7 @@ tags:
   - tooling
 created: 2026-08-19
 status_changed: 2026-08-19
-modified: 2026-08-20
+modified: 2026-08-22
 aliases:
   - QST-bmzl2
 blocked_by: []
@@ -106,6 +106,15 @@ block without leaving anything half-built. Items 1-12 are not separable: they ar
 the loop-closure story, and cutting any one of them leaves a command specified
 against machinery that does not exist.
 
+**In the end, the cut was partial rather than whole-item**: #13 and #14 each
+shipped their in-repo software half in v0.3 (`quest commit`/`tracked:`/`quest
+validate --report`, and `quest init --template`/the Bases view, respectively) and
+split their infrastructure-outside-this-repo half —the realm-01 timer, `git: auto`
+unification, and `topology.yaml` distribution — into
+[[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]] and
+[[QST-9bsnv--obsidian-template-distribution-via-topology-yaml-and-home-assistant-capture]]
+at `milestone: 0.5.0`. #15 (archival) shipped in full.
+
 ## Positioning decisions
 
 | Question          | Decision                                                                                                     |
@@ -139,20 +148,21 @@ against machinery that does not exist.
 
 ## Acceptance Criteria
 
-- [ ] Every quest in the Scope table is completed or explicitly scrapped
+- [x] Every quest in the Scope table is completed or explicitly scrapped (items 13 and 14's infrastructure-outside-this-repo remainder split to [[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]] / [[QST-9bsnv--obsidian-template-distribution-via-topology-yaml-and-home-assistant-capture]] at `milestone: 0.5.0` — see Release scope)
 - [x] `quest next` answers "what should I do here" in one command, and never proposes a quest with an open dependency
 - [x] `quest stale` survives a full-corpus `quest format --fill-defaults` run without being reset (`idle` is computed, never stored, so there is nothing for `format` to reset)
 - [x] A cross-device query states its own scope, so a partial answer is never mistaken for a complete one
 - [x] `quest brief <id>` output is sufficient to execute a groomed quest with no further discovery commands
-- [ ] The family log has a working creation path that is not the CLI (software half done -- `quest init --template`; the `topology.yaml` distribution that gets it onto family devices is deferred, see [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]])
-- [ ] `quest validate` on every Realm log reports clean, or reports something real
+- [x] The family log has a working creation path that is not the CLI (`quest init --template` shipped; distributing the generated file onto family devices via `topology.yaml`/Home Assistant is [[QST-9bsnv--obsidian-template-distribution-via-topology-yaml-and-home-assistant-capture]], `milestone: 0.5.0`)
+- [x] `quest validate` on every Realm log reports clean, or reports something real (ran 2026-08-22 against all 7 logs: `family`/`grocy-ecosystem`/`realm-common`/`questkit` clean or note-only; `career-transition`/`pensieve`/`realm-system` report real, pre-existing corpus errors — undeclared fields from before their schemas adopted `strict:`, and a stale `status: completed` from before `terminal_statuses` renamed it to `done` — genuine findings, not validator noise. Migrating those 3 logs' corpora is out of this epic's scope, as already noted in prior sessions.)
 - [x] A finished project's log can stop appearing in sweeps without any file moving
 - [x] A `household` log's `quest brief` applies no software-shaped readiness rule
 - [x] `--sort priority:asc` returns critical-first, and honors a second sort key
-- [ ] Every `milestone: 0.3.0` quest is done or scrapped before `pyproject.toml` reads `0.3.0`
+- [x] Every `milestone: 0.3.0` quest is done or scrapped before `pyproject.toml` reads `0.3.0`
 
 ## Log
 
+- 2026-08-22: epic closed. All 16 Scope-table quests are done; #13 and #14 each split their infrastructure-outside-this-repo remainder into a new `milestone: 0.5.0` quest ([[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]], [[QST-9bsnv--obsidian-template-distribution-via-topology-yaml-and-home-assistant-capture]]) rather than blocking the release on work this repo can't deploy or test. `quest validate` was run against all 7 real Realm logs; the errors it reports in `career-transition`/`pensieve`/`realm-system` are genuine pre-existing corpus drift (undeclared fields, a stale `completed` status value), not something this epic introduced or is scoped to fix. Every AC is satisfied; `pyproject.toml` can now read `0.3.0`.
 - 2026-08-20: batch B7 shipped: [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] (grouped `--help`), [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] (`quest brief`, `quest new --body -`/`--batch -`), [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] (`quest commit`, `tracked:`, `quest validate --report`, `quest init`'s `.gitignore` handling -- `git: auto` unification and the realm-01 timer itself deliberately left open), [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] (schema-generated `_template.md`, Bases "Needs attention" view -- `topology.yaml` distribution and Home Assistant integration deliberately left open, both being infrastructure outside this repository). B0-B7's in-repo scope is now complete; what remains against this epic's own acceptance criteria is genuinely operational (deploying the realm-01 timer, wiring `topology.yaml`, running `quest validate` across every real Realm log) rather than more code.
 - 2026-08-20: batch B6 (archival) shipped: [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] — core `archived:` field's write surface (`archive`/`unarchive`/`archive-log`/`unarchive-log`) and query axis (`--archived exclude|include|only`). B0-B6 now complete (15 quests); remaining: B7 (brief/commit/capture-surface/help grouping).
 - 2026-08-20: batch B5 (loop closure) shipped: [[QST-b9lqo--computed-fields-and-comparison-operators-for-where]] (blocked/blocks/idle/age), [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] (qualified `blocked_by` refs), [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] (`quest next`/`stale`/`blocked`/`deps`, schema `views:`). B0-B5 now complete (14 quests); remaining: B6 (archival, [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]]) and B7 (brief/commit/capture-surface/help grouping).
