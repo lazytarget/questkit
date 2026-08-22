@@ -95,6 +95,11 @@ format real. Full design record: `docs/planning/plan_questkit_v3.md`.
   writes/regenerates an Obsidian `_template.md` from the log's merged schema.
 - **Grouped `--help` output** (Capture / Query / Modify / Logs / Maintain /
   Introspect) as the CLI passed 20 verbs — no command renamed or nested.
+- **`quest version` / `quest --version`** — both print `questkit <version>`
+  from the one source of truth (`questkit.__version__`, read from the
+  installed package's own metadata). Fixed a real drift bug found while
+  adding this: `__init__.py` had been hand-duplicating the version string
+  and was already stale (`0.2.0`) against `pyproject.toml`'s `0.3.0`.
 - **`quest migrate`** — frontmatter-aware corpus migrations (`--backfill`,
   `--rename-value`), with `--dry-run` and `--commit`.
 - **`Quest.save()`** now writes only when the rendered content actually changes,

@@ -1136,6 +1136,35 @@ $ quest schema quest sprint
 {"type": "string", "required": true}
 ```
 
+### `quest version` / `quest --version`
+
+Both print the exact same string, `questkit <version>`, from the one source
+of truth: `questkit.__version__`, itself read from the *installed package's*
+metadata (`importlib.metadata.version("questkit")`) rather than a
+hand-duplicated constant — `__init__.py` carried its own copy of the version
+string until this shipped, and it had already drifted (`0.2.0` there,
+`0.3.0` in `pyproject.toml`) by the time that was noticed. `--version` is
+argparse's own `action="version"`, which exits during parsing itself, before
+the subparsers' `required=True` check runs — so `quest --version` works with
+no subcommand given. `quest version` exists as a real subcommand alongside
+it, since an agent or script that already treats every questkit action as
+`quest <verb>` shouldn't need a `--flag`-shaped special case for this one
+fact.
+
+```bash
+$ quest --version
+questkit 0.3.0
+$ quest version
+questkit 0.3.0
+```
+
+**A stale editable install will report the old version until reinstalled**
+— this is standard Python packaging behavior, not a questkit bug: bumping
+`pyproject.toml`'s `version` does not retroactively rewrite an already-built
+package's metadata. After bumping the version, re-run `pip install -e .`
+(or `uv pip install -e .`) in each environment before relying on `quest
+--version` to reflect it.
+
 ### Global error handling
 
 Every subcommand's exceptions are caught once, centrally, in `cli.main()`

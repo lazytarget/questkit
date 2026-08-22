@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from . import __version__
 from .commands import (
     archive_cmd,
     brief_cmd,
@@ -22,6 +23,7 @@ from .commands import (
     set_cmd,
     show_cmd,
     validate_cmd,
+    version_cmd,
 )
 from .help_groups import GroupedSubparsers
 
@@ -98,6 +100,10 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="quest", description="File-based quest tracking.")
+    # argparse's own `action="version"` prints and exits during parsing itself,
+    # before the subparsers' `required=True` check below ever runs -- so
+    # `quest --version` (no subcommand) works without a special case.
+    parser.add_argument("--version", action="version", version=f"questkit {__version__}")
     subparsers = GroupedSubparsers(parser.add_subparsers(dest="command", required=True))
 
     p_new = subparsers.add("new", group="Capture", help="capture a new quest")
@@ -359,6 +365,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_schema.add_argument("--format", dest="format", choices=["json", "table"], default="json")
     p_schema.add_argument("--in", dest="in_dir")
     p_schema.set_defaults(func=schema_cmd.run)
+
+    p_version = subparsers.add("version", group="Introspect", help="print the installed questkit version")
+    p_version.set_defaults(func=version_cmd.run)
 
     subparsers.validate()
     parser.formatter_class = subparsers.formatter_class()
