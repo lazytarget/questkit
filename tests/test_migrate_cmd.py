@@ -364,6 +364,30 @@ def test_commit_refuses_outright_on_a_dirty_index(isolated, make_log, write_ques
     assert Quest.load(next(log.glob("QST-aaaaa*.md"))).get("status") == "completed"
 
 
+def test_commit_bypasses_local_hooks(isolated, make_log, write_quest, run):
+    """A pre-commit hook can't distinguish a trusted, deterministic value
+    rename from a hand edit -- it only sees a diff. Concretely,
+    `quest-bump-modified`'s own status-transition backfill (QST-3h09k) would
+    otherwise read this exact migration as a missed manual transition and
+    stamp `status_changed`, undoing the field-preservation rule this module
+    documents. `--no-verify` is what keeps that from happening; a hook that
+    always fails is the simplest proof it's actually being passed."""
+    _repo(isolated)
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="completed")
+    _git(isolated, "add", "-A")
+    _git(isolated, "commit", "-qm", "seed")
+    hooks_dir = isolated / ".git" / "hooks"
+    pre_commit = hooks_dir / "pre-commit"
+    pre_commit.write_text("#!/bin/sh\nexit 1\n")
+    pre_commit.chmod(0o755)
+
+    result = run("migrate", "--rename-value", "status:completed=done", "--in", str(log), "--commit")
+
+    assert result.code == 0
+    assert "committed" in result.out
+
+
 def test_commit_with_dry_run_is_refused(isolated, make_log, run):
     log = make_log(isolated)
 
