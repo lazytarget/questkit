@@ -12,7 +12,7 @@ tags:
   - framework
   - tooling
 created: 2026-08-19
-status_changed: 2026-08-19
+status_changed: 2026-08-22
 modified: 2026-08-22
 aliases:
   - QST-bmzl2
