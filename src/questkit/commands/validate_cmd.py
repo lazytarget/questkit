@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 from .. import schema
 from ..config import CONFIG_FILENAME, ConfigVersionError, QuestLogConfig, config_exists
 from ..discovery import QuestLogNotFoundError, resolve_by_name_or_path, resolve_log
-from ..quest import Quest, QuestFileError, find_by_id
+from ..quest import Quest, QuestFileError, count_sync_conflicts, find_by_id, glob_quests
 
 _WIKILINK_ID_RE = re.compile(r"\[\[(QST-[0-9a-z]{5})")
 _FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
@@ -29,24 +30,56 @@ def run(args: argparse.Namespace) -> int:
         print(f"[quest validate] {exc}")
         return 1
 
+    as_json = getattr(args, "format", "text") == "json"
+
     _warn_validation_theater(config)
+
+    conflicts = count_sync_conflicts(quests_dir, config.pattern)
+    if conflicts:
+        print(
+            f"[quest validate] {conflicts} sync-conflict copies present — resolve by hand",
+            file=sys.stderr,
+        )
+
+    paths = glob_quests(quests_dir, config.pattern)
+    quests: dict[Path, Quest] = {}
+    for path in paths:
+        try:
+            quests[path] = Quest.load(path)
+        except QuestFileError:
+            continue
+    unique_errors = _check_unique_fields(quests, config)
 
     checked = 0
     total_errors = 0
     total_notes = 0
     report_sections: list[str] = []
-    for path in sorted(quests_dir.glob(config.pattern)):
+    findings: list[dict] = []
+    for path in paths:
         checked += 1
-        try:
-            quest = Quest.load(path)
-        except QuestFileError as exc:
-            print(f"[!] {exc}")
-            total_errors += 1
-            report_sections.append(f"## {path}\n\n- error: {exc}\n")
+        quest = quests.get(path)
+        if quest is None:
+            try:
+                Quest.load(path)
+            except QuestFileError as exc:
+                if not as_json:
+                    print(f"[!] {exc}")
+                total_errors += 1
+                report_sections.append(f"## {path}\n\n- error: {exc}\n")
+                findings.append(
+                    {
+                        "file": str(path),
+                        "id": None,
+                        "kind": "error",
+                        "rule": "parse-error",
+                        "message": str(exc),
+                    }
+                )
             continue
 
         errors = schema.validate_quest(quest, config.schema)
         errors.extend(_project_drift(quest, config))
+        errors.extend(unique_errors.get(path, []))
         ref_errors, ref_notes = _check_references(quest, quests_dir)
         errors.extend(ref_errors)
         # Notes are a separate channel, not a severity flag on an error: they
@@ -59,24 +92,55 @@ def run(args: argparse.Namespace) -> int:
         total_errors += len(errors)
         total_notes += len(notes)
 
-        shown = errors + (notes if args.notes else [])
-        if shown:
-            print(f"[!] {path}")
-            for error in errors:
-                print(f"      error: {error.message}")
-            if args.notes:
-                for note in notes:
-                    print(f"      note: {note.message}")
+        shown_notes = notes if args.notes else []
+        if not as_json:
+            shown = errors + shown_notes
+            if shown:
+                print(f"[!] {path}")
+                for error in errors:
+                    print(f"      error: {error.message}")
+                if args.notes:
+                    for note in notes:
+                        print(f"      note: {note.message}")
+        quest_id = quest.get("id")
+        findings.extend(_as_finding(path, quest_id, "error", e) for e in errors)
+        findings.extend(_as_finding(path, quest_id, "note", n) for n in shown_notes)
         if errors or notes:
             lines = [f"- error: {e.message}" for e in errors] + [f"- note: {n.message}" for n in notes]
             report_sections.append(f"## {path}\n\n" + "\n".join(lines) + "\n")
 
-    print(f"[quest validate] {_summary(checked, total_errors, total_notes)}")
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "findings": findings,
+                    "summary": {
+                        "checked": checked,
+                        "errors": total_errors,
+                        "notes": total_notes,
+                    },
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(f"[quest validate] {_summary(checked, total_errors, total_notes)}")
 
     if getattr(args, "report", None):
         _write_report(Path(args.report), checked, total_errors, total_notes, report_sections)
 
     return 1 if total_errors else 0
+
+
+def _as_finding(path: Path, quest_id, kind: str, error: schema.ValidationError) -> dict:
+    """One `ValidationError` as the stable, documented JSON finding shape."""
+    return {
+        "file": str(path),
+        "id": quest_id,
+        "kind": kind,
+        "rule": error.rule,
+        "message": error.message,
+    }
 
 
 def _write_report(report_path: Path, checked: int, errors: int, notes: int, sections: list[str]) -> None:
@@ -123,6 +187,49 @@ def _summary(checked: int, errors: int, notes: int) -> str:
     return f"{checked} quest(s) checked, {errors} error(s), {notes} note(s)"
 
 
+def _check_unique_fields(
+    quests: dict, config: QuestLogConfig
+) -> dict:
+    """One `ValidationError` per file sharing a `unique: true` field's value.
+
+    Needs the whole log in view -- `schema.validate_quest()` only ever sees
+    one file at a time, the same split as cross-reference resolution. Null
+    values are exempt (nothing to collide with): a custom field left unset on
+    most quests must not turn into a false "these are all duplicates" report.
+    Log-scoped, like every other validation rule here -- no cross-log
+    uniqueness concept.
+    """
+    unique_fields = [
+        name for name, spec in config.schema.fields.items() if spec.unique
+    ]
+    errors: dict = {}
+    if not unique_fields:
+        return errors
+
+    for field_name in unique_fields:
+        groups: dict[object, list] = {}
+        for path, quest in quests.items():
+            value = quest.get(field_name)
+            if value is None or (isinstance(value, str) and value.strip() == ""):
+                continue
+            groups.setdefault(value, []).append(path)
+
+        for value, paths in groups.items():
+            if len(paths) < 2:
+                continue
+            for path in paths:
+                others = sorted(str(other) for other in paths if other != path)
+                errors.setdefault(path, []).append(
+                    schema.ValidationError(
+                        path,
+                        f"field '{field_name}' value '{value}' is declared unique but also "
+                        f"used by {', '.join(others)}",
+                        rule="unique-field",
+                    )
+                )
+    return errors
+
+
 def _project_drift(quest, config: QuestLogConfig) -> list[schema.ValidationError]:
     if not config.project:
         return []
@@ -133,6 +240,7 @@ def _project_drift(quest, config: QuestLogConfig) -> list[schema.ValidationError
                 quest.path,
                 f"project '{quest_project}' disagrees with this log's declared project "
                 f"'{config.project}' (drift)",
+                rule="project-drift",
             )
         ]
     return []
@@ -165,7 +273,9 @@ def _check_references(
         if find_by_id(quests_dir, ref) is None:
             errors.append(
                 schema.ValidationError(
-                    quest.path, f"blocked_by references '{ref}', not found in this log"
+                    quest.path,
+                    f"blocked_by references '{ref}', not found in this log",
+                    rule="reference",
                 )
             )
 
@@ -182,7 +292,9 @@ def _check_references(
         if find_by_id(quests_dir, ref_id) is None:
             errors.append(
                 schema.ValidationError(
-                    quest.path, f"backlink references '{ref_id}', not found in this log"
+                    quest.path,
+                    f"backlink references '{ref_id}', not found in this log",
+                    rule="reference",
                 )
             )
 
@@ -206,12 +318,14 @@ def _check_qualified_ref(
         logs = resolve_by_name_or_path(project, start=quests_dir)
     except QuestLogNotFoundError as exc:
         return None, schema.ValidationError(
-            quest.path, f"blocked_by references '{ref}', but {exc}"
+            quest.path, f"blocked_by references '{ref}', but {exc}", rule="reference"
         )
     if find_by_id(logs[0], ref_id) is None:
         return (
             schema.ValidationError(
-                quest.path, f"blocked_by references '{ref}', not found in log '{project}'"
+                quest.path,
+                f"blocked_by references '{ref}', not found in log '{project}'",
+                rule="reference",
             ),
             None,
         )

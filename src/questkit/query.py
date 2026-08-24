@@ -37,6 +37,20 @@ def parse_where(expr: str) -> tuple[str, str, str | None]:
     )
 
 
+def parse_expression_list(expr: str) -> list[tuple[str, str, str | None]]:
+    """`;`-separated list of `--where`-grammar expressions, each parsed.
+
+    The one rule QST-00myv adds to the grammar: `;` separates a *list of
+    expressions*, and the flag using it is what names the combinator --
+    `--where "a=1;b=2"` is AND (sugar for repeating `--where`), `--any
+    "a=1;b=2"` is OR (see list_cmd.run). This function only splits and
+    parses; it has no opinion about how its caller combines the results.
+    A single expression with no `;` at all is still a one-element list, so
+    every `--where`/`--any` value can be run through this uniformly.
+    """
+    return [parse_where(part.strip()) for part in expr.split(";") if part.strip()]
+
+
 def split_candidates(value: str) -> list[str]:
     """`"a,b"` -> `["a", "b"]` -- the comma-list-is-OR convention shared by
     every --where operator: `field=a,b` and `field~a,b` both mean "a or b"."""
@@ -66,7 +80,15 @@ def matches(row, field_name: str, op: str, value: str | None) -> bool:
         # An absent field genuinely *is* `!= afk`, so this must not be false.
         return str(actual).lower() not in wanted if actual is not None else True
     if op in _COMPARISONS:
-        return compare(actual, value or "", op)
+        # Field-vs-field comparison: if the right-hand side is exactly the
+        # name of a field this same row carries, compare against *that
+        # field's own value* instead of the literal text -- what
+        # `criteria_done<criteria_total` (QST-bo3xs) means. A literal value
+        # that happens to collide with an unrelated field's name is the
+        # accepted, exceedingly unlikely, cost of this: real search values
+        # (`todo`, `high`, `bug`) never coincide with a field name.
+        rhs = row.get(value) if isinstance(value, str) and value in row else value
+        return compare(actual, "" if rhs is None else str(rhs), op)
     return False
 
 

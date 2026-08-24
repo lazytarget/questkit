@@ -52,6 +52,34 @@ def git_mv(repo_root: Path, src: Path, dest: Path) -> bool:
         return False
 
 
+def git_hooks_dir(repo_root: Path) -> Path | None:
+    """Where git actually looks for hook scripts for `repo_root`.
+
+    Delegates to `git rev-parse --git-path hooks` rather than assuming
+    `repo_root / ".git" / "hooks"` -- a git *worktree*'s `.git` is a plain
+    file pointing elsewhere (this very checkout is one: see
+    `.git/worktrees/<name>`), and hardcoding the join would silently write
+    a hook that git never runs. Returns `None` if git can't answer (not a
+    repo, no `git` binary) -- callers should skip hook-writing rather than
+    guess.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-path", "hooks"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    raw = result.stdout.strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    return path if path.is_absolute() else (repo_root / path).resolve()
+
+
 def stage(repo_root: Path, path: Path) -> None:
     """`git add` a single path (also correctly stages an already-removed path as a deletion)."""
     rel = path.relative_to(repo_root)

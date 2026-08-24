@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+from questkit import query
 from questkit.commands import list_cmd
 
 # --- --where parsing ---------------------------------------------------------------
@@ -52,6 +53,33 @@ def test_parse_where_exists_wins_over_the_operators():
 
 def test_parse_where_contains_still_works():
     assert list_cmd._parse_where("tags~cli") == ("tags", "contains", "cli")
+
+
+# --- QST-00myv: `;`-separated expression lists --------------------------------
+#
+# The flag names the combinator: `--where "a=1;b=2"` is AND sugar for
+# repeating `--where`; `--any "a=1;b=2"` is OR within that one group. Both
+# share the same list-of-parsed-clauses grammar, factored into query.py so
+# list_cmd's --where and --any handling (and any future consumer) parse it
+# identically.
+
+
+def test_parse_expression_list_splits_on_semicolons():
+    assert query.parse_expression_list("status=parked;blocked=true") == [
+        ("status", "eq", "parked"),
+        ("blocked", "eq", "true"),
+    ]
+
+
+def test_parse_expression_list_with_a_single_expression_is_a_one_element_list():
+    assert query.parse_expression_list("status=todo") == [("status", "eq", "todo")]
+
+
+def test_parse_expression_list_tolerates_stray_whitespace_around_semicolons():
+    assert query.parse_expression_list("status=todo ; effort=s,m") == [
+        ("status", "eq", "todo"),
+        ("effort", "eq", "s,m"),
+    ]
 
 
 # --- --where matching --------------------------------------------------------------

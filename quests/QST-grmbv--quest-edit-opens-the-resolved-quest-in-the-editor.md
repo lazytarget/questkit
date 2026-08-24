@@ -4,14 +4,15 @@ title: Quest edit opens the resolved quest in the editor
 description: quest edit <id> opens the resolved quest file in $EDITOR — parity with quest new --edit, same id resolution as show.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic:
 aliases:
   - QST-grmbv
@@ -40,3 +41,4 @@ normalized immediately (same guarantee as every other write path).
 ## Log
 
 - 2026-08-22: captured from R&D catalog CLI-2, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

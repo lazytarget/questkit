@@ -4,7 +4,7 @@ title: Machine-readable output for quest validate via format json
 description: quest validate --format json emitting structured findings (file, rule, kind, message) so agents and CI consume results without scraping stderr prose.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
@@ -12,7 +12,8 @@ tags:
   - agentic
   - validation
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic:
 aliases:
   - QST-njwu7
@@ -43,3 +44,4 @@ Markdown note to FILE) and with `--no-notes`.
 ## Log
 
 - 2026-08-22: captured from R&D catalog AX-3, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

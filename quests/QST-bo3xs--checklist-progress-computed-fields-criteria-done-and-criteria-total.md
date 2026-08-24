@@ -4,14 +4,15 @@ title: Checklist-progress computed fields criteria_done and criteria_total
 description: Computed criteria_done/criteria_total parsed from the Acceptance Criteria checklist, filterable and sortable like blocked/idle.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - query
   - computed-fields
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic:
 aliases:
   - QST-bo3xs
@@ -48,3 +49,4 @@ with unchecked criteria —
 ## Log
 
 - 2026-08-22: captured from R&D catalog SCH-2, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

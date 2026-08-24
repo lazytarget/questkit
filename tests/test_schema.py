@@ -243,6 +243,21 @@ def test_schema_config_extends_circular_chain_raises(tmp_path):
         schema.SchemaConfig.load(tmp_path, {"extends": "a.yaml"})
 
 
+# --- QST-5brm7: unique:true on a custom field --------------------------------
+
+
+def test_a_field_defaults_to_not_unique():
+    assert schema.FieldSpec("sprint").unique is False
+
+
+def test_a_field_can_declare_unique(tmp_path):
+    loaded = schema.SchemaConfig.load(
+        tmp_path, {"fields": {"external_id": {"type": "string", "unique": True}}}
+    )
+
+    assert loaded.fields["external_id"].unique is True
+
+
 def test_validate_quest_flags_missing_required_custom_field():
     schema_config = schema.SchemaConfig.load(
         Path("."), {"fields": {"sprint": {"type": "string", "required": True}}}

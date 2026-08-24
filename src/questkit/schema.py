@@ -39,7 +39,17 @@ OBSIDIAN_RESERVED_FIELDS = ("cssclasses", "cssclass", "permalink", "publish", "c
 # two different questions one word apart, and a quest could satisfy either
 # without the other. Enforced at config load, which is what makes `blocked`
 # leaving the status enum permanent rather than a tidy-up someone reverses.
-COMPUTED_FIELD_NAMES = ("blocked", "blocks", "idle", "age", "archived")
+COMPUTED_FIELD_NAMES = (
+    "blocked",
+    "blocks",
+    "idle",
+    "age",
+    "archived",
+    "criteria_done",
+    "criteria_total",
+    "overdue",
+    "due_in",
+)
 
 # Which vocabulary each sortable field draws its order from.
 _FIELD_VOCABULARIES = {
@@ -212,6 +222,7 @@ DEFAULT_VIEWS = {
     "next": View(where=("blocked=false",), sort="priority:asc,effort:asc,idle:desc", limit=1),
     "stale": View(where=("idle>14",), sort="idle:desc"),
     "blocked": View(where=("blocked=true",), sort="blocks:desc"),
+    "due": View(where=("due:exists",), sort="due_in:asc"),
 }
 
 
@@ -234,6 +245,7 @@ class FieldSpec:
     required: bool = False
     values: tuple = ()  # only meaningful for type: enum; ordered, so it sorts
     default: object = None
+    unique: bool = False  # `quest validate` errors on a shared non-null value log-wide
 
     @property
     def has_static_default(self) -> bool:
@@ -364,6 +376,7 @@ def _field_spec(name: str, spec: dict) -> FieldSpec:
         required=bool(spec.get("required", False)),
         values=values,
         default=spec.get("default"),
+        unique=bool(spec.get("unique", False)),
     )
 
 
@@ -614,11 +627,19 @@ def _resolve_extends_target(quests_dir: Path, extends: str) -> Path:
 
 
 class ValidationError:
-    """A single problem found while validating a quest file."""
+    """A single problem found while validating a quest file.
 
-    def __init__(self, path, message: str) -> None:
+    `rule` is a stable slug naming which check produced this finding --
+    QST-njwu7's `quest validate --format json` surfaces it verbatim so
+    agents/CI can filter or dedupe on it without parsing `message` prose.
+    Defaults to `"generic"` for call sites that predate the field, rather
+    than making every constructor call name a rule explicitly.
+    """
+
+    def __init__(self, path, message: str, rule: str = "generic") -> None:
         self.path = path
         self.message = message
+        self.rule = rule
 
     def __repr__(self) -> str:
         return f"ValidationError({self.path!r}, {self.message!r})"
@@ -640,13 +661,23 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
 
     for name in _SCALAR_REQUIRED_FIELDS:
         if _blank(fm.get(name)):
-            errors.append(ValidationError(quest.path, f"missing required field '{name}'"))
+            errors.append(
+                ValidationError(
+                    quest.path, f"missing required field '{name}'", rule="required-field"
+                )
+            )
 
     if fm.get("tags") is None:
-        errors.append(ValidationError(quest.path, "missing required field 'tags'"))
+        errors.append(
+            ValidationError(quest.path, "missing required field 'tags'", rule="required-field")
+        )
 
     if fm.get("status") != "draft" and _blank(fm.get("description")):
-        errors.append(ValidationError(quest.path, "missing required field 'description'"))
+        errors.append(
+            ValidationError(
+                quest.path, "missing required field 'description'", rule="required-field"
+            )
+        )
 
     errors.extend(_check_enum(quest.path, fm, "type", schema_config.types))
     errors.extend(_check_enum(quest.path, fm, "tier", schema_config.tiers))
@@ -657,7 +688,11 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
     for field_name, spec in schema_config.fields.items():
         if spec.required and _blank(fm.get(field_name)):
             errors.append(
-                ValidationError(quest.path, f"missing required custom field '{field_name}'")
+                ValidationError(
+                    quest.path,
+                    f"missing required custom field '{field_name}'",
+                    rule="required-field",
+                )
             )
         if spec.type == "enum":
             errors.extend(_check_enum(quest.path, fm, field_name, spec.values))
@@ -682,7 +717,9 @@ def _check_undeclared_fields(quest, schema_config: SchemaConfig) -> list[Validat
         return []
     allowed = schema_config.declared_field_names | frozenset(OBSIDIAN_RESERVED_FIELDS)
     return [
-        ValidationError(quest.path, f"undeclared field '{key}' (strict schema)")
+        ValidationError(
+            quest.path, f"undeclared field '{key}' (strict schema)", rule="undeclared-field"
+        )
         for key in quest.frontmatter
         if key not in allowed
     ]
@@ -705,14 +742,20 @@ def _check_identity(quest) -> list[ValidationError]:
     if fm_id and fm_id != file_id:
         errors.append(
             ValidationError(
-                quest.path, f"filename id '{file_id}' disagrees with frontmatter id '{fm_id}'"
+                quest.path,
+                f"filename id '{file_id}' disagrees with frontmatter id '{fm_id}'",
+                rule="identity",
             )
         )
 
     aliases = quest.frontmatter.get("aliases") or []
     if fm_id and fm_id not in aliases:
         errors.append(
-            ValidationError(quest.path, f"aliases does not include this quest's own id '{fm_id}'")
+            ValidationError(
+                quest.path,
+                f"aliases does not include this quest's own id '{fm_id}'",
+                rule="identity",
+            )
         )
 
     return errors
@@ -741,6 +784,7 @@ def check_slug_drift(quest) -> list[ValidationError]:
             quest.path,
             f"filename slug '{file_slug}' disagrees with the title-derived slug "
             f"'{expected_slug}' (title may have changed since creation)",
+            rule="slug-drift",
         )
     ]
 
@@ -756,6 +800,6 @@ def _check_enum(path, fm, name, allowed) -> list[ValidationError]:
     value = fm.get(name)
     if value is None or value in allowed:
         return []
-    return [ValidationError(path, f"{name} '{value}' not in {list(allowed)}")]
+    return [ValidationError(path, f"{name} '{value}' not in {list(allowed)}", rule="enum")]
 
 

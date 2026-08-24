@@ -19,7 +19,30 @@ from datetime import date
 # these outright. Distinct from `schema.COMPUTED_FIELD_NAMES`, which also
 # reserves `archived` -- a *stored* core field that merely happens to be
 # read by the computation here, not derived by it.
-DERIVED_FIELD_NAMES = ("blocked", "blocks", "idle", "age")
+#
+# `body` is not itself "computed" (it's the file's own Markdown body, not
+# derived from the corpus), but it is read-only the same way: there is no
+# legitimate `quest set <id> body=...` -- a quest's body is edited by editing
+# the file's Markdown, not by writing a `body:` key into its frontmatter.
+# Blocking it here keeps a typo'd `quest set` from ever creating that key.
+DERIVED_FIELD_NAMES = (
+    "blocked",
+    "blocks",
+    "idle",
+    "age",
+    "criteria_done",
+    "criteria_total",
+    "overdue",
+    "due_in",
+    "body",
+)
+
+# The subset of DERIVED_FIELD_NAMES that needs a quest's *body text* on disk
+# to compute -- `list_cmd._collect_rows` only pays for `Quest.load`'s full
+# read (frontmatter + body) when a query actually references one of these;
+# every other field comes from the frontmatter-only fast path
+# (`quest.load_frontmatter`). See QST-vy4vt / QST-bo3xs.
+LAZY_FIELD_NAMES = ("body", "criteria_done", "criteria_total")
 
 
 def annotate_rows(
@@ -50,6 +73,63 @@ def annotate_rows(
         row["blocks"] = blocks_count.get(row.get("id") or "", 0)
         row["idle"] = _days_since(row.get("status_changed") or row.get("created"), today)
         row["age"] = _days_since(row.get("created"), today)
+        row["overdue"], row["due_in"] = _due_fields(row, terminal_by_log, log_key, today)
+
+
+def criteria_counts(body: str) -> tuple[int, int]:
+    """(total, done) `- [ ]`/`- [x]` items under `## Acceptance Criteria`.
+
+    Deliberately its own pass rather than a shared call into
+    `schema._count_checklist_items` (which only needs a total, for
+    `readiness:`): this one needs the checked/unchecked split, and importing
+    a schema-private helper here would be the wrong direction for the
+    dependency to point anyway -- `schema.py` already reaches into `query.py`
+    for the `--where` grammar; `computed.py` has no business reaching into
+    `schema.py` in turn. Same heading-match/stop-at-next-`## ` rule as that
+    other parser, so the two never quietly disagree about what counts.
+    """
+    heading = "## acceptance criteria"
+    counting = False
+    total = 0
+    done = 0
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.lower() == heading:
+            counting = True
+            continue
+        if not counting:
+            continue
+        if stripped.startswith("## "):
+            break
+        marker = stripped[:5].lower()
+        if marker == "- [ ]":
+            total += 1
+        elif marker == "- [x]":
+            total += 1
+            done += 1
+    return total, done
+
+
+def _due_fields(row: dict, terminal_by_log: dict, log_key: str, today: date) -> tuple[bool, int | None]:
+    """`(overdue, due_in)` from `due:` -- `due_in` is a plain day count (can be
+    negative), `overdue` additionally honors terminal statuses and `archived`
+    the same way `blocked`/`blocks` do: a `due` date in the past on a `done`
+    or archived quest is not something still in front of you.
+    """
+    due = row.get("due")
+    if is_blank(due):
+        return False, None
+    due_date = date.fromisoformat(due) if isinstance(due, str) else due
+    if due_date is None:
+        return False, None
+    due_in = (due_date - today).days
+    terminal = terminal_by_log.get(row.get(log_key) or "", ())
+    overdue = due_in < 0 and not row.get("archived") and row.get("status") not in terminal
+    return overdue, due_in
+
+
+def is_blank(value) -> bool:
+    return value is None or value == ""
 
 
 def _is_blocked(row: dict, by_id: dict, terminal_by_log: dict, log_key: str) -> bool:

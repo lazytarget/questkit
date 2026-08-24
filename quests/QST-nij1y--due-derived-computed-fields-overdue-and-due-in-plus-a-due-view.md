@@ -4,14 +4,15 @@ title: Due-derived computed fields overdue and due_in plus a due view
 description: Computed overdue (bool) and due_in (days) from due, plus a views.due, so dated quests surface without hand-written date comparisons.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - query
   - computed-fields
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic:
 aliases:
   - QST-nij1y
@@ -44,3 +45,4 @@ future due-notification surface (MOB-3, deferred).
 ## Log
 
 - 2026-08-22: captured from R&D catalog SCH-3, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

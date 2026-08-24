@@ -11,7 +11,7 @@ from pathlib import Path
 from .. import schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import resolve_log_set, resolve_sweep_roots
-from ..quest import Quest
+from ..quest import Quest, glob_quests
 
 
 @dataclass
@@ -77,7 +77,7 @@ def run(args: argparse.Namespace) -> int:
                 return 1
             seen_projects[project] = quests_dir
 
-        paths = sorted(quests_dir.glob(config.pattern))
+        paths = glob_quests(quests_dir, config.pattern)
         quests = [Quest.load(p) for p in paths]
         terminal = config.schema.terminal_statuses
         open_count = sum(1 for q in quests if q.get("status") not in terminal)

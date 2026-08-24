@@ -212,6 +212,33 @@ def test_schema_block_is_present_when_the_log_declares_custom_fields(isolated, m
     assert "SCHEMA" in result.out
 
 
+def test_header_metadata_line_surfaces_a_schema_declared_custom_field_value(
+    isolated, make_log, write_quest, run
+):
+    """QST-onxad: a schema-declared custom field (e.g. `language`) reaches the
+    header's metadata line for free, the same way `effort`/`tier` do -- no
+    core field, no brief_cmd change needed per log."""
+    log = make_log(
+        isolated,
+        project="proj",
+        schema={"fields": {"language": {"type": "enum", "values": ["sv", "en"], "default": "sv"}}},
+    )
+    write_quest(log, "QST-aaaaa", status="todo", body=_SPEC_BODY, language="sv")
+
+    result = run("brief", "QST-aaaaa", "--in", str(log))
+
+    assert "language=sv" in result.out
+
+
+def test_header_metadata_line_omits_a_custom_field_with_no_value(isolated, make_log, write_quest, run):
+    log = make_log(isolated, project="proj", schema={"fields": {"language": {"type": "string"}}})
+    write_quest(log, "QST-aaaaa", status="todo", body=_SPEC_BODY, language=None)
+
+    result = run("brief", "QST-aaaaa", "--in", str(log))
+
+    assert "language=" not in result.out
+
+
 def test_output_contains_no_vendor_specific_text(isolated, make_log, write_quest, run):
     log = make_log(isolated, project="proj")
     write_quest(log, "QST-aaaaa", status="todo", body=_SPEC_BODY)

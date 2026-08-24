@@ -4,14 +4,15 @@ title: Exclude Syncthing conflict copies from quest enumeration
 description: Conflict copies match the quest pattern and find_by_id globs — exclude them from enumeration and commit tracking, warn on presence, fix docs §10.
 project: questkit
 type: bug
-status: todo
+status: done
 priority: high
 tags:
   - questkit
   - syncthing
   - validation
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic:
 aliases:
   - QST-oe92z
@@ -65,3 +66,4 @@ Decision (2026-08-22): **exclude + surface**.
 ## Log
 
 - 2026-08-22: captured from R&D catalog SYNC-1 (verified bug) + SYNC-2 (Realm-side tool), accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

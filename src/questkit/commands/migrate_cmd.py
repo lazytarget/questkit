@@ -31,7 +31,7 @@ from .. import macros, schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import resolve_log_set
 from ..gitutil import find_git_root
-from ..quest import Quest, QuestFileError
+from ..quest import Quest, QuestFileError, glob_quests
 
 
 class MigrationError(Exception):
@@ -203,7 +203,7 @@ def _migrate_log(quests_dir: Path, mutate, *, dry_run: bool) -> LogOutcome:
     config = QuestLogConfig.load(quests_dir)
     project = config.project or quests_dir.name
     outcome = LogOutcome(quests_dir=quests_dir, project=project)
-    paths = sorted(quests_dir.glob(config.pattern))
+    paths = glob_quests(quests_dir, config.pattern)
     known_fields = _known_fields(quests_dir, config, paths)
 
     for path in paths:

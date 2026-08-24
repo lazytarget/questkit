@@ -4,14 +4,15 @@ title: Markdown output format for quest list and views
 description: A md output format rendering list and view rows as a Markdown bullet list — the changelog primitive the release helper consumes.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - cli
   - release
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic: hitl
 aliases:
   - QST-f6otu
@@ -49,3 +50,4 @@ job (release-drafter-style category mapping from `type`).
 ## Log
 
 - 2026-08-22: captured from R&D catalog REL-1 (option 2 of the review), accepted for 0.4.0, hitl
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

@@ -4,15 +4,15 @@ title: Check for duplicates when adding with same title
 description: Warn at capture time when a new quest's title collides with an existing one in the same log, without ever blocking the capture.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: low
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-16
-status_changed: 2026-08-19
-modified: 2026-08-20
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic: afk
 aliases:
   - QST-lc3d7
@@ -78,3 +78,4 @@ warning.
 
 - 2026-08-16: captured
 - 2026-08-19: groomed as part of [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]. Deliberately kept outside `strict` — capture must never fail on a judgment call.
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

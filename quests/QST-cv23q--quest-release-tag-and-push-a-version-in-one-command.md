@@ -3,14 +3,15 @@ id: QST-cv23q
 title: "quest release: tag and push a version in one command"
 project: questkit
 type: feature
-status: draft
+status: done
 priority: medium
 tags:
   - questkit
   - cli
   - release
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic: hitl
 aliases:
   - QST-cv23q
@@ -19,6 +20,7 @@ blocked_by:
 effort: s
 milestone: 0.4.0
 tier: spark
+description: "A scripts/release.py ritual: verify milestone completeness, assemble the CHANGELOG.md section via quest list --format md, confirm pyproject/installed version agreement, then tag and push."
 ---
 
 ## Notes (draft)
@@ -72,3 +74,4 @@ Scope grows from "tag and push" to the full ritual:
 
 - 2026-08-22: captured after manually tagging `v0.3.0` by hand.
 - 2026-08-22: merged R&D REL-2 scope (changelog assembly via --format md, release-drafter type grouping); blocked_by QST-f6otu; agentic set to hitl.
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

@@ -4,7 +4,7 @@ title: Milestone view and burnup in the development schema
 description: A views.milestone in the development schema; a specific milestone is selected via two-layer precedence, burnup counts via group-by milestone and status.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
@@ -12,7 +12,8 @@ tags:
   - query
   - release
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-08-24
 agentic:
 aliases:
   - QST-tok0k
@@ -47,3 +48,4 @@ caller's. Burnup counts ride on group-by (QST-oguay):
 ## Log
 
 - 2026-08-22: captured from R&D catalog REL-3, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

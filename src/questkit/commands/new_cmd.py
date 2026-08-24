@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import os
-import subprocess
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,12 +14,35 @@ from ruamel.yaml.comments import CommentedMap
 from .. import macros, schema
 from ..config import QuestLogConfig
 from ..discovery import resolve_log_for_new
+from ..editing import open_in_editor
 from ..gitutil import auto_commit
 from ..ids import generate_id
-from ..quest import Quest
+from ..quest import Quest, glob_quests, load_frontmatter_only
 from ..templates import render_body
 from ..timeutil import today
 from ..utils import slugify
+
+# QST-lc3d7: capture-time duplicate-title warning. Deliberately not governed
+# by `strict` -- that's about field names being real, this is about a human
+# having a thought twice, so it always warns and never blocks.
+_STOPWORDS = frozenset(
+    {
+        "a", "an", "the", "to", "for", "of", "and", "or", "in", "on", "with",
+        "is", "are", "be", "when", "by", "at", "as", "from", "into",
+    }
+)
+
+
+def _title_tokens(title: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", title.lower())
+    return {w for w in words if w not in _STOPWORDS}
+
+
+def _token_overlap(a: set[str], b: set[str]) -> float:
+    """Jaccard similarity of two token sets, ignoring stopwords."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
 
 # Shorthand flags for fields every schema has. Custom fields go through
 # `--set`, because argparse is built before the log is resolved and therefore
@@ -93,18 +115,72 @@ def run(args: argparse.Namespace) -> int:
         sets=[_parse_set_assignment(s) for s in (args.sets or [])],
         body=body,
     )
+    found_similar = False
+    if not getattr(args, "allow_duplicate", False):
+        found_similar = _warn_similar_quests(quests_dir, config, spec.title)
+
     path = _create_quest(quests_dir, config, spec)
     if path is None:
         return 1
     print(str(path))
 
+    if found_similar:
+        new_id = path.stem.partition("--")[0]
+        print(
+            f"  created anyway as {new_id} -- use `quest set {new_id} status=scrapped` "
+            "if duplicate",
+            file=sys.stderr,
+        )
+
     if config.git == "auto":
         auto_commit(quests_dir, path, f"quest({quests_dir.name}): new {path.stem.partition('--')[0]} {args.title}")
 
     if args.edit:
-        _open_editor(path)
+        open_in_editor(path)
 
     return 0
+
+
+_TOKEN_OVERLAP_THRESHOLD = 0.7
+
+
+def _find_similar_quests(quests_dir: Path, pattern: str, title: str) -> list[tuple[str, str, str]]:
+    """`(id, status, title)` for every existing quest whose title collides.
+
+    A hit is either an exact slug match or a token-overlap of at least
+    `_TOKEN_OVERLAP_THRESHOLD` (ignoring stopwords) -- scoped to this one
+    log, never a cross-log sweep.
+    """
+    new_slug = slugify(title)
+    new_tokens = _title_tokens(title)
+    matches: list[tuple[str, str, str]] = []
+    for path in glob_quests(quests_dir, pattern):
+        try:
+            frontmatter = load_frontmatter_only(path)
+        except Exception:
+            continue
+        existing_title = str(frontmatter.get("title") or "")
+        if not existing_title:
+            continue
+        is_match = slugify(existing_title) == new_slug
+        if not is_match:
+            is_match = _token_overlap(new_tokens, _title_tokens(existing_title)) >= _TOKEN_OVERLAP_THRESHOLD
+        if is_match:
+            quest_id = str(frontmatter.get("id") or path.stem.partition("--")[0])
+            status = str(frontmatter.get("status") or "")
+            matches.append((quest_id, status, existing_title))
+    return matches
+
+
+def _warn_similar_quests(quests_dir: Path, config: QuestLogConfig, title: str) -> bool:
+    """Print a stderr warning naming every colliding quest. Returns whether any were found."""
+    matches = _find_similar_quests(quests_dir, config.pattern, title)
+    if not matches:
+        return False
+    print("[warning] similar quest(s) already in this log:", file=sys.stderr)
+    for quest_id, status, existing_title in matches:
+        print(f"    {quest_id}  {status}   {existing_title}", file=sys.stderr)
+    return True
 
 
 def _run_batch(quests_dir: Path, config: QuestLogConfig, args: argparse.Namespace) -> int:
@@ -279,10 +355,3 @@ def _warn_uninitialized(quest: Quest, config: QuestLogConfig, quest_id: str) -> 
                 file=sys.stderr,
             )
 
-
-def _open_editor(path: Path) -> None:
-    editor = os.environ.get("EDITOR")
-    if not editor:
-        print("[quest] $EDITOR is not set; skipping --edit")
-        return
-    subprocess.run([editor, str(path)])

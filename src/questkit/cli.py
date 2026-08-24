@@ -10,8 +10,11 @@ from .commands import (
     archive_cmd,
     brief_cmd,
     commit_cmd,
+    completion_cmd,
     deps_cmd,
+    doctor_cmd,
     done_cmd,
+    edit_cmd,
     format_cmd,
     init_cmd,
     list_cmd,
@@ -19,6 +22,7 @@ from .commands import (
     migrate_cmd,
     mv_cmd,
     new_cmd,
+    open_cmd,
     schema_cmd,
     set_cmd,
     show_cmd,
@@ -38,7 +42,20 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
         dest="where",
         action="append",
         metavar="EXPR",
-        help="repeatable filter: field=value / field~value / field:exists",
+        help=(
+            "repeatable filter: field=value / field~value / field:exists; "
+            "\"a=1;b=2\" is AND, sugar for repeating --where"
+        ),
+    )
+    parser.add_argument(
+        "--any",
+        dest="any",
+        action="append",
+        metavar="EXPR[;EXPR...]",
+        help=(
+            "repeatable OR-group: matches if any ';'-separated expression in the group "
+            "holds; each --any group is ANDed with --where and every other --any group"
+        ),
     )
     parser.add_argument(
         "-A", "--all-logs",
@@ -58,7 +75,7 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
         help="silence the summary block on stderr",
     )
     parser.add_argument(
-        "--format", dest="format", choices=["table", "json", "csv", "prompt"], default="table"
+        "--format", dest="format", choices=["table", "json", "csv", "prompt", "md"], default="table"
     )
     parser.add_argument(
         "--select",
@@ -67,14 +84,18 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
         help="restrict output to these fields, in order -- applies to every --format",
     )
     parser.add_argument(
-        "--distinct",
-        action="store_true",
-        help="collapse rows identical across the --select'd fields (requires --select)",
+        "--group-by",
+        dest="group_by",
+        metavar="field[,field2]",
+        help=(
+            "aggregate into vocabulary-ordered counts across one or two fields, instead of "
+            "listing quests; error alongside --select; unsupported for --format prompt"
+        ),
     )
     parser.add_argument(
         "--count",
         action="store_true",
-        help="print a bare integer; honors --where/--select/--distinct, ignores --limit/--offset",
+        help="print a bare integer; honors --where/--select/--group-by, ignores --limit/--offset",
     )
     parser.add_argument("--sort", dest="sort", metavar="FIELD[:asc|desc]")
     parser.add_argument("--limit", dest="limit", type=int)
@@ -139,6 +160,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_new.add_argument("--in", dest="in_dir")
     p_new.add_argument("--edit", action="store_true")
+    p_new.add_argument(
+        "--allow-duplicate",
+        dest="allow_duplicate",
+        action="store_true",
+        help="suppress the near-duplicate-title warning for this capture",
+    )
     p_new.set_defaults(func=new_cmd.run)
 
     p_list = subparsers.add("list", group="Query", help="list quests")
@@ -180,6 +207,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("--in", dest="in_dir")
     p_show.set_defaults(func=show_cmd.run)
 
+    p_edit = subparsers.add("edit", group="Modify", help="open a quest in $EDITOR")
+    p_edit.add_argument("id")
+    p_edit.add_argument("--in", dest="in_dir")
+    p_edit.set_defaults(func=edit_cmd.run)
+
+    p_open = subparsers.add("open", group="Query", help="open a quest in Obsidian (gh --web analog)")
+    p_open.add_argument("id")
+    p_open.add_argument("--in", dest="in_dir")
+    p_open.add_argument(
+        "--editor", action="store_true", help="skip Obsidian, open in $EDITOR instead"
+    )
+    p_open.set_defaults(func=open_cmd.run)
+
     p_set = subparsers.add("set", group="Modify", help="set one or more fields on a quest")
     p_set.add_argument("id")
     # nargs="*" rather than "+" so `quest set <id> --set f=v` reaches the
@@ -200,16 +240,29 @@ def build_parser() -> argparse.ArgumentParser:
     # grammar for one operation, so it is a rejection that names the right
     # form rather than a silent alias.
     p_set.add_argument("--set", dest="rejected_set", action="append", help=argparse.SUPPRESS)
+    p_set.add_argument(
+        "--log",
+        dest="log_message",
+        metavar="MESSAGE",
+        help="append '- YYYY-MM-DD: MESSAGE' to the quest's ## Log section (created if missing), "
+        "in the same save; a pure journal entry (no field=value) is legal",
+    )
     p_set.set_defaults(func=set_cmd.run)
 
     p_done = subparsers.add("done", group="Modify", help="mark a quest done")
     p_done.add_argument("id")
     p_done.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
+    p_done.add_argument(
+        "--log", dest="log_message", metavar="MESSAGE", help="append a dated bullet to ## Log"
+    )
     p_done.set_defaults(func=done_cmd.run)
 
     p_scrap = subparsers.add("scrap", group="Modify", help="mark a quest scrapped")
     p_scrap.add_argument("id")
     p_scrap.add_argument("--in", dest="in_dirs", action="append", metavar="LOG")
+    p_scrap.add_argument(
+        "--log", dest="log_message", metavar="MESSAGE", help="append a dated bullet to ## Log"
+    )
     p_scrap.set_defaults(func=done_cmd.run_scrap)
 
     p_archive = subparsers.add("archive", group="Modify", help="archive a quest (retention, not status)")
@@ -268,7 +321,22 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="write findings as a Markdown note to FILE, deleting it when the log is clean",
     )
+    p_validate.add_argument(
+        "--format",
+        dest="format",
+        choices=["text", "json"],
+        default="text",
+        help="text (default) prints to stdout for humans; json emits structured findings for agents/CI",
+    )
     p_validate.set_defaults(func=validate_cmd.run)
+
+    p_doctor = subparsers.add(
+        "doctor", group="Maintain",
+        help="read-only diagnosis pass over env, logs and installs"
+    )
+    p_doctor.add_argument("--root", dest="root", action="append", help="repeatable")
+    p_doctor.add_argument("--format", dest="format", choices=["text", "json"], default="text")
+    p_doctor.set_defaults(func=doctor_cmd.run)
 
     p_format = subparsers.add(
         "format", group="Maintain",
@@ -368,6 +436,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_version = subparsers.add("version", group="Introspect", help="print the installed questkit version")
     p_version.set_defaults(func=version_cmd.run)
+
+    p_completion = subparsers.add(
+        "completion", group="Introspect", help="print a shell completion script"
+    )
+    p_completion.add_argument("shell", choices=["bash", "zsh", "fish"])
+    p_completion.set_defaults(func=completion_cmd.run)
 
     subparsers.validate()
     parser.formatter_class = subparsers.formatter_class()

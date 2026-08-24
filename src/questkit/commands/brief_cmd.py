@@ -22,7 +22,7 @@ from .. import computed, schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import resolve_log_set, resolve_mutation_target, resolve_sweep_roots
 from ..gitutil import find_git_root, repo_status
-from ..quest import Quest
+from ..quest import Quest, glob_quests
 
 _LOG_KEY = "__log__"
 
@@ -98,6 +98,13 @@ def run(args: argparse.Namespace) -> int:
 def _header(quest: Quest, config: QuestLogConfig) -> list[str]:
     meta = [str(quest.get("type") or ""), str(quest.get("status") or ""), str(quest.get("priority") or "")]
     for field_name in ("effort", "tier", "agentic", "owner"):
+        value = quest.get(field_name)
+        if value:
+            meta.append(f"{field_name}={value}")
+    # Context-varying vocabulary (e.g. `language`) is a schema field, not a
+    # core one (QST-onxad) -- surfacing it here is what makes it reach an
+    # agent at all, with no per-log change to this function.
+    for field_name in sorted(config.schema.fields):
         value = quest.get(field_name)
         if value:
             meta.append(f"{field_name}={value}")
@@ -255,7 +262,7 @@ def _sweep_corpus(args: argparse.Namespace) -> tuple[list[dict], dict[str, tuple
             continue
         project = config.project or quests_dir.name
         terminal_by_log[project] = config.schema.terminal_statuses
-        for path in sorted(quests_dir.glob(config.pattern)):
+        for path in glob_quests(quests_dir, config.pattern):
             fm = Quest.load(path).frontmatter
             row = {key: (list(value) if isinstance(value, list) else value) for key, value in fm.items()}
             row.setdefault("project", project)

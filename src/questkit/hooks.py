@@ -1,4 +1,6 @@
-"""Entry points invoked by pre-commit: `quest-format`, `quest-validate`, `quest-bump-modified`."""
+"""Entry points invoked by git hooks: `quest-format`, `quest-validate`,
+`quest-bump-modified` (pre-commit), and `quest-apply-trailers` (post-commit,
+or timer-driven -- see QST-22gdn)."""
 
 from __future__ import annotations
 
@@ -8,6 +10,7 @@ from pathlib import Path
 
 from . import schema
 from .config import ConfigVersionError, QuestLogConfig
+from .discovery import resolve_mutation_target
 from .gitutil import find_git_root
 from .quest import Quest, QuestFileError
 from .timeutil import today
@@ -150,6 +153,153 @@ def _previous_quest(path: Path) -> Quest | None:
         return Quest.from_text(path, result.stdout.decode("utf-8", errors="replace"))
     except QuestFileError:
         return None
+
+
+def apply_trailers_main(argv: list[str] | None = None) -> int:
+    """`quest-apply-trailers` (QST-22gdn): read `Quest:` git trailers off one
+    or more commits and transition (or Log-mention) the quest(s) they name.
+
+    Trailer forms (parsed with `git interpret-trailers --parse`, never prose
+    regex, so this matches git's own understanding of what a trailer is)::
+
+        Quest: QST-x7k2m done      # token = the literal status name -> transition
+        Quest: QST-x7k2m           # bare mention -> `## Log` append only
+
+    The **fixed key** is always `Quest:`. The **token is the exact status
+    value** written to `status:` -- validated against the *target* log's own
+    declared `statuses` (a schema-overridden vocabulary writes its own words,
+    e.g. `Quest: QST-x shipped`). No verb mapping, no `status=X` form.
+
+    Callers: a `post-commit` hook wired by `quest init --hooks` (no args --
+    defaults to `HEAD`, i.e. the commit that was just made), and/or a
+    timer/cron sweep that passes an explicit commit or range
+    (`quest-apply-trailers HEAD~5..HEAD`) -- so this never assumes it's only
+    ever invoked once per commit.
+
+    Stateless idempotency, deliberately no synced state file: a transition to
+    the status the quest already holds is a no-op, and a bare-mention `## Log`
+    append dedupes on the commit's short sha already appearing in the quest's
+    body -- so re-running the same commit (a re-triggered hook, an overlapping
+    timer window) never double-applies or double-logs it.
+
+    An unknown quest id, or a status token outside the target log's declared
+    vocabulary, is a **warning** (printed, skipped) rather than a hard error --
+    a code-repo commit should never be blocked by a typo'd or stale trailer
+    (this hook cannot know whether the id will exist tomorrow after a
+    Syncthing sync), and it's a `post-commit` hook besides: git does not treat
+    its exit code as commit-blocking anyway.
+    """
+    refs = list(argv) if argv else ["HEAD"]
+    cwd = Path.cwd()
+    for sha in _resolve_commits(refs, cwd):
+        _apply_commit_trailers(sha, cwd)
+    return 0
+
+
+def _resolve_commits(refs: list[str], cwd: Path) -> list[str]:
+    """Each ref in `refs` -> one or more full commit shas.
+
+    A `..`-containing ref is a range, expanded via `git rev-list` (the timer's
+    use case: sweep everything since the last run). Anything else is a single
+    commit-ish, resolved via `git rev-parse` (the hook's use case: `HEAD`).
+    A ref that fails to resolve (bad range, repo with no commits yet) is
+    silently skipped rather than raising -- a hook must never crash a commit.
+    """
+    shas: list[str] = []
+    for ref in refs:
+        args = ["git", "rev-list", ref] if ".." in ref else ["git", "rev-parse", ref]
+        result = subprocess.run(args, cwd=cwd, capture_output=True, text=True)
+        if result.returncode != 0:
+            continue
+        shas.extend(line.strip() for line in result.stdout.splitlines() if line.strip())
+    return shas
+
+
+def _apply_commit_trailers(sha: str, cwd: Path) -> None:
+    message = subprocess.run(
+        ["git", "log", "-1", "--format=%B", sha], cwd=cwd, capture_output=True, text=True
+    ).stdout
+    short_sha = subprocess.run(
+        ["git", "rev-parse", "--short", sha], cwd=cwd, capture_output=True, text=True
+    ).stdout.strip() or sha[:7]
+
+    for quest_id, token in _parse_quest_trailers(message, cwd):
+        _apply_one_trailer(quest_id, token, short_sha, cwd)
+
+
+def _parse_quest_trailers(message: str, cwd: Path) -> list[tuple[str, str | None]]:
+    """The `Quest:` trailers in `message`, as `(quest_id, status_token_or_None)`.
+
+    Delegates trailer detection entirely to `git interpret-trailers --parse`
+    -- it alone decides what counts as the trailing key/value paragraph, so
+    this never has to reimplement (or diverge from) git's own trailer rules.
+    """
+    result = subprocess.run(
+        ["git", "interpret-trailers", "--parse"],
+        input=message,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+    )
+    trailers: list[tuple[str, str | None]] = []
+    for line in result.stdout.splitlines():
+        key, sep, value = line.partition(":")
+        if not sep or key.strip() != "Quest":
+            continue
+        parts = value.strip().split(None, 1)
+        if not parts:
+            continue
+        quest_id = parts[0]
+        token = parts[1].strip() if len(parts) > 1 else None
+        trailers.append((quest_id, token or None))
+    return trailers
+
+
+def _apply_one_trailer(quest_id: str, token: str | None, short_sha: str, cwd: Path) -> None:
+    found = resolve_mutation_target(quest_id, start=cwd)
+    if found is None:
+        print(f"[quest-apply-trailers] {short_sha}: unknown quest id '{quest_id}', skipping")
+        return
+    _quests_dir, path = found
+    try:
+        quest = Quest.load(path)
+    except QuestFileError as exc:
+        print(f"[quest-apply-trailers] {short_sha}: {exc}")
+        return
+
+    if token is None:
+        _apply_mention(quest, short_sha)
+        return
+
+    statuses = _schema_for(path).statuses
+    if token not in statuses:
+        print(
+            f"[quest-apply-trailers] {short_sha}: '{token}' is not a declared status for "
+            f"{quest_id} (expected one of: {', '.join(statuses)}), skipping"
+        )
+        return
+
+    if quest.get("status") == token:
+        return  # already in this status -- no-op, stateless idempotency
+
+    today_str = today()
+    quest.set("status", token)
+    quest.set("status_changed", today_str)
+    quest.frontmatter["modified"] = today_str
+    quest.save()
+    print(f"[quest-apply-trailers] {quest_id}: status -> {token} ({short_sha})")
+
+
+def _apply_mention(quest: Quest, short_sha: str) -> None:
+    """`## Log` append for a bare (no status token) `Quest:` mention.
+
+    Dedupes on the short sha already appearing anywhere in the body -- the
+    only idempotency check available without a synced state file (QST-22gdn).
+    """
+    if short_sha in quest.body:
+        return
+    quest.append_log(f"mentioned in commit {short_sha}", today())
+    quest.save()
 
 
 if __name__ == "__main__":
