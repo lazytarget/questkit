@@ -32,7 +32,7 @@ Syncthing inserts `.sync-conflict-...` *before* the extension, so a
 conflict copy is enumerated as a quest: duplicate id in `list`,
 inflated counts in `logs`, passes `validate` (id prefix and self-alias
 both match), and — worst — matches the log's `pattern` and therefore
-`quest commit`'s default `tracked:` set, so the unattended realm-01
+`quest commit`'s default `tracked:` set, so the unattended realm-prod-01
 committer would commit conflict litter into history. Id resolution
 survives today only because `.md` happens to sort before
 `.sync-conflict-...`. Contradicts docs §10's claim that a conflict

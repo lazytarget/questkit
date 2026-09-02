@@ -25,7 +25,7 @@ A weekly `_digest.md` per log (or one aggregated at the catch-all):
 new / done / stale counts for the week, most-idle open quests. Derived
 state like `_validation.md` — transported by Syncthing, excluded from
 `tracked:`, phone-readable in Obsidian. Zero new infrastructure: the
-realm-01 timer just runs one more command.
+realm-prod-01 timer just runs one more command.
 
 Open question for grooming: is this a questkit command
 (`quest digest --out _digest.md`) with the timer as one caller — keeping

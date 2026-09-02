@@ -58,11 +58,11 @@ row creates it.
 
 ### Home Assistant capture and view
 
-A local `todo` list → automation on item-added → `shell_command` on realm-01 →
+A local `todo` list → automation on item-added → `shell_command` on realm-prod-01 →
 `quest new --in family "{{ item }}"`. The family already uses HA to-do lists for
 groceries, so the interaction is one they've learned, with no new app. This is
 also the cleanest write path in the system: HA writes *through the CLI*, on the
-designated-committer machine ([[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]]),
+designated-committer machine ([[QST-kxo5m--designated-committer-timer-and-git-auto-unification]]),
 so HA-captured quests arrive with normalized frontmatter and never need `quest
 format`. A `command_line` sensor over `quest list --in family --format json` feeds
 a dashboard card, and `quest stale` ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]],
@@ -73,7 +73,7 @@ shipped) can drive an HA notification to someone who will never see a terminal.
 - [ ] `topology.yaml` rows land `_template.md` in the Realm root and pensieve
       vaults, creating `.templates/`
 - [ ] A Home Assistant `todo` list automation calls `quest new --in family` via
-      `shell_command` on realm-01
+      `shell_command` on realm-prod-01
 - [ ] A `command_line` sensor over `quest list --in family --format json` feeds an
       HA dashboard card
 
