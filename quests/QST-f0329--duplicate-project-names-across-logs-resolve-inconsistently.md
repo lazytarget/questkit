@@ -57,6 +57,30 @@ not junk like `.git`/`node_modules` — it holds genuinely different,
 real quest state (whatever the feature branch has in flight). Pruning it by
 path pattern would just hide data, not resolve the ambiguity.
 
+### Also affects Obsidian Bases (`quests.base`)
+
+Same root cause, third consumer, worse blast radius: the generated
+`quests/quests.base` filters with `project == "questkit"` (confirmed by
+diffing it against `src/templates/quests.base` — the template gains that
+clause on generation). Bases has no folder-scoping filter
+(`file.path.startsWith(...)`) — it's a vault-wide glob restricted only by
+`file.name.startsWith("QST-")` and `project == "<name>"`. So once a
+long-lived sibling worktree (`<repo>-worktrees/<branch>/`, the Realm's own
+convention — see `.realm/README.md`) is synced into the same Obsidian
+vault, its quests carry the same `project: questkit` value and get pulled
+into every view by that filter alone, with no dedup. This is confirmed to
+be what produced the "way too many rows" the user saw when testing Bases —
+two logs' worth (roughly 58 + 57 quests) rendered as one inflated table.
+
+Unlike the CLI paths above, this isn't fixable by changing `quest`'s
+argument-resolution logic — Bases never calls into questkit at all. Whatever
+uniqueness/disambiguation policy comes out of this quest needs a concrete
+answer for what `project:` actually *means* project-wide (must be
+vault-unique, since it's the only filter key Bases has), or `quests.base`
+needs a different, still Bases-expressible key to filter on (e.g. a
+generated `log:`/`log_path:` field unique per physical log) if `project:`
+itself is allowed to collide.
+
 ### Options
 
 1. **Enforce uniqueness, hard error everywhere** (extend today's `quest
@@ -97,9 +121,18 @@ instead of silently concatenating under one header.
       accident rather than design)
 - [ ] Covered by a test fixture with two logs sharing one `project:` name
 - [ ] Docs note git worktrees as the common real-world trigger
+- [ ] `quests.base` generation (`src/templates/quests.base` →
+      `quests/quests.base`) resolved against the same policy: either
+      `project:` is enforced/treated as globally unique so `project ==
+      "<name>"` stays a safe filter, or the generated Base filters on a key
+      that actually is unique per physical log
 
 ## Log
 
 - 2026-09-03: captured from user report — hit via an active
   `questkit-worktrees/feature-questkit-v4` worktree duplicating the
   `questkit` project name; not yet in the R&D ideas catalog
+- 2026-09-03: confirmed this is also what caused inflated row counts when
+  testing `quests.base` in Obsidian — the generated Base's only filter is
+  `project == "<name>"`, vault-wide, no folder scoping, so it silently
+  pulls in the worktree's duplicate-project quests too
