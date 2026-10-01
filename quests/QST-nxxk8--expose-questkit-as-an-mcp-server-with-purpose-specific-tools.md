@@ -3,14 +3,15 @@ id: QST-nxxk8
 title: Expose questkit as an MCP server with purpose-specific tools
 project: questkit
 type: task
-status: draft
+status: todo
 priority: medium
 tags:
   - mcp
   - cli
   - integration
 created: 2026-09-21
-modified: 2026-09-21
+status_changed: 2026-10-01
+modified: 2026-10-01
 agentic:
 aliases:
   - QST-nxxk8
@@ -18,6 +19,7 @@ blocked_by: []
 component: cli
 milestone:
 related_adrs:
+description: MCP server exposing a minimal set of purpose-specific quest tools with structured errors, so agents stop shelling out to quest
 ---
 
 ## Description
@@ -72,3 +74,5 @@ log that could not be read — a valid empty result is not an access failure.
 
 - 2026-09-21: captured while studying CCAR-F Domain 2 (TS 2.1 tool interfaces, TS 2.2 structured
   error responses); spec drafted from those objectives
+- 2026-10-01: promoted draft → todo; overrides the AX-6 "defer" disposition in
+  `docs/planning/rd_ideas_2026-08-21.md`
