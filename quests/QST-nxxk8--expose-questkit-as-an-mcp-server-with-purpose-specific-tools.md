@@ -35,7 +35,7 @@ is a natural subject. The exam objective and a plausible questkit feature are th
 **Architecture & Packaging:** 
 - The server will ship in-repo as a subcommand: `quest mcp`.
 - Built in Python (using `FastMCP` or equivalent standard SDK) to natively invoke `questkit` libraries without shelling out.
-- Dual transport support: Must support both `stdio` (for local clients like Claude Code/Cursor) and `SSE` (Server-Sent Events) for potential containerized execution.
+- Transport: `stdio` only for now (local clients like Claude Code/Cursor). A network transport is deferred; if added later it should be Streamable HTTP (SSE is deprecated in MCP), with authentication or bound to localhost.
 - Least-Privilege: Implement a `--read-only` flag for `quest mcp` that explicitly disables all mutation tools.
 
 **Scope.** Lean core, consistent with questkit's existing philosophy — a small number of
@@ -70,7 +70,7 @@ Critically, a search that legitimately matches nothing must be distinguishable f
 - [ ] Each tool description carries purpose, input formats, an example, edge cases, and a when-to-use-instead-of note.
 - [ ] Always return structured error responses with category and retryable flag on failures.
 - [ ] Valid empty search results return gracefully without triggering error routines.
-- [ ] Implemented as an in-repo subcommand (`quest mcp`) with `stdio` and `SSE` transport support.
+- [ ] Implemented as an in-repo subcommand (`quest mcp`) with `stdio` transport.
 - [ ] `--read-only` flag implemented, successfully blocking all creation and update tools.
 - [ ] Git trailer `Auto-Commit: Questkit v{version}` appended on autonomous `git: auto` commits.
 - [ ] Server registered and exercised from a real Claude Code or Cursor session.
@@ -85,3 +85,4 @@ Critically, a search that legitimately matches nothing must be distinguishable f
 - 2026-10-02: merged a Syncthing conflict with the 2026-10-01 promotion. Decided: a required
   `log` parameter on every log-scoped tool (no nearest-log resolution), and `search_quests`
   includes `draft` like `quest list` should.
+- 2026-10-02: decided `stdio` only for the first implementation; SSE dropped.

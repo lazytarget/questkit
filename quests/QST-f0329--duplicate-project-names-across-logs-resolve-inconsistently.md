@@ -11,7 +11,7 @@ tags:
   - discovery
   - correctness
 created: 2026-09-03
-modified: 2026-09-03
+modified: 2026-10-02
 agentic:
 aliases:
   - QST-f0329
@@ -105,6 +105,43 @@ before any single-log resolution or write — and always disambiguate
 duplicate-project display by log path (or a `--root`-relative short id)
 instead of silently concatenating under one header.
 
+### The wider duplicate family (2026-10-02)
+
+Worktree logs are one of four ways the same quest or log shows up more than
+once. They share a root cause (discovery assumes a key is unique and the
+first match wins) and should share one policy, even though each is fixed in
+its own quest:
+
+| Source | Duplicated key | Tracked in |
+|--------|----------------|------------|
+| Git worktree checkouts | `project:` per log, and every quest id inside it | this quest |
+| Syncthing conflict copies | quest id (`QST-x.sync-conflict-….md`) | [[QST-oe92z--exclude-syncthing-conflict-copies-from-quest-enumeration]] |
+| Re-capturing the same idea | title (different ids) | [[QST-lc3d7--check-for-duplicates-when-adding-with-same-title]] |
+| Ids colliding across logs | quest id | [[QST-whcdp--quest-doctor-diagnoses-environment-logs-and-installs]] check 1 |
+
+Learnings since capture:
+
+- **Not questkit-specific.** On 2026-10-01 `quest logs` at the Realm root
+  hard-failed on `project 'home-lab'` (`home-lab/quests` vs
+  `home-lab-worktrees/arr-stack/quests`). Any repo with a worktree breaks
+  the Realm-wide sweep, not just questkit's own.
+- **Worktrees are long-lived.** `questkit-worktrees/feature-questkit-v4` has
+  existed since 2026-08-24, so a worktree is a normal state for weeks, not
+  a moment. That rules out a hard error as the steady-state answer.
+- **Obsidian Bases shows one row per checkout.** Every quest appears once per
+  worktree that holds it, because the Base filters only on `project` and
+  file name. Worth verifying whether Bases' `file.inFolder()` gives the
+  folder scoping this quest assumed is missing; if so, generating the Base
+  with a folder filter is cheaper than a new `log_path` field.
+- **Content can't tell worktrees apart.** Two worktrees on the same commit
+  hold byte-identical quests, so content hashes don't help. Only the log
+  path tells them apart. This is why the MCP server (QST-nxxk8) takes a
+  required `log` parameter accepting a path; the CLI's `--in` should accept
+  a path for the same reason (option 3 above).
+- **Discovery tools must label, not fail.** `quest logs` and the MCP
+  `list_quest_logs` should list both checkouts with their paths and a
+  collision warning, never error out of the whole listing.
+
 ## Acceptance Criteria
 
 - [ ] Decide and document the policy for warn-vs-error, and where each
@@ -126,6 +163,11 @@ instead of silently concatenating under one header.
       `project:` is enforced/treated as globally unique so `project ==
       "<name>"` stays a safe filter, or the generated Base filters on a key
       that actually is unique per physical log
+- [ ] One documented duplicate policy shared by the four sources in the
+      table above (worktrees, conflict copies, same-title captures,
+      cross-log ids)
+- [ ] `--in` accepts a log path as well as a project name, matching the MCP
+      server's `log` parameter
 
 ## Log
 
@@ -136,3 +178,8 @@ instead of silently concatenating under one header.
   testing `quests.base` in Obsidian — the generated Base's only filter is
   `project == "<name>"`, vault-wide, no folder scoping, so it silently
   pulls in the worktree's duplicate-project quests too
+- 2026-10-02: widened to the duplicate-quest family (worktrees, Syncthing
+  conflict copies QST-oe92z, same-title captures QST-lc3d7, cross-log ids).
+  Reproduced again outside questkit (`home-lab` worktree breaks
+  `quest logs` at the Realm root). Noted that content hashes can't tell
+  worktrees apart, so the log path is the disambiguator.

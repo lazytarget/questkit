@@ -11,8 +11,8 @@ tags:
   - syncthing
   - validation
 created: 2026-08-22
-modified: 2026-08-22
-agentic:
+modified: 2026-10-02
+agentic: afk
 aliases:
   - QST-oe92z
 blocked_by: []
@@ -65,3 +65,9 @@ Decision (2026-08-22): **exclude + surface**.
 ## Log
 
 - 2026-08-22: captured from R&D catalog SYNC-1 (verified bug) + SYNC-2 (Realm-side tool), accepted for 0.4.0
+- 2026-10-02: hit for real. A Syncthing conflict on QST-nxxk8 (phone offline
+  while an agent edited on another device) produced
+  `QST-nxxk8--….sync-conflict-20261002-074306-OE7VUMG.md`. `quest validate`
+  counted it as a 61st quest and only noted a slug mismatch, with no
+  duplicate-id error. Merged by hand. Sibling of QST-f0329's worktree
+  duplicates; both should follow one duplicate policy.
