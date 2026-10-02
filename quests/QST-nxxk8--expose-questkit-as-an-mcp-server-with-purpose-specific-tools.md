@@ -86,3 +86,5 @@ Critically, a search that legitimately matches nothing must be distinguishable f
   `log` parameter on every log-scoped tool (no nearest-log resolution), and `search_quests`
   includes `draft` like `quest list` should.
 - 2026-10-02: decided `stdio` only for the first implementation; SSE dropped.
+- 2026-10-02: decided against content hashes (optimistic locking) on the update tools. They
+  would not catch cross-device conflicts like today's Syncthing one, and Git takes over that job.
