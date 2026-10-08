@@ -89,17 +89,71 @@ def bump_modified_main(argv: list[str] | None = None) -> int:
             print(f"[!] {exc}")
             continue
 
-        if _backfill_status_changed(quest, path, today_str):
+        # Only a file whose content differs from HEAD is being edited; bumping
+        # the rest would re-date the whole corpus on `--all-files` (QST-reakz).
+        # A brand-new quest has no HEAD version and counts as changed.
+        if not _differs_from_head(path):
+            continue
+
+        backfilled = _backfill_status_changed(quest, path, today_str)
+        if backfilled:
             print(f"[quest-bump-modified] {path}: backfilled status_changed")
 
         # str()-compare: `modified` normalizes to a real `date` object on save
         # (see quest._normalize_date_fields), so a straight `!=` against the
         # plain ISO string here would always be true and rewrite -- and
         # re-save -- every staged file on every commit, changed or not.
-        if str(quest.frontmatter.get("modified")) != today_str:
+        old_modified = str(quest.frontmatter.get("modified"))
+        bumped = old_modified != today_str
+        if bumped:
             quest.frontmatter["modified"] = today_str
+            print(
+                f"[quest-bump-modified] {path.name}: modified {old_modified} \u2192 {today_str}"
+            )
         quest.save()
+
+        if bumped or backfilled:
+            # pre-commit fails a hook that leaves *unstaged* changes, whatever
+            # its exit code. Staging our own edit lets the hook pass and puts
+            # the bump in the same commit.
+            _stage(path)
     return 0
+
+
+def _git_root_and_rel(path: Path) -> tuple[Path, Path] | None:
+    git_root = find_git_root(path.parent)
+    if git_root is None:
+        return None
+    try:
+        return git_root, path.resolve().relative_to(git_root)
+    except ValueError:
+        return None
+
+
+def _head_bytes(path: Path) -> bytes | None:
+    """This file's content as committed at `HEAD`, or `None` when there is
+    nothing to compare against (not a git repo, no commits yet, or a new file)."""
+    located = _git_root_and_rel(path)
+    if located is None:
+        return None
+    git_root, rel = located
+    result = subprocess.run(
+        ["git", "show", f"HEAD:{rel.as_posix()}"], cwd=git_root, capture_output=True
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def _differs_from_head(path: Path) -> bool:
+    head = _head_bytes(path)
+    return head is None or head != path.read_bytes()
+
+
+def _stage(path: Path) -> None:
+    located = _git_root_and_rel(path)
+    if located is None:
+        return
+    git_root, rel = located
+    subprocess.run(["git", "add", "--", rel.as_posix()], cwd=git_root, capture_output=True)
 
 
 def _backfill_status_changed(quest: Quest, path: Path, today_str: str) -> bool:
@@ -137,20 +191,11 @@ def _previous_quest(path: Path) -> Quest | None:
     """This file's content as committed at `HEAD`, or `None` when there's
     nothing to compare against (not a git repo, no commits yet, or this
     particular file is new -- `git show` fails for all three the same way)."""
-    git_root = find_git_root(path.parent)
-    if git_root is None:
+    head = _head_bytes(path)
+    if head is None:
         return None
     try:
-        rel = path.resolve().relative_to(git_root)
-    except ValueError:
-        return None
-    result = subprocess.run(
-        ["git", "show", f"HEAD:{rel.as_posix()}"], cwd=git_root, capture_output=True
-    )
-    if result.returncode != 0:
-        return None
-    try:
-        return Quest.from_text(path, result.stdout.decode("utf-8", errors="replace"))
+        return Quest.from_text(path, head.decode("utf-8", errors="replace"))
     except QuestFileError:
         return None
 

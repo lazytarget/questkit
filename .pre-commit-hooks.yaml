@@ -21,3 +21,4 @@
   language: python
   files: (^|/)QST-[^/]+\.md$
   pass_filenames: true
+  verbose: true

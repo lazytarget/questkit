@@ -1979,13 +1979,21 @@ re-litigating it:
   validate_quest()` — and *only* that — against each staged file passed to
   it. Fails (nonzero exit, blocking the commit) if any hard rule fails.
 - **`quest-bump-modified`** → `hooks.bump_modified_main()`. Rewrites
-  `modified:` to today's date on each staged file, if it isn't already
-  today (compared with `str()` on both sides, since `modified` is a real
-  `date` object once normalized — a naive `!=` against a plain string
-  would never match and rewrite every staged file on every commit). Pre-
-  commit's own behavior then applies: a hook that modifies files fails
-  that run so you can review/re-stage — this is standard pre-commit UX,
-  not something questkit does specially.
+  `modified:` to today's date on each file passed to it **whose content
+  differs from `HEAD`** (a brand-new quest counts as changed; an untouched
+  one is skipped, so `pre-commit run --all-files` is a no-op on an unchanged
+  corpus). The comparison of `modified` to today uses `str()` on both sides,
+  since `modified` is a real `date` object once normalized — a naive `!=`
+  against a plain string would never match.
+
+  pre-commit marks a hook **Failed** if it leaves *unstaged* changes, whatever
+  its exit code, which used to force a second commit attempt after every raw
+  edit. The hook therefore **stages its own edit** (`git add`), so the bump
+  lands in the same commit, and prints one line per bumped file
+  (`[quest-bump-modified] QST-x…md: modified 2026-10-01 → 2026-10-02`).
+  `verbose: true` in `.pre-commit-hooks.yaml` makes pre-commit show it for a
+  passing hook. Outside a git repo nothing is staged. `quest-format` still
+  fails when it reformats: that is a content change worth seeing.
 
   **It also backfills `status_changed`** when a raw text edit (Obsidian, or
   anyone bypassing the CLI) changed `status` without touching that field
