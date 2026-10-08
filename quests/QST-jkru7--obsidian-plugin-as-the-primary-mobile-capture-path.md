@@ -38,7 +38,7 @@ Fallbacks, held until the plugin experiment is evaluated:
   no-code, works on mobile, but schema logic lives in template JS
   outside validate's reach
 - R&D MOB-1 — `quest adopt`: a generic CLI verb (find `NEW--*.md`,
-  mint, rename, normalize; the realm-01 timer merely schedules it) as
+  mint, rename, normalize; the realm-prod-01 timer merely schedules it) as
   the backstop for capture with no plugin at all
 
 ## Acceptance Criteria

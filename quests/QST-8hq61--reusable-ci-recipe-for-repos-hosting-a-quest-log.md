@@ -27,7 +27,7 @@ correctly). Catches what pre-commit structurally cannot: edits
 arriving via Syncthing/Obsidian from devices with no hooks installed,
 or pushes from machines that never ran `pre-commit install`.
 
-In the current topology the realm-01 timer already validates every
+In the current topology the realm-prod-01 timer already validates every
 log on a schedule, so this adds little today — it becomes real when a
 log lives in a repo with a second contributor or push-based
 collaboration on Gitea. Needs questkit installable in the runner

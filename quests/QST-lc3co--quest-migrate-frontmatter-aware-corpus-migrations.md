@@ -91,7 +91,7 @@ Shared behavior:
   takes a flag; and with a dirty index there is no way to produce a commit
   containing only the migration, so that is a hard refusal rather than a warning.
   Each log commits separately in its own repo via `quest commit`
-  ([[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]]) with a migration message:
+  ([[QST-e6g6t--quest-commit-and-the-designated-committer]]) with a migration message:
   `quest(family): migrate — rename status completed→done (7 files)`. This is the
   first command that writes to multiple repositories in one invocation.
 

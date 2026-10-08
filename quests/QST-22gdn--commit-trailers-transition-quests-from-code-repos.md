@@ -13,7 +13,7 @@ tags:
   - agentic
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-08
 agentic: hitl
 aliases:
   - QST-22gdn
@@ -44,7 +44,7 @@ thematic alias keys — what the trailer says is what the frontmatter gets.
 **Not a CLI verb** (decided 2026-08-22 — the verb list stays slim): a
 standalone console-script entry point `quest-apply-trailers`, joining
 quest-format/quest-validate/quest-bump-modified. Callers: a post-commit
-hook wired by `quest init --hooks`, and/or the realm-01 timer.
+hook wired by `quest init --hooks`, and/or the realm-prod-01 timer.
 Stateless idempotency: a transition to the current status is a no-op;
 ## Log appends dedupe on the short sha — no synced state file.
 

@@ -84,7 +84,7 @@ on a surface that already exists. Note the existing view named "Kanban" is a
 the one that matters.
 
 **4. Home Assistant** as capture and view. A local `todo` list → automation on
-item-added → `shell_command` on realm-01 → `quest new --in family "{{ item }}"`.
+item-added → `shell_command` on realm-prod-01 → `quest new --in family "{{ item }}"`.
 The family already uses HA to-do lists for groceries, so the interaction is one
 they have learned, and it needs no new app.
 
@@ -96,7 +96,7 @@ normalized frontmatter and correct `project:` stamping and never need
 `quest stale` exists ([[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]]) an HA notification reaches a person who will
 never see a terminal.
 
-**5. `_validation.md`** ([[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]]) is the only error channel a phone user will
+**5. `_validation.md`** ([[QST-e6g6t--quest-commit-and-the-designated-committer]]) is the only error channel a phone user will
 ever read.
 
 ## Acceptance Criteria

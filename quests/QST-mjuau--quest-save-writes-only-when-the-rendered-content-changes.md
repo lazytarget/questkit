@@ -33,7 +33,7 @@ nothing changes — 66 files in `grocy-ecosystem`, every time.
 Two consequences, one of which blocks other work:
 
 1. **Syncthing churn.** N mtime changes propagate to every device on every run.
-2. **The debounce eats itself.** Any timed committer (see [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]]) gates on
+2. **The debounce eats itself.** Any timed committer (see [[QST-e6g6t--quest-commit-and-the-designated-committer]]) gates on
    "has this log been quiet for N minutes", which means asking the filesystem
    for recent mtimes. After a no-op `quest format`, every file in the log is
    freshly touched — so the next run's quiescence check sees a hot log and skips,

@@ -20,7 +20,10 @@ views:
       - tier
       - modified
       - tags
+      - milestone
     sort:
+      - property: milestone
+        direction: ASC
       - property: status
         direction: ASC
       - property: title

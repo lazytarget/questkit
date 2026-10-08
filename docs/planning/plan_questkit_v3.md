@@ -2,7 +2,7 @@
 title: questkit v3 — loop closure, multi-log UX, and agent handoff
 description: "Design record for questkit v3: the decisions, the evidence behind them, and the alternatives rejected along the way."
 created: 2026-08-19
-modified: 2026-08-21
+modified: 2026-10-08
 type: plan
 status: active
 tags:
@@ -395,9 +395,9 @@ It does **not** prevent `.git/index` churn (§2). So the Syncthing mitigation ha
 
 ### The `git: auto` trap
 
-`git: auto` means "the CLI commits from whatever device it runs on". So `quest new --in family` on a workstation *and* a realm-01 timer are **two writers on the same repo** — precisely the silently-resolving index race documented in `.stignore-common` and confirmed in production on 2026-08-14. Deriving the timer's scope from `git: auto` guarantees the overlap rather than partitioning it.
+`git: auto` means "the CLI commits from whatever device it runs on". So `quest new --in family` on a workstation *and* a realm-prod-01 timer are **two writers on the same repo** — precisely the silently-resolving index race documented in `.stignore-common` and confirmed in production on 2026-08-14. Deriving the timer's scope from `git: auto` guarantees the overlap rather than partitioning it.
 
-**Decision:** flip the quest-only logs (`family`, `realm-common`, `grocy-ecosystem`) to `git: manual` and give the timer an **explicit multi-`--in` scope**. Workstations write quest *files*; Syncthing carries them; realm-01 commits them.
+**Decision:** flip the quest-only logs (`family`, `realm-common`, `grocy-ecosystem`) to `git: manual` and give the timer an **explicit multi-`--in` scope**. Workstations write quest *files*; Syncthing carries them; realm-prod-01 commits them.
 
 The four `git: manual` code repos are where the 46 conflicts actually live. **Decided 2026-08-20: they stay in Syncthing, `.git/` included** — the multi-device working experience is worth more than the conflict litter, and the 2026-08-16 revert of the `index`/`logs` exclusion was the right call for the same reason (excluding only those while syncing the worktree leaves the index describing a tree that is not there, so `git status` lies). This is a Realm decision, recorded here because it bounds what `quest commit` can promise: pathspec limiting prevents *staging unrelated files*, and nothing questkit does prevents index churn.
 
@@ -433,7 +433,7 @@ Quiescence is **whole-log, not per-file**: reformatting file A while someone edi
 
 `quest validate --report FILE` writes findings as a Markdown note and deletes it when clean, leaving exit codes alone. The timer chooses leniency with `|| true`; questkit does not grow a `--no-fail` flag someone will later paste into a hook.
 
-→ [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]], [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]]
+→ [[QST-e6g6t--quest-commit-and-the-designated-committer]], [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]]
 
 ## 8. Agent handoff
 
@@ -465,7 +465,7 @@ Deliberately **not** built: a claim/lock/report-back protocol. `quest handoff` w
 1. **Generated `_template.md`** — `quest init --template` writes it from the log's merged schema. `.md` (not `.tmpl`) because it must be editable in Obsidian on a phone, and because it renders as what it produces. `_` prefix so both `pattern` and the Bases `startsWith("QST-")` filter skip it. **Generating it is what makes an Obsidian template safe** — a hand-written one duplicates schema logic where `quest validate` cannot protect it, and drifts; a generated one is a build artifact like `quests.base`.
 2. **Distribution via `topology.yaml`**, the route `quests.base` already uses. One hardcoded row per vault with an `.obsidian` directory: the Realm root and pensieve — not `common/beans`, the dead system questkit replaced. `.templates/` does not exist at the Realm root yet, so the row creates it.
 3. **Bases triage view** — `status == "draft" and description == null`. Note the existing view named "Kanban" is a *table grouped by status*; Bases has no board type here.
-4. **Home Assistant** — a `todo` list → automation → `shell_command` on realm-01 → `quest new --in family`. The family already uses HA to-do lists for groceries, so the interaction is learned, and it needs no new app. It is also the **cleanest write path in the system**: HA writes through the CLI on the committer machine, so those quests arrive normalized and correctly stamped.
+4. **Home Assistant** — a `todo` list → automation → `shell_command` on realm-prod-01 → `quest new --in family`. The family already uses HA to-do lists for groceries, so the interaction is learned, and it needs no new app. It is also the **cleanest write path in the system**: HA writes through the CLI on the committer machine, so those quests arrive normalized and correctly stamped.
 5. **`_validation.md`** is the only error channel a phone user will ever read.
 
 `quest ingest` (plain bullets promoted into quests) is held — add it only after watching the template go unused.
@@ -571,7 +571,7 @@ the Obsidian link graph this system exists to build.
 | 10 | [[QST-8hjjk--allow-for-select-and-distinct-when-listing-quests]] | |
 | 11 | [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] | needs `blocks` |
 | 12 | [[QST-37n0t--built-in-views-next-stale-blocked-and-quest-deps]] | needs computed fields |
-| 13 | [[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]] | |
+| 13 | [[QST-e6g6t--quest-commit-and-the-designated-committer]] | |
 | 14 | [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] | needs the schema engine |
 | 15 | [[QST-lcsza--archive-a-whole-quest-log-instead-of-individual-quests]] | needs `quest logs` |
 | 16 | [[QST-zl5xc--group-root-commands-in-help-output-as-the-cli-passes-20-verbs]] | 10 commands become 22 |
@@ -618,7 +618,7 @@ is what makes the bump honest.
 | `0.4.0` | 2 | duplicate detection, and `language` (which needs `household`) |
 
 **If 0.3 needs to shrink, items 13-15 are the cut line** — `quest commit` and the
-realm-01 timer, the Obsidian capture surface, and archival. Each is useful and
+realm-prod-01 timer, the Obsidian capture surface, and archival. Each is useful and
 nothing earlier depends on them, so they move as a block without leaving anything
 half-built. Items 1-12 are not separable: they are the loop-closure story, and
 cutting one leaves a command specified against machinery that does not exist.

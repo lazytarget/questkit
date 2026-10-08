@@ -115,9 +115,9 @@ Two pieces of v0.3 scope are infrastructure this repository can't deploy or test
 from inside itself, and were split into their own quests rather than blocking
 the release:
 
-- [[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]] —
+- [[QST-kxo5m--designated-committer-timer-and-git-auto-unification]] —
   reimplementing `git: auto` on top of `quest commit`, and deploying the
-  realm-01 systemd timer that commits Obsidian-authored quest changes.
+  realm-prod-01 systemd timer that commits Obsidian-authored quest changes.
 - [[QST-9bsnv--obsidian-template-distribution-via-topology-yaml-and-home-assistant-capture]]
   — distributing `_template.md` via `topology.yaml`, and a Home Assistant
   capture/view integration for the family log.

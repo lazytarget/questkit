@@ -12,8 +12,8 @@ tags:
   - validation
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
-agentic:
+modified: 2026-10-08
+agentic: afk
 aliases:
   - QST-oe92z
 blocked_by: []
@@ -33,7 +33,7 @@ Syncthing inserts `.sync-conflict-...` *before* the extension, so a
 conflict copy is enumerated as a quest: duplicate id in `list`,
 inflated counts in `logs`, passes `validate` (id prefix and self-alias
 both match), and — worst — matches the log's `pattern` and therefore
-`quest commit`'s default `tracked:` set, so the unattended realm-01
+`quest commit`'s default `tracked:` set, so the unattended realm-prod-01
 committer would commit conflict litter into history. Id resolution
 survives today only because `.md` happens to sort before
 `.sync-conflict-...`. Contradicts docs §10's claim that a conflict
@@ -66,4 +66,10 @@ Decision (2026-08-22): **exclude + surface**.
 ## Log
 
 - 2026-08-22: captured from R&D catalog SYNC-1 (verified bug) + SYNC-2 (Realm-side tool), accepted for 0.4.0
+- 2026-10-02: hit for real. A Syncthing conflict on QST-nxxk8 (phone offline
+  while an agent edited on another device) produced
+  `QST-nxxk8--….sync-conflict-20261002-074306-OE7VUMG.md`. `quest validate`
+  counted it as a 61st quest and only noted a slug mismatch, with no
+  duplicate-id error. Merged by hand. Sibling of QST-f0329's worktree
+  duplicates; both should follow one duplicate policy.
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.

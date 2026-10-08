@@ -37,7 +37,7 @@ Consequence: a supported operation (`quest set <id> title=...`) makes
 since 2026-08-16 because of [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]], so the log never reports clean. That in
 turn means:
 
-- `quest validate --report` ([[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]]) would write a permanent `_validation.md`
+- `quest validate --report` ([[QST-e6g6t--quest-commit-and-the-designated-committer]]) would write a permanent `_validation.md`
   for a non-problem, on a surface built specifically so real problems get noticed;
 - it trains the reader to ignore validate output, which is the failure mode the
   report file exists to prevent.
@@ -50,7 +50,7 @@ Separate **notes** from **errors** throughout.
 2. Notes do not count toward `total_errors` and do not affect the exit code.
 3. The summary line reports both: `8 quest(s) checked, 0 error(s), 1 note(s)`.
 4. `--notes` / `--no-notes` toggles display; the exit code is unaffected either way.
-5. `quest validate --report FILE` ([[QST-e6g6t--quest-commit-and-the-realm-01-designated-committer]]) writes errors and notes in separate
+5. `quest validate --report FILE` ([[QST-e6g6t--quest-commit-and-the-designated-committer]]) writes errors and notes in separate
    sections. A log whose only findings are notes counts as **clean** — the report
    file is deleted.
 

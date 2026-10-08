@@ -1,6 +1,6 @@
 ---
 id: QST-e6g6t
-title: quest commit and the realm-01 designated committer
+title: quest commit and the designated committer
 description: Own the commit convention in the app, give it a bounded pathspec, and make one always-on host the sole git writer for the quest-only logs.
 project: questkit
 type: feature
@@ -28,7 +28,7 @@ tier: brief
 
 Quests edited in Obsidian on a phone never touch the CLI, so `git: auto` never
 fires and their history stops. The fix is a designated always-on machine —
-**`realm-01`**, a new VM/LXC syncing the whole Realm and running the Pensieve
+**`realm-prod-01`**, a new VM/LXC syncing the whole Realm and running the Pensieve
 daemon — that periodically formats, validates and commits the quest-only logs.
 
 The commit convention (`quest(<project>): ...`) belongs in questkit, not
@@ -58,7 +58,7 @@ staged. That is a correctness guarantee, not a Syncthing one.
 
 **The actual mitigation is one git writer per repo.** Which exposes a trap:
 `git: auto` means "the CLI commits from whatever device it runs on", so
-`quest new --in family` on a workstation *and* the realm-01 timer are two writers
+`quest new --in family` on a workstation *and* the realm-prod-01 timer are two writers
 on the same repo — exactly the silently-resolving index race documented in
 `.stignore-common` (confirmed in production 2026-08-14).
 
@@ -67,7 +67,7 @@ on the same repo — exactly the silently-resolving index race documented in
 ### Scope
 
 **In:** `quest commit`, the `tracked:` config key, `quest validate --report`, the
-`.gitignore` entry for `_validation.md`, and the realm-01 timer.
+`.gitignore` entry for `_validation.md`, and the realm-prod-01 timer.
 **Out:** Pensieve integration (a `TimedSummons` Niffler once Pensieve is deployed;
 systemd until then), and the wider question of whether the code repos should be in
 Syncthing folders at all — that is a Realm decision, not questkit's.
@@ -111,14 +111,14 @@ Syncthing folders at all — that is a Realm decision, not questkit's.
    own git repos with **no `.gitignore` at all**, so without this the report file
    sits untracked forever, waiting for the first `git add -A`.
 9. **Flip the quest-only logs to `git: manual`** (`family`, `realm-common`,
-   `grocy-ecosystem`) and give the timer an explicit scope. realm-01 becomes the
+   `grocy-ecosystem`) and give the timer an explicit scope. realm-prod-01 becomes the
    genuine sole git writer; workstations write quest *files*, Syncthing carries
-   them, realm-01 commits them.
+   them, realm-prod-01 commits them.
 
 ### Snippets
 
 ```bash
-# realm-01, systemd timer, */15
+# realm-prod-01, systemd timer, */15
 LOGS="--in family --in realm-common --in grocy-ecosystem"
 find <log dirs> -name 'QST-*.md' -mmin -10 | grep -q . && exit 0   # whole-log quiescence
 quest format $LOGS
@@ -128,7 +128,7 @@ quest commit $LOGS --no-verify
 
 Quiescence is **whole-log, not per-file**: reformatting file A while someone edits
 file B is safe for A, but the commit would capture B mid-thought. Polling *is*
-debouncing — which is also why a file watcher is the wrong tool here. realm-01 must
+debouncing — which is also why a file watcher is the wrong tool here. realm-prod-01 must
 be a machine nobody edits from.
 
 ### Alternatives
@@ -152,11 +152,19 @@ be a machine nobody edits from.
 - [x] `--no-verify` is forwarded to git; `--push` is opt-in and off by default
 - [x] `quest validate --report FILE` writes the note and deletes it when clean
 - [x] `quest init` adds `_validation.md` to the log's `.gitignore`, idempotently
-- [ ] ~~`git: auto` is implemented via `quest commit`~~ → split to [[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]], `milestone: 0.5.0`
-- [ ] ~~The realm-01 timer runs unattended and skips a log edited in the last N minutes~~ → split to [[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]], `milestone: 0.5.0`
+- [ ] ~~`git: auto` is implemented via `quest commit`~~ → split to [[QST-kxo5m--designated-committer-timer-and-git-auto-unification]], `milestone: 0.5.0`
+- [ ] ~~The realm-prod-01 timer runs unattended and skips a log edited in the last N minutes~~ → split to [[QST-kxo5m--designated-committer-timer-and-git-auto-unification]], `milestone: 0.5.0`
 
 ## Log
 
-- 2026-08-22: closed for v0.3. The two remaining items (`git: auto` unification, the realm-01 timer) are split out to [[QST-kxo5m--realm-01-designated-committer-timer-and-git-auto-unification]] at `milestone: 0.5.0` — both are infrastructure/refactor work outside what this repository can deploy or test, and `quest commit` itself needs a release of real-world use before `git: auto` is rebuilt on top of it.
-- 2026-08-20: `quest commit`, `tracked:`, `quest validate --report`, and `quest init`'s `.gitignore` handling are implemented and tested (`commands/commit_cmd.py`, `tests/test_commit_cmd.py`, `tests/test_validate_report_and_gitignore.py`). Two acceptance criteria are deliberately left open rather than marked done by assumption: **`git: auto` reimplemented via `quest commit`** would mean rerouting `new_cmd`/`set_cmd`/`mv_cmd`/`migrate_cmd`'s existing `gitutil.auto_commit` call sites onto the new tracked-pathspec-plus-derived-message path, changing the exact commit message format every prior batch's tests assert on (`quest(<log-dir-name>): new <id> <title>` etc.) — a real refactor with real regression surface, not a drive-by rename, and better done as its own reviewed change. **The realm-01 timer** is a systemd unit on a specific always-on host outside this git repository; it cannot be deployed or tested from here. The snippet in this quest's Spec is ready to hand to whoever provisions that machine.
+- 2026-09-02: the always-on host named throughout this quest exists as of
+  today: `realm-prod-01` (VMID 310, `192.168.50.100`), Terraform-provisioned
+  and Ansible-converged from `02-projects/lazytarget/home-lab`. The name is
+  locked at `realm-prod-01` (the working name `realm-01` broke home-lab's
+  `<role>-<environment>-<index>` convention), and this quest's own slug was
+  rewritten to drop the hostname so a future rename cannot invalidate it. No
+  change to this quest's outcome — it stays closed; the timer remains
+  [[QST-kxo5m--designated-committer-timer-and-git-auto-unification]]'s work.
+- 2026-08-22: closed for v0.3. The two remaining items (`git: auto` unification, the realm-prod-01 timer) are split out to [[QST-kxo5m--designated-committer-timer-and-git-auto-unification]] at `milestone: 0.5.0` — both are infrastructure/refactor work outside what this repository can deploy or test, and `quest commit` itself needs a release of real-world use before `git: auto` is rebuilt on top of it.
+- 2026-08-20: `quest commit`, `tracked:`, `quest validate --report`, and `quest init`'s `.gitignore` handling are implemented and tested (`commands/commit_cmd.py`, `tests/test_commit_cmd.py`, `tests/test_validate_report_and_gitignore.py`). Two acceptance criteria are deliberately left open rather than marked done by assumption: **`git: auto` reimplemented via `quest commit`** would mean rerouting `new_cmd`/`set_cmd`/`mv_cmd`/`migrate_cmd`'s existing `gitutil.auto_commit` call sites onto the new tracked-pathspec-plus-derived-message path, changing the exact commit message format every prior batch's tests assert on (`quest(<log-dir-name>): new <id> <title>` etc.) — a real refactor with real regression surface, not a drive-by rename, and better done as its own reviewed change. **The realm-prod-01 timer** is a systemd unit on a specific always-on host outside this git repository; it cannot be deployed or tested from here. The snippet in this quest's Spec is ready to hand to whoever provisions that machine.
 - 2026-08-19: captured. The `.git/index` behavior was measured, not assumed — pathspec was expected to avoid the write and does not.
