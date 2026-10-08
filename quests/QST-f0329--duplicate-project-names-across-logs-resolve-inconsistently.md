@@ -11,14 +11,14 @@ tags:
   - discovery
   - correctness
 created: 2026-09-03
-modified: 2026-10-02
-agentic:
+modified: 2026-10-08
+agentic: hitl
 aliases:
   - QST-f0329
 blocked_by: []
 component:
 effort: m
-milestone:
+milestone: 0.4.0
 related_adrs:
 ---
 

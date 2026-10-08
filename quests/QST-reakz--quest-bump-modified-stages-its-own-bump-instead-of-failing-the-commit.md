@@ -12,14 +12,14 @@ tags:
   - dx
 created: 2026-10-02
 status_changed: 2026-10-02
-modified: 2026-10-02
+modified: 2026-10-08
 agentic: afk
 aliases:
   - QST-reakz
 blocked_by: []
 component:
 effort: s
-milestone:
+milestone: 0.4.0
 related_adrs:
 ---
 
