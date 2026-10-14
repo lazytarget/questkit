@@ -47,7 +47,9 @@ Related: [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capt
 [[QST-nxxk8--expose-questkit-as-an-mcp-server-with-purpose-specific-tools]],
 [[QST-tf4wc--gitea-actions-ci-for-the-questkit-repo]], [[QST-8hq61--reusable-ci-recipe-for-repos-hosting-a-quest-log]],
 [[QST-22gdn--commit-trailers-transition-quests-from-code-repos]],
-[[QST-u90gs--personalised-implement-quest-skill-for-epic-and-blueprint-quests]] (epic/blueprint harness skill).
+[[QST-u90gs--personalised-implement-quest-skill-for-epic-and-blueprint-quests]] (epic/blueprint harness skill),
+[[QST-d5zdg--r-d-round-2-idea-catalog-for-0-5-0-and-later-beads-ticgit-tix-cli-markdown-ticket]]
+(prior art from Beads/Gas Town and others: EXT-1 bears on decision 1, CLM-1 and STO-1 on decision 4).
 Background: `99-system/docs/omnigent-realm-workflow.md` (worktrees, ship flow, tea + omnigent bot user).
 
 ## Decisions to make
