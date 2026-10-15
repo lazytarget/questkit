@@ -40,6 +40,15 @@ quest done QST-x7k2m
 quest validate
 ```
 
+## Skills
+
+[`skills/`](skills/README.md) holds agent skills that wrap common questkit
+workflows. Start with **`/new-quest`**: it captures a quest in a throwaway
+worktree off the remote's default branch, runs `quest new`, validates, pushes,
+opens a PR, then removes the local worktree and branch. A ticket takes one
+prompt and never disturbs your working checkout. See the
+[skills index](skills/README.md) for the full list and install notes.
+
 ## How it resolves which log to use
 
 For every command, in order:
