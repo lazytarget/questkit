@@ -1,0 +1,57 @@
+name: Publish
+
+# On a version tag: build the package and publish it to the Gitea
+# PyPI-compatible registry. GitHub / PyPI publishing is out of scope until 0.9.0.
+#
+# Configure in the repository settings:
+#   variable GITEA_PYPI_URL    e.g. https://<gitea-host>/api/packages/<owner>/pypi
+#   secret   GITEA_PYPI_USER   registry user
+#   secret   GITEA_PYPI_TOKEN  access token with package write scope
+# Without GITEA_PYPI_URL the job builds and uploads the artifacts only.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - name: Tag matches pyproject version
+        run: |
+          version=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match pyproject version $version" >&2
+            exit 1
+          fi
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-gitea:
+    needs: build
+    if: ${{ vars.GITEA_PYPI_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - run: python -m pip install twine
+      - name: Upload to the Gitea PyPI registry
+        env:
+          TWINE_REPOSITORY_URL: ${{ vars.GITEA_PYPI_URL }}
+          TWINE_USERNAME: ${{ secrets.GITEA_PYPI_USER }}
+          TWINE_PASSWORD: ${{ secrets.GITEA_PYPI_TOKEN }}
+        run: twine upload dist/*
