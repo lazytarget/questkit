@@ -101,7 +101,7 @@ quest brief QST-x7k2m                                         # self-contained a
 quest schema quest status                                    # valid values, so nothing's guessed
 ```
 
-`--all` aggregates from every log found downward from `QST_ROOT` (an env
+`-A`/`--all-logs` aggregates from every log found downward from `QST_ROOT` (an env
 var — the sweep-root analogue of `QUEST_LOG`), the git root, or the
 current directory. Because ids are globally unique, targeted mutations
 are location-independent too: `quest set`/`show`/`done <id>` check the
@@ -134,9 +134,10 @@ aliases: [QST-x7k2m]             # surfaces the short id in Obsidian search/quic
 ```
 
 `agentic: afk | hitl` is not shown above — it is not a core field. It is
-declared by the `development` schema (`schema: development` in a log's
-`.questkit.yaml`), because "can an agent run this unsupervised" is not a
-universal vocabulary; household work has no such axis.
+declared by a shared named schema you maintain (e.g. `schema: development`
+in a log's `.questkit.yaml`; questkit ships none), because "can an agent run
+this unsupervised" is not a universal vocabulary; chores and errands have no
+such axis.
 
 ### Cross-referencing other quests in Obsidian
 
@@ -158,7 +159,7 @@ autocomplete matches on the alias and inserts the full link for you.
 This is also vault-scoped: wikilinks cannot resolve across separate
 Obsidian vaults at all, so a cross-reference between quests in different
 zones/logs only resolves when a vault containing both is open (e.g. a
-realm-root vault nesting every zone) — never when a narrower, per-zone
+vault at a parent folder nesting every log) — never when a narrower, per-log
 vault is open. For a genuinely cross-zone reference, prefer plain text
 (`QST-x7k2m`, greppable and `quest show`-able) over a wikilink that will
 silently fail to resolve in the common case.
@@ -187,9 +188,10 @@ pre-commit hook does the same for staged files on every commit (see
 
 `agentic: afk` is a claim, not a declaration — but `quest validate` no longer
 checks it. That check now lives in a schema's `readiness:` block (advisory,
-not commit-blocking): the `development` schema requires a `## Spec`/`##
-Design` section and an `## Acceptance Criteria` checklist before treating an
-AFK quest as handoff-ready. See [docs/questkit.md §13](docs/questkit.md#13-agentic-support).
+not commit-blocking): by default a quest needs a description, a non-draft
+status, a `## Spec`/`## Design` section and an `## Acceptance Criteria`
+checklist to count as handoff-ready (a schema can add rules such as
+"AFK work needs an owner"). See [docs/questkit.md §13](docs/questkit.md#13-agentic-support).
 
 ### What else `quest validate` checks
 
@@ -295,13 +297,16 @@ valid values/spec — instead of guessing or reading the YAML chain by hand.
   Skipped (not overwritten) if one already exists. Obsidian Bases is a
   fairly new file format; treat the generated file as a starting point, not
   a guarantee — check it opens the way you expect.
+- `--template` — write (or regenerate) `quests/_template.md` from the log's
+  merged schema, for capturing quests from Obsidian. Unlike the other flags it
+  overwrites on every call.
 - `--hooks` — wire questkit's own pre-commit hooks (`quest-format`,
   `quest-validate`, `quest-bump-modified`, in that order) into this repo's
   `.pre-commit-config.yaml`,
   creating the file if it doesn't exist, and run `pre-commit install`. A
   no-op (with a message) outside a git repo. Structural, not marker-based:
   re-running it never duplicates the entry. References questkit by local
-  path until it has a real Git remote to pin a release tag against. Also
+  path (your checkout). Also
   writes (or appends to) a plain `post-commit` git hook script calling
   `quest-apply-trailers` — so any commit in this repo carrying a `Quest:
   QST-xxxxx <status>` trailer transitions that quest, and a bare `Quest:
