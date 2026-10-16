@@ -1969,7 +1969,8 @@ re-litigating it:
 
 - **`quest-format`** → `hooks.format_main()`. Pure re-save of each staged
   file — normalizes list style, date-field quoting, and quote style (see
-  [§7](#7-frontmatter-reference)) with no field-value changes. Runs
+  [§7](#7-frontmatter-reference)), and ends every file with exactly one blank
+  line after the body, with no field-value changes. Runs
   *first* so a file edited outside questkit (Obsidian, by hand) arrives at
   `quest-validate`/`quest-bump-modified` already in normalized form,
   instead of the three hooks disagreeing with each other about style on

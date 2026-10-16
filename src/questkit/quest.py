@@ -86,7 +86,8 @@ class Quest:
         buf = io.StringIO()
         _yaml.dump(self.frontmatter, buf)
         body = self.body.strip("\n")
-        return f"---\n{buf.getvalue()}---\n\n{body}\n"
+        # Always one blank line before EOF: the body ends in `\n\n`.
+        return f"---\n{buf.getvalue()}---\n\n{body}\n\n"
 
     def save(self) -> bool:
         """Normalize and write. Returns True only if the file's bytes changed.

@@ -61,7 +61,7 @@ def test_format_main_reports_bad_frontmatter_without_crashing(tmp_path, capsys):
 
 def test_bump_modified_main_does_not_rewrite_when_already_today(tmp_path, monkeypatch):
     path = tmp_path / "QST-abcde--example.md"
-    _write(path, "---\nid: QST-abcde\nmodified: 2026-08-14\n---\n\n## Description\n")
+    _write(path, "---\nid: QST-abcde\nmodified: 2026-08-14\n---\n\n## Description\n\n")
     monkeypatch.setattr("questkit.hooks.today", lambda: "2026-08-14")
     before = path.read_text()
 

@@ -196,3 +196,26 @@ def test_find_by_id_matches_full_filename(tmp_path):
     assert found is not None
     assert found.name == "QST-abcde--example.md"
     assert find_by_id(tmp_path, "QST-zzzzz") is None
+
+
+def test_render_ends_with_a_blank_line_after_the_body(tmp_path):
+    path = tmp_path / "QST-aaaaa--t.md"
+    path.write_text("---\nid: QST-aaaaa\n---\n\n## Description\n\ntext\n", encoding="utf-8")
+
+    rendered = Quest.load(path).render()
+
+    assert rendered.endswith("text\n\n")
+    assert not rendered.endswith("\n\n\n")
+
+
+def test_render_is_stable_when_the_file_already_ends_with_a_blank_line(tmp_path):
+    path = tmp_path / "QST-aaaaa--t.md"
+    path.write_text("---\nid: QST-aaaaa\n---\n\n## Description\n\ntext\n\n\n\n", encoding="utf-8")
+
+    quest = Quest.load(path)
+    first = quest.render()
+
+    assert first.endswith("text\n\n")
+    quest.save()
+    assert Quest.load(path).render() == first
+    assert path.read_text(encoding="utf-8") == first
