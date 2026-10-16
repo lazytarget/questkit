@@ -48,10 +48,23 @@ def test_ci_runs_tests_lint_types_and_the_quest_log_checks():
         assert expected in commands
 
 
-def test_publish_triggers_on_version_tags_and_targets_the_gitea_registry():
+def test_publish_triggers_on_version_tags_and_targets_the_private_registry():
     workflow = _load("publish.yml")
     assert workflow["on"]["push"]["tags"] == ["v*"]
     text = (WORKFLOWS / "publish.yml").read_text(encoding="utf-8")
-    assert "GITEA_PYPI_URL" in text
+    assert "PYPI_REGISTRY_URL" in text
     assert "upload.pypi.org" not in text
     assert "pypa/gh-action-pypi-publish" not in text
+
+
+def test_publish_avoids_what_gitea_actions_does_not_support():
+    """Gitea reserves the GITEA_/GITHUB_ prefixes for secrets and variables, and
+    does not support v4 of the artifact actions."""
+    text = (WORKFLOWS / "publish.yml").read_text(encoding="utf-8")
+    assert "secrets.GITEA_" not in text and "vars.GITEA_" not in text
+    assert "upload-artifact" not in text and "download-artifact" not in text
+
+
+def test_publish_is_skipped_where_no_registry_is_configured():
+    job = _load("publish.yml")["jobs"]["publish"]
+    assert "vars.PYPI_REGISTRY_URL" in job["if"]

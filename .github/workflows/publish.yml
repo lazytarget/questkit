@@ -1,13 +1,20 @@
 name: Publish
 
-# On a version tag: build the package and publish it to the Gitea
-# PyPI-compatible registry. GitHub / PyPI publishing is out of scope until 0.9.0.
+# On a version tag: build the package and upload it to a PyPI-compatible
+# package registry (Gitea's, for now). GitHub / PyPI publishing is out of
+# scope until 0.9.0.
 #
-# Configure in the repository settings:
-#   variable GITEA_PYPI_URL    e.g. https://<gitea-host>/api/packages/<owner>/pypi
-#   secret   GITEA_PYPI_USER   registry user
-#   secret   GITEA_PYPI_TOKEN  access token with package write scope
-# Without GITEA_PYPI_URL the job builds and uploads the artifacts only.
+# This job is meant for a self-hosted Gitea Actions runner: a registry behind
+# a private network is not reachable from GitHub-hosted runners, so the job
+# is skipped wherever PYPI_REGISTRY_URL is not set (e.g. on github.com).
+#
+# Configure in the Gitea repository settings (Actions):
+#   variable PYPI_REGISTRY_URL    https://<gitea-host>/api/packages/<owner>/pypi
+#   secret   PYPI_REGISTRY_USER   the registry owner's user name
+#   secret   PYPI_REGISTRY_TOKEN  that user's access token, scope write:package
+# (Gitea reserves the GITEA_ and GITHUB_ prefixes for secret and variable names.)
+# No artifact upload/download actions are used: v4 of those is not supported
+# by Gitea Actions, so build and upload happen in one job.
 
 on:
   push:
@@ -17,7 +24,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  publish:
+    if: ${{ vars.PYPI_REGISTRY_URL != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,24 +42,9 @@ jobs:
           fi
       - run: python -m build
       - run: twine check dist/*
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-  publish-gitea:
-    needs: build
-    if: ${{ vars.GITEA_PYPI_URL != '' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - run: python -m pip install twine
-      - name: Upload to the Gitea PyPI registry
+      - name: Upload to the package registry
         env:
-          TWINE_REPOSITORY_URL: ${{ vars.GITEA_PYPI_URL }}
-          TWINE_USERNAME: ${{ secrets.GITEA_PYPI_USER }}
-          TWINE_PASSWORD: ${{ secrets.GITEA_PYPI_TOKEN }}
+          TWINE_REPOSITORY_URL: ${{ vars.PYPI_REGISTRY_URL }}
+          TWINE_USERNAME: ${{ secrets.PYPI_REGISTRY_USER }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_REGISTRY_TOKEN }}
         run: twine upload dist/*
