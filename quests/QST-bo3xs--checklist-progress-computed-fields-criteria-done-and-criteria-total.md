@@ -12,7 +12,7 @@ tags:
   - computed-fields
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-bo3xs
@@ -50,3 +50,4 @@ with unchecked criteria —
 
 - 2026-08-22: captured from R&D catalog SCH-2, accepted for 0.4.0
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

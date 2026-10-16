@@ -14,7 +14,7 @@ tags:
   - beans-migration
 created: 2026-08-13
 status_changed: 2026-08-14
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-whm2e
@@ -217,3 +217,4 @@ Obsidian **Bases** (core plugin) is already enabled in every vault/profile on th
 - [[../../../../99-system/workflow/README.md]] — spark/brief/blueprint tier definitions, inherited unchanged
 - [[../../../../03-knowledge/realm-metadata-standard.md]] — the frontmatter standard this schema extends
 - [[../../realm-hooks/README.md]] — hub-and-spoke hook model questkit's own hooks follow
+

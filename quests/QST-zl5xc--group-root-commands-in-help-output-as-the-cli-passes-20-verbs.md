@@ -12,7 +12,7 @@ tags:
   - dx
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-08-20
+modified: 2026-10-16
 aliases:
   - QST-zl5xc
 blocked_by: []
@@ -141,3 +141,4 @@ command stays reachable as `git <verb>`. Same shape, same reason.
 
 - 2026-08-20: implemented. New `src/questkit/help_groups.py`: `GroupedSubparsers` wraps the real subparsers action, requiring `group=` on every `.add(...)` call (used in place of `subparsers.add_parser(...)` throughout `cli.py`); `.validate()` — called once at the end of `build_parser()`, not lazily at `--help` time — raises `RuntimeError` naming any subcommand added by bypassing `.add(...)`, which is the actual "startup error" (a test constructs a raw subparser this way to prove it). `.formatter_class()` returns a `HelpFormatter` subclass that special-cases the one subparsers pseudo-action (identity-compared, not type-compared, so a nested subparsers action elsewhere would render normally) and renders it grouped by `GROUP_ORDER`, appending `(view)` for views. `commit`/`brief` will get group assignments when [[QST-e6g6t--quest-commit-and-the-designated-committer]]/[[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]] ship. 7 new tests in `tests/test_help_groups.py`.
 - 2026-08-19: captured. Trigger was counting the v3 command set: 10 today, 22 after v3, on an argparse default that renders them as one flat list.
+

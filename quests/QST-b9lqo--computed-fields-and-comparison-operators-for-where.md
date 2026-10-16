@@ -12,7 +12,7 @@ tags:
   - dx
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-b9lqo
@@ -140,3 +140,4 @@ at config load.
 - 2026-08-21: comparison operators moved out to [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] rule 19. They were three build-order items behind their first consumer (`readiness:` is written in `!=`), and `_parse_where` has no dependency on derivation, so the split is clean. Corrected a stale `[completed, scrapped]` reference to `[done, scrapped]`.
 - 2026-08-19: `blocked` removed from the core status enum so the computed field owns the name outright.
 - 2026-08-19: captured. The corpus check that motivated it: 0 uses of `status: blocked`, 8 quests genuinely blocked by an open dependency.
+

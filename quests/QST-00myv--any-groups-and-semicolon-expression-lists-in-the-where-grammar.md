@@ -12,7 +12,7 @@ tags:
   - cli
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-00myv
@@ -58,3 +58,4 @@ confirm shape during implementation.
 
 - 2026-08-22: captured from R&D catalog QRY-1 plus the review side-thought (semicolon in --where), accepted for 0.4.0
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

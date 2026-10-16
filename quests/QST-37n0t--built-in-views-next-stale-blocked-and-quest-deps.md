@@ -12,7 +12,7 @@ tags:
   - dx
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-37n0t
@@ -124,3 +124,4 @@ print it ([[QST-iqwjm--multi-log-query-ux-all-logs-repeatable-in-and-root-per-lo
 
 - 2026-08-20: implemented. `schema.View`/`schema.DEFAULT_VIEWS` added, resolved per log in `SchemaConfig.load` with full-replacement semantics (matching `readiness:`). `list_cmd.run` resolves `args.view` (default `"default"`), builds a per-log `view_wheres_by_log` map (each row filtered against *its own* log's view, not the first resolved log's — an explicit `--where` on a field drops that field from every log's view clause first), then `_apply_view_sort`/`_apply_view_limits` apply each log's own `sort`/`limit` independently when the caller didn't override them with `--sort`/`--limit`. `cli._add_list_options` factors the full `list` flag set so `next`/`stale`/`blocked` are the same parser with `set_defaults(view=...)` — an explicit `--view` on the command line still wins, since argparse always prefers a given value over any default. `quest deps` is a new command (`commands/deps_cmd.py`): sweeps every log in scope by default (needed to traverse qualified cross-log refs from [[QST-yiep7--qualified-cross-log-references-in-blocked-by]]), builds a global adjacency map, and renders depth-first with a global `visited` set so a diamond dependency prints the shared ancestor twice but expands its own children only once, marked `(see above)`. 16 new tests in `tests/test_views_and_deps.py`.
 - 2026-08-19: captured. `quest blocked` was not in the original list — the corpus check that added it found 0 uses of `status: blocked` against 8 genuinely blocked quests.
+

@@ -12,7 +12,7 @@ tags:
   - validation
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-10-08
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-oe92z
@@ -73,3 +73,4 @@ Decision (2026-08-22): **exclude + surface**.
   duplicate-id error. Merged by hand. Sibling of QST-f0329's worktree
   duplicates; both should follow one duplicate policy.
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

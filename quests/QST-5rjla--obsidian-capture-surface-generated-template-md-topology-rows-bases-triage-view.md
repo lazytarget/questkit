@@ -12,7 +12,7 @@ tags:
   - dx
 created: 2026-08-19
 status_changed: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-5rjla
@@ -116,3 +116,4 @@ ever read.
 - 2026-08-22: closed for v0.3. The remaining item (`topology.yaml` distribution, plus Home Assistant integration from the Spec) is split out to [[QST-9bsnv--obsidian-template-distribution-via-topology-yaml-and-home-assistant-capture]] at `milestone: 0.5.0` — infrastructure in a different part of the Realm, not deployable or testable from this repository.
 - 2026-08-20: implemented the in-repo half. New `src/questkit/templates.py` replaces `template.py`: `render_body()` now reads a template file's body section (the log's own `_template.md` when present, else the packaged `src/templates/_template.md`) instead of a hardcoded Python string; `generate_template(config)` produces the frontmatter+body skeleton from the log's merged schema (declared custom fields, `project:`, and the three default-field values), regenerated in full on every `quest init --template` call. `quests.base`'s template gained a "Needs attention" view. **Left open**: the `topology.yaml` rows and Home Assistant integration are infrastructure in a different part of the Realm (or a different system entirely) — not files in this repository, and not deployable or testable from here. The exact rows and HA automation shape are already fully specified in this quest's Spec, ready for whoever has access to `topology.yaml` and the HA instance to apply them.
 - 2026-08-19: captured. Generating the template from the schema reverses an earlier objection to Obsidian templates — the objection was drift, and generation removes it.
+

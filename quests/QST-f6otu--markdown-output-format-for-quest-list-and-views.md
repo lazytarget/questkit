@@ -12,7 +12,7 @@ tags:
   - release
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-f6otu
@@ -51,3 +51,4 @@ job (release-drafter-style category mapping from `type`).
 
 - 2026-08-22: captured from R&D catalog REL-1 (option 2 of the review), accepted for 0.4.0, hitl
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

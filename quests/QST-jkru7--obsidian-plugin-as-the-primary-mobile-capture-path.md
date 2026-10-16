@@ -12,7 +12,7 @@ tags:
   - mobile
   - capture
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-jkru7
@@ -51,3 +51,4 @@ Fallbacks, held until the plugin experiment is evaluated:
 ## Log
 
 - 2026-08-22: captured from R&D catalog MOB-5 + MOB-2 + MOB-1 (combined, plugin primary), milestone 0.5.0 chosen
+

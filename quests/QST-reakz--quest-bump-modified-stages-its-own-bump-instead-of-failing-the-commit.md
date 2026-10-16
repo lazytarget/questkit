@@ -12,7 +12,7 @@ tags:
   - dx
 created: 2026-10-02
 status_changed: 2026-10-08
-modified: 2026-10-08
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-reakz
@@ -80,3 +80,4 @@ content change worth seeing, unlike a date bump.
 
 - 2026-10-02: captured after the bump hook forced a second commit attempt on `b35421b`
 - 2026-10-08: Implemented: hook stages its own bump, prints old → new, skips files unchanged from HEAD; verbose: true in both hook manifests.
+

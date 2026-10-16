@@ -1,6 +1,7 @@
 ---
 id: QST-nxxk8
 title: Expose questkit as an MCP server with purpose-specific tools
+description: MCP server (quest mcp) exposing purpose-specific quest tools with an explicit log parameter and structured errors, so agents stop shelling out to quest
 project: questkit
 type: task
 status: todo
@@ -11,7 +12,7 @@ tags:
   - integration
 created: 2026-09-21
 status_changed: 2026-10-01
-modified: 2026-10-02
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-nxxk8
@@ -19,7 +20,6 @@ blocked_by: []
 component: cli
 milestone:
 related_adrs:
-description: MCP server (quest mcp) exposing purpose-specific quest tools with an explicit log parameter and structured errors, so agents stop shelling out to quest
 ---
 
 ## Description
@@ -88,3 +88,4 @@ Critically, a search that legitimately matches nothing must be distinguishable f
 - 2026-10-02: decided `stdio` only for the first implementation; SSE dropped.
 - 2026-10-02: decided against content hashes (optimistic locking) on the update tools. They
   would not catch cross-device conflicts like today's Syncthing one, and Git takes over that job.
+

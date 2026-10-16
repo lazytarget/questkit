@@ -13,7 +13,7 @@ tags:
   - multi-log
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-iqwjm
@@ -172,3 +172,4 @@ With multiple roots the `logs` block gains one row per root.
 
   Extended repeatable `--in` beyond `list` to `set`/`done`/`scrap` (via `resolve_mutation_target` accepting a list), since the spec explicitly calls out mutation commands as "a bounded search set with no silent sweep past it." `new`/`mv`/`show`/`schema`/`format`/`validate` keep single-target `--in` -- a repeatable `--in` on `new` has no coherent meaning (which of several logs would it write to?), and the others already gained name resolution from `QST-fmk0p` without needing to become multi-valued.
 - 2026-08-19: captured. Grouping replaced an earlier proposal to force a global ranking across logs — concatenating per-log results means each log evaluates its own view definition, which is strictly more correct.
+

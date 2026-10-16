@@ -13,7 +13,7 @@ tags:
   - agentic
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-10-08
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-22gdn
@@ -66,3 +66,4 @@ this ships.
 - 2026-08-22: captured from R&D catalog GIT-1, accepted for 0.4.0 (hitl; naming discussion recorded in the review)
 - 2026-08-22: naming decided — fixed `Quest:` key, token is the literal status name (schema-overridden vocabularies write their own words); thematic aliases and `status=X` form rejected; `quest-apply-trailers` via `quest init --hooks` confirmed.
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

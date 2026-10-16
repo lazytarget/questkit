@@ -12,7 +12,7 @@ tags:
   - cli
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-vy4vt
@@ -50,3 +50,4 @@ Grep-with-identity inside the existing engine, no new command:
 
 - 2026-08-22: captured from R&D catalog QRY-2 (revised — folded into list, not a separate command), accepted for 0.4.0
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

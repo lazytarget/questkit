@@ -13,7 +13,7 @@ tags:
   - multi-log
 created: 2026-08-16
 status_changed: 2026-08-20
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-fmk0p
@@ -128,3 +128,4 @@ wrong.
 - 2026-08-21: implemented (batch B4). `resolve_by_name_or_path()` is the single new primitive: path-shaped values delegate straight to the already-tested `find_all_logs()` (which already handles "the directory itself is a log" and "logs nested beneath it" in one pass), so the path branch is a few lines. `resolve_log()` wraps it and rejects a multi-log result with `AmbiguousDestinationError`, giving every single-target command (`show`, `set`, `done`, `mv`, `schema`, `new`) name resolution for free. `resolve_log_set()` (built in B0 for `quest migrate`) now routes its repeatable `--in` through the same resolver instead of the single-log `resolve_log`, so a mutation command's `--in` can expand to more than one log when the value names a directory of several -- matching the spec's "bounded search set with no silent sweep past it," which is a different thing from "always exactly one."
 - 2026-08-16: captured
 - 2026-08-19: groomed as part of [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]. Retitled from "Resolving `Single()` Questkit Log in specified path via `--in`"; the filename slug is intentionally left alone (filenames are immutable by design) — see [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]] for why the resulting drift should not be an error.
+

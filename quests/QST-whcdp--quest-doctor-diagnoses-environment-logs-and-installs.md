@@ -13,7 +13,7 @@ tags:
   - maintenance
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-whcdp
@@ -57,3 +57,4 @@ Text output; `--format json` follows the validate finding shape
 
 - 2026-08-22: captured from R&D catalog CLI-5, accepted for 0.4.0
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

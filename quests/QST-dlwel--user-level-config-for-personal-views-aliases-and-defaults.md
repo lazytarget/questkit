@@ -12,7 +12,7 @@ tags:
   - dx
   - config
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-dlwel
@@ -46,3 +46,4 @@ Ergonomics only, never validity:
 ## Log
 
 - 2026-08-22: captured from R&D catalog CLI-6, accepted; milestone 0.5.0 chosen (0.4.0 is full, and ergonomics lands better after completions/doctor)
+

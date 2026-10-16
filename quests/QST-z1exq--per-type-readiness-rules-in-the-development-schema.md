@@ -12,7 +12,7 @@ tags:
   - agentic
 created: 2026-08-22
 status_changed: 2026-08-24
-modified: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-z1exq
@@ -47,3 +47,4 @@ discoverable for other schemas.
 
 - 2026-08-22: captured from R&D catalog SCH-4, accepted for 0.4.0
 - 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

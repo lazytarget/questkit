@@ -10,7 +10,7 @@ tags:
   - reporting
   - cli
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-eszpe
@@ -39,3 +39,4 @@ From R&D catalog REP-1. Draft by request, milestone 0.5.0.
 ## Log
 
 - 2026-08-22: captured from R&D catalog REP-1 (draft, milestone 0.5.0)
+

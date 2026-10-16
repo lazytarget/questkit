@@ -11,7 +11,7 @@ tags:
   - schema
   - references
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-698og
@@ -51,3 +51,4 @@ new core fields:
 ## Log
 
 - 2026-08-22: captured from R&D catalog SCH-1 + AX-1 (generic mechanism instead of hardcoded relation fields), accepted for 0.5.0, hitl
+

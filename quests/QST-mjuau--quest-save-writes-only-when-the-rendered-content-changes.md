@@ -12,7 +12,7 @@ tags:
   - sync
 created: 2026-08-19
 status_changed: 2026-08-19
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-mjuau
@@ -105,3 +105,4 @@ reuse it rather than writing a second one.
 ## Log
 
 - 2026-08-21: implemented (batch B0). `save()` now returns `bool`, with the rendering split out into `Quest.render()` so `--check` and `migrate --dry-run` can ask "what would change" through the same code that answers "what changed" — anything else drifts from `save()` and turns `--check` into a guess. `format` grew positional targets and `--check`; `set_cmd` compares each assignment against the *coerced* current value, which matters because `tags=a,b` becomes a list and dates round-trip as `date` objects, so a `str`-vs-typed comparison would call every date assignment a change. The hook's read-save-reread dance is gone. One test-design note worth keeping: the "does not bump `modified`" assertions had to backdate `modified` first — a fresh quest's `modified` is already today, so a same-day test cannot tell "did not bump" from "bumped to the value it already had", and would pass against the bug.
+

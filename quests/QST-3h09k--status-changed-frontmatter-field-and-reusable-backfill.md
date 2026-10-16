@@ -12,7 +12,7 @@ tags:
   - cli
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-08-22
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-3h09k
@@ -93,3 +93,4 @@ consumes it ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]]).
 - 2026-08-21: implemented (batch B0). Two things the spec did not anticipate, both found by running the real corpus rather than by tests. First, the ordered-insertion rule was written in `set_cmd`, so `quest migrate` — the command that introduces this field to 122 files — appended it after `blocked_by` instead. Moved into `Quest.set()`, so every writer shares one rule. Second, backfilling from `created` assigned the source field's own object, which makes it appear twice in one document and ruamel then emits a YAML anchor/alias pair: the dry-run produced `status_changed: *id001`. That parses back correctly and is useless to Obsidian's Properties panel, to `grep`, and to a human — so the value is deep-copied. Also settled that `quest new` never writes the field: a new quest is *born* at its status rather than transitioning to it, so `created` is the honest answer and the fallback already returns it.
 - 2026-08-21: added [[QST-lc3co--quest-migrate-frontmatter-aware-corpus-migrations]] to `blocked_by`. The backfill acceptance criterion names `quest migrate` outright, so the dependency was real but undeclared — and `migrate` sat at build-order #15 while this quest sat at #2. It now ships at #2 and this one at #3.
 - 2026-08-19: captured. Sequenced deliberately ahead of `--fill-defaults`.
+

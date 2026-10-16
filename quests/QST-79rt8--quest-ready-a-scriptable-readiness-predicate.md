@@ -10,7 +10,7 @@ tags:
   - cli
   - agentic
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-79rt8
@@ -37,3 +37,4 @@ From R&D catalog AX-2. Draft by request, no milestone.
 ## Log
 
 - 2026-08-22: captured from R&D catalog AX-2 (draft, deferred)
+

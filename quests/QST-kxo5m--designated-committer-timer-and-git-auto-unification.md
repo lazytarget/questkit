@@ -12,7 +12,7 @@ tags:
   - git
   - automation
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-kxo5m
@@ -93,3 +93,4 @@ sole git writer.
   Still outstanding before the timer itself can be built: the host has no
   Gitea-authorized SSH identity (so it cannot yet clone or push), and `tea` is
   not logged in there — both are what this quest's committer role depends on.
+
