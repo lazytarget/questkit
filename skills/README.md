@@ -7,7 +7,7 @@ example `~/.claude/skills/`, `~/.agents/skills/`) to use it.
 
 | Skill | Invoke | What it does |
 | --- | --- | --- |
-| [new-quest](new-quest/SKILL.md) | `/new-quest` | Capture a quest in a fresh worktree + branch, push, open a PR, and purge the local worktree (opt out to keep it). |
+| [new-quest](new-quest/SKILL.md) | `/new-quest` | Create a quest in a fresh worktree + branch, push, open a PR, and purge the worktree (opt out to keep it); or alter an existing quest in place with `quest set`. |
 
 ## Adding a skill
 
