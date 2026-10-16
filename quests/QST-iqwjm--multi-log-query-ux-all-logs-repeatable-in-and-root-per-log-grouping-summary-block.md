@@ -36,7 +36,7 @@ the scope of a query hard to know and impossible to state:
   phone, so `quest list --all` reports a smaller world there than on the ProArt,
   and says nothing about it. A partial answer that does not announce itself is
   worse than a narrower one that does.
-- **There is no way to query two logs.** "House contexts" is `family + home`;
+- **There is no way to query two logs.** "House contexts" is `family + home-b`;
   "code contexts" is `questkit + pensieve + realm-system`. Neither is one log and
   neither is every log.
 - **The default status filter is invisible.** `quest list` silently injects

@@ -36,7 +36,7 @@ defaults worth ordering, and `--set` is unsafe until the schema can say which
 field names are real.
 
 v2 built the schema engine with **no consumer in the room**. The first real ones
-(`development` for the four code logs, `household` for family/home) bend it in
+(`development` for the four code logs, `household` for family/home-b) bend it in
 three places at once, which is the argument for building against a real
 vocabulary rather than writing reference docs for a shape that cannot survive
 contact.

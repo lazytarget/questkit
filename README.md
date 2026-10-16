@@ -335,3 +335,22 @@ uv pip install -e ".[dev]"
 pytest
 ruff check .
 ```
+
+### Hooks and keeping private details out
+
+```bash
+pre-commit install    # installs the commit and push stages
+```
+
+The pre-commit config runs questkit's own hooks, [gitleaks](https://github.com/gitleaks/gitleaks)
+for credentials, and `scripts/sensitive_scan.py` for names, employers and hosts
+that no credential scanner can know about. That script reads a private
+deny-list that must stay **outside** the repository
+(`~/.config/questkit/sensitive-terms`, or `$SENSITIVE_TERMS_FILE`): one
+case-insensitive regex per line, `lit:` for a literal. Without a list the hooks
+simply pass.
+
+```bash
+python scripts/sensitive_scan.py history   # matching commits, and how many would need new ids if rewritten
+python scripts/sensitive_scan.py tree      # the current tree
+```

@@ -77,11 +77,17 @@ hostnames, addresses and email addresses.
   `peteraslund.me`, internal IP addresses and VM ids. These do not need
   scrubbing, though the host name may still be generalised in docs because
   nothing in questkit depends on it being Gitea.
-- **Redact:** family member names. Done in the current tree (the owner example
-  in `QST-whm2e`); the three commits that contain it are only fixable by a
-  history rewrite (see below).
-- **Undecided:** employer and client names (`work-a`, `home`, `work-c`,
-  `work-b`) and the private repository names listed below.
+- **Family member names:** redacted in the current tree (the owner example in
+  `QST-whm2e`). The old commits that contain it stay as they are; that is
+  accepted.
+- **Redact:** employer and client names (kept in the private deny-list used by
+  `scripts/sensitive_scan.py`, never in the repository). Done in the current tree;
+  in history it needs the rewrite described below.
+- **Undecided:** the private repository names listed below. Redacting them
+  from history would rewrite all 110 commits (the very first commit has one);
+  leaving them costs nothing extra, so they are left unless you decide otherwise.
+- **If moving to GitHub entirely:** Gitea PRs and their discussion do not need
+  to be migrated.
 - **Deferred:** bumping `pyproject.toml` and tagging `v0.4.0` wait until every
   `milestone: 0.4.0` quest is complete.
 - **Registry:** Gitea PyPI-compatible registry, owner `peter`. GitHub / PyPI
@@ -95,7 +101,7 @@ strings in the number of commits shown.
 | Term | Kind | Tree | Commits touching it |
 |------|------|------|---------------------|
 | family member's first name | personal | 1 / 2 (now removed) | 3 |
-| `work-a`, `home`, `work-c`, `work-b` | employer / client names | 4 / 7, 3 / 4, 1 / 1, 4 / 5 | 4, 1, 1, 2 |
+| four employer / client names | employer / client names | 13 lines in 7 files (now removed) | 4 commits in total |
 | `pensieve` | private repo | 13 / 30 | 14 |
 | `grocy-ecosystem` (and `grocy`) | private repo | 9 / 20 | 11 |
 | `realm-system` | private repo | 5 / 10 | 7 |
@@ -105,6 +111,60 @@ strings in the number of commits shown.
 
 The code, tests and user docs (`README.md`, `docs/questkit.md`) are already
 free of these. What is left is in `quests/` and `docs/planning/`.
+
+### What a redaction costs, measured (2026-10-16)
+
+`scripts/sensitive_scan.py history` reports, for a set of terms, the matching
+commits and how many commits would get new ids. Measured on this repository
+(110 commits, all refs):
+
+| Redact | Matching commits | Earliest match | Rewritten | Keep their ids |
+|--------|------------------|----------------|-----------|----------------|
+| employer and client names | 4 | 2026-08-19 | **85** | **25** |
+| internal host and VM id | 5 | 2026-08-19 | 85 | 25 |
+| family member name | 6 | 2026-08-13 | 101 | 9 |
+| private repository names | 20 | 2026-08-13 (first commit) | 110 | 0 |
+
+The cost is set by the *earliest* match, not by how many commits match. So with
+the decisions above (family name stays, host and IPs approved, repository names
+left), the only history redaction is the employer names: **85 commits get new
+ids and the first 25 keep theirs**. All commits, authors and dates are kept.
+The only way to keep every id is not to rewrite. Squashing does not help:
+squashing the span from the first to the last match is 85 commits and the
+commits after it still change, because a commit id includes its parents.
+
+### Keeping it out in future: tooling
+
+Credential scanners and a private deny-list solve different problems:
+
+- **Credentials** (tokens, keys, high-entropy strings): gitleaks, the most
+  widely used one, runs as a `pre-commit` hook on the staged diff and, on
+  GitHub, as `gitleaks/gitleaks-action` over the full history in CI. The
+  alternative is Yelp's `detect-secrets` (pure Python, baseline file). Both are
+  what well-known repositories use. Both found nothing in this history.
+- **Names, employers, hosts**: no scanner can know these. They need a
+  deny-list, and the list is itself sensitive, so it lives outside the
+  repository (`~/.config/questkit/sensitive-terms`, or `$SENSITIVE_TERMS_FILE`).
+  `scripts/sensitive_scan.py` reads it and offers `history`, `tree`, `staged`
+  (pre-commit hook) and `push` (pre-push hook). With no list configured the
+  hooks pass, so contributors are not blocked. gitleaks can also take custom
+  rules from a private `--config` file, but it does not report how many
+  commits a rewrite would touch.
+- Wired in `.pre-commit-config.yaml` (`pre-commit install` installs both the
+  commit and push stages) and in `ci.yml` (gitleaks on GitHub only).
+
+### Deploying to the Gitea registry
+
+State: the registry token and the repository secrets and variable are set.
+`publish.yml` runs on the Gitea runner on a `vX.Y.Z` tag, and can be run by
+hand once it is on `main` (a manual run publishes `<version>.devN`, never the
+real version, because a registry will not let a version be overwritten).
+
+1. Prove the registry and token with a local upload of a `.dev` build.
+2. Merge the pull request, then run the Publish workflow by hand from the
+   Actions tab (a dry run of the CI path).
+3. After the last 0.4.0 quest: bump the version, run `scripts/release.py`,
+   tag; the tag push publishes for real.
 
 ### Rewriting history: what it does
 
@@ -222,10 +282,12 @@ version number.
 ## Acceptance Criteria (follow-up)
 
 - [x] Redact the family member's name in the current tree
-- [ ] Decide the history strategy (no rewrite, one rewrite on the primary, or a rewritten public copy) and which strings to redact; see Decisions
-- [ ] Decide on employer, client and private repository names in `quests/` and `docs/planning/`
+- [x] Redact employer and client names in the current tree
+- [x] A private deny-list scanner with history, tree, staged and push modes, and hooks wired in
+- [x] gitleaks on staged changes (pre-commit) and, on GitHub, over history in CI
+- [ ] Rewrite history to remove the employer names (85 of 110 commits get new ids), or decide to publish without that
 - [ ] Push mirror from Gitea to `github.com/lazytarget/questkit`, or the decision to move instead
-- [ ] Gitea PyPI registry working for owner `peter`: Actions variable and secrets set, first upload succeeds from a tag
+- [ ] Gitea PyPI registry: a local dev upload succeeds, then a manual workflow run, then the real tag
 - [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`)
 
 ## Log
@@ -235,4 +297,5 @@ version number.
 - 2026-10-16: Registry decision: Gitea PyPI for now; GitHub / PyPI publishing at 0.9.0.
 - 2026-10-16: History audit done (no credentials; personal and infrastructure detail found); follow-up criteria added.
 - 2026-10-16: Recorded decisions, history-rewrite effects, mirror vs move, and the Gitea PyPI registry setup. Hostname, peteraslund.me, IPs and VM ids approved as public; family name redacted in the tree; version bump deferred until 0.4.0 is complete.
+- 2026-10-16: Measured the cost of each redaction with scripts/sensitive_scan.py (employer names: 85 of 110 rewritten, 25 keep ids); wired gitleaks and the private deny-list into pre-commit and pre-push; registry deploy steps recorded.
 
