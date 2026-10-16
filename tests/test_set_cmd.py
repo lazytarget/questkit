@@ -140,3 +140,109 @@ def test_a_no_op_set_produces_no_empty_commit_in_a_git_auto_log(isolated, run, m
     run("set", quest_id, "status=todo", "--in", str(isolated / "quests"))
 
     assert _count() == before
+
+
+# --- QST-hzlny: schema-type-driven list coercion, shared with `new --set` -----
+
+
+def _frontmatter(path: Path) -> dict:
+    import yaml
+
+    text = path.read_text(encoding="utf-8")
+    return yaml.safe_load(text.split("---")[1])
+
+
+def test_set_blocked_by_single_id_writes_a_list(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+
+    assert run("set", quest_id, "blocked_by=QST-aaaaa").code == 0
+
+    assert _frontmatter(path)["blocked_by"] == ["QST-aaaaa"]
+
+
+def test_set_blocked_by_comma_list(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+
+    run("set", quest_id, "blocked_by=QST-aaaaa, QST-bbbbb")
+
+    assert _frontmatter(path)["blocked_by"] == ["QST-aaaaa", "QST-bbbbb"]
+
+
+def test_set_blocked_by_flow_list(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+
+    run("set", quest_id, "blocked_by=[QST-aaaaa, QST-bbbbb]")
+
+    assert _frontmatter(path)["blocked_by"] == ["QST-aaaaa", "QST-bbbbb"]
+
+
+def test_set_blocked_by_empty_clears_to_empty_list(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+    run("set", quest_id, "blocked_by=QST-aaaaa")
+
+    run("set", quest_id, "blocked_by=")
+
+    assert _frontmatter(path)["blocked_by"] == []
+
+
+def test_set_empty_flow_list_clears_to_empty_list(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+    run("set", quest_id, "blocked_by=QST-aaaaa")
+
+    run("set", quest_id, "blocked_by=[]")
+
+    assert _frontmatter(path)["blocked_by"] == []
+
+
+def test_set_aliases_and_tags_use_the_same_list_coercion(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+
+    run("set", quest_id, "aliases=[x, y]", "tags=a,b")
+
+    fm = _frontmatter(path)
+    assert fm["aliases"] == ["x", "y"]
+    assert fm["tags"] == ["a", "b"]
+
+
+def test_set_custom_list_field_is_coerced_by_declared_type(isolated, make_log, write_quest, run):
+    log = make_log(isolated, schema={"fields": {"owners": {"type": "list"}}})
+    path = write_quest(log, "QST-aaaaa")
+
+    assert run("set", "--in", str(log), "QST-aaaaa", "owners=ann,bob").code == 0
+
+    assert _frontmatter(path)["owners"] == ["ann", "bob"]
+
+
+def test_set_leaves_scalar_fields_alone(quest_log, run):
+    quest_id = _id_of(run("new", "A quest", "--status", "todo"))
+    path = next(quest_log.glob(f"{quest_id}*.md"))
+
+    run("set", quest_id, "component=a,b")
+
+    assert _frontmatter(path)["component"] == "a,b"
+
+
+def test_new_set_blocked_by_writes_a_list(quest_log, run):
+    result = run("new", "A quest", "--set", "blocked_by=QST-aaaaa")
+    path = next(quest_log.glob(f"{_id_of(result)}*.md"))
+    assert _frontmatter(path)["blocked_by"] == ["QST-aaaaa"]
+
+
+def test_new_set_blocked_by_flow_and_comma_forms(quest_log, run):
+    flow = run("new", "Flow quest", "--set", "blocked_by=[QST-aaaaa, QST-bbbbb]")
+    comma = run("new", "Comma quest", "--set", "blocked_by=QST-aaaaa,QST-bbbbb")
+    for result in (flow, comma):
+        path = next(quest_log.glob(f"{_id_of(result)}*.md"))
+        assert _frontmatter(path)["blocked_by"] == ["QST-aaaaa", "QST-bbbbb"]
+
+
+def test_new_set_empty_list_field_is_an_empty_list(quest_log, run):
+    result = run("new", "A quest", "--set", "blocked_by=")
+    path = next(quest_log.glob(f"{_id_of(result)}*.md"))
+    assert _frontmatter(path)["blocked_by"] == []

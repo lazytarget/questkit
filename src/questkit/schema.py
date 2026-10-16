@@ -149,6 +149,10 @@ CORE_FIELD_SPECS = {
     },
 }
 
+# Core fields whose frontmatter value is a YAML list. Custom fields join them
+# by declaring `type: list`; see `SchemaConfig.is_list_field`.
+CORE_LIST_FIELDS = ("tags", "blocked_by", "aliases")
+
 DEFAULT_STATUS = "draft"
 DEFAULT_TYPE = "task"
 DEFAULT_PRIORITY = "medium"
@@ -285,6 +289,29 @@ class SchemaConfig:
         """
         return frozenset(CORE_FIELDS) | frozenset(self.fields)
 
+    def is_list_field(self, name: str) -> bool:
+        """Whether `name` is declared list-typed: a core list field or a `type: list` custom one."""
+        if name in CORE_LIST_FIELDS:
+            return True
+        spec = self.fields.get(name)
+        return spec is not None and spec.type == "list"
+
+    def coerce(self, name: str, raw: str):
+        """Turn a CLI string into the value the schema's type for `name` calls for.
+
+        Shared by `quest set` and `quest new --set`, so both write the same
+        thing. List-typed fields accept a comma list (`a,b`) or a YAML flow
+        list (`[a, b]`); an empty value (or `[]`) is an empty list. Any other
+        field keeps the raw string.
+        """
+        if not self.is_list_field(name):
+            return raw
+        text = raw.strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        items = [item.strip().strip("'\"").strip() for item in text.split(",")]
+        return [item for item in items if item]
+
     @classmethod
     def default(cls) -> SchemaConfig:
         """The schema in effect when a log has no `schema:` block at all."""
@@ -410,7 +437,7 @@ def _resolve_readiness(merged: dict) -> tuple:
 
     A merge-by-key scheme would need a name-based identity for rules that
     have none; full replacement is what the rest of this file already does
-    for `statuses`/`fields`/etc., so a `household` schema overriding the list
+    for `statuses`/`fields`/etc., so a schema overriding the list
     down to one rule is one YAML list, not a diff against four unwritten ones.
     """
     if "readiness" not in merged:
@@ -535,13 +562,10 @@ def _resolve_terminal_statuses(merged: dict, statuses: tuple) -> tuple:
 SCHEMA_PATH_ENV = "QST_SCHEMA_PATH"
 
 # Where a *named* schema (`extends: development`) is looked up, relative to an
-# ancestor of the log. Deliberately under `99-system/`, not the Realm root:
-# `99-system/syncthing.yaml` has no folder for `.`, so the root is a local
-# composition of independently-synced folders rather than a synced entity. A
-# schema file there would resolve on one machine and fail silently on every
-# other -- the worst possible failure shape. Generalizes: any questkit artifact
-# that must reach every device belongs under `99-system/`.
-REALM_SCHEMA_DIR = ("99-system", "questkit", "schemas")
+# ancestor of the log. A fixed relative directory rather than the tree's root,
+# so a tree made of independently-synced folders can keep shared schemas in one
+# folder that reaches every device. `QST_SCHEMA_PATH` overrides it.
+SHARED_SCHEMA_DIR = ("99-system", "questkit", "schemas")
 
 
 def _resolve_schema_extends(
@@ -586,7 +610,7 @@ def _looks_like_a_path(extends: str) -> bool:
 def _schema_search_path(quests_dir: Path) -> list[Path]:
     """Where named schemas are looked for, most specific first.
 
-    `QST_SCHEMA_PATH` wins so a standalone (non-Realm) user, or a test, can
+    `QST_SCHEMA_PATH` wins so a standalone user, or a test, can
     point questkit somewhere else entirely without inventing a config key that
     every log would then have to repeat.
     """
@@ -598,7 +622,7 @@ def _schema_search_path(quests_dir: Path) -> list[Path]:
         )
     current = quests_dir.resolve()
     while True:
-        candidates.append(current.joinpath(*REALM_SCHEMA_DIR))
+        candidates.append(current.joinpath(*SHARED_SCHEMA_DIR))
         if current.parent == current:
             break
         current = current.parent
@@ -697,9 +721,32 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
         if spec.type == "enum":
             errors.extend(_check_enum(quest.path, fm, field_name, spec.values))
 
+    errors.extend(_check_list_types(quest, schema_config))
     errors.extend(_check_undeclared_fields(quest, schema_config))
     errors.extend(_check_identity(quest))
 
+    return errors
+
+
+def _check_list_types(quest, schema_config: SchemaConfig) -> list[ValidationError]:
+    """A list-typed field holding a scalar is one error, not one per character."""
+    errors: list[ValidationError] = []
+    names = list(CORE_LIST_FIELDS) + [
+        name for name, spec in schema_config.fields.items() if spec.type == "list"
+    ]
+    for name in names:
+        value = quest.frontmatter.get(name)
+        if value is None or isinstance(value, list):
+            continue
+        kind = {str: "string", bool: "boolean", int: "number", float: "number"}.get(
+            type(value), type(value).__name__
+        )
+        shown = f" '{value}'" if isinstance(value, str) else f" {value}"
+        errors.append(
+            ValidationError(
+                quest.path, f"{name} must be a list, got {kind}{shown}", rule="list-type"
+            )
+        )
     return errors
 
 

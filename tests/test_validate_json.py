@@ -131,3 +131,39 @@ def test_text_format_is_still_the_default(isolated, make_log, write_quest, run):
 
     assert "[quest validate]" in result.out
     assert "error:" in result.out
+
+
+# --- QST-hzlny: a scalar in a list field is ONE type error ----------------
+
+
+def test_scalar_in_blocked_by_is_one_list_type_error(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", blocked_by="QST-eg94z")
+
+    result = run("validate", "--in", str(log), "--format", "json")
+
+    findings = json.loads(result.out)["findings"]
+    assert [f["rule"] for f in findings] == ["list-type"]
+    assert findings[0]["message"] == "blocked_by must be a list, got string 'QST-eg94z'"
+    assert result.code == 1
+
+
+def test_scalar_in_custom_list_field_is_a_list_type_error(isolated, make_log, write_quest, run):
+    log = make_log(isolated, schema={"fields": {"owners": {"type": "list"}}})
+    write_quest(log, "QST-aaaaa", owners="ann")
+
+    result = run("validate", "--in", str(log), "--format", "json")
+
+    findings = json.loads(result.out)["findings"]
+    assert [f["rule"] for f in findings] == ["list-type"]
+    assert "owners must be a list" in findings[0]["message"]
+
+
+def test_real_lists_do_not_trigger_the_list_type_rule(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-bbbbb")
+    write_quest(log, "QST-aaaaa", blocked_by=["QST-bbbbb"])
+
+    result = run("validate", "--in", str(log), "--format", "json")
+
+    assert json.loads(result.out)["findings"] == []

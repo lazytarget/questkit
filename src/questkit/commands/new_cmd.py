@@ -67,7 +67,7 @@ class _NewSpec:
     tags: list = field(default_factory=list)
     # (name, value) pairs. Values keep their native YAML type from a batch
     # entry (a `blocked_by` list stays a list); the CLI path always yields
-    # strings, since `--set k=v` can't express anything else.
+    # strings, except that `--set` on a list-typed field is coerced by the schema.
     sets: list = field(default_factory=list)
     body: str | None = None
 
@@ -112,7 +112,10 @@ def run(args: argparse.Namespace) -> int:
         project=args.project,
         description=args.description,
         tags=list(args.tags or []),
-        sets=[_parse_set_assignment(s) for s in (args.sets or [])],
+        sets=[
+            (k, config.schema.coerce(k, v))
+            for k, v in (_parse_set_assignment(s) for s in (args.sets or []))
+        ],
         body=body,
     )
     found_similar = False

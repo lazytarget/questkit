@@ -262,7 +262,10 @@ def _check_references(
     notes: list[schema.ValidationError] = []
     own_id = quest.get("id")
 
-    for ref in quest.frontmatter.get("blocked_by") or []:
+    blocked_by = quest.frontmatter.get("blocked_by")
+    # A scalar here is reported once by schema's `list-type` rule; walking it
+    # would yield one bogus "not found" per character.
+    for ref in blocked_by if isinstance(blocked_by, list) else []:
         if "/" in ref:
             error, note = _check_qualified_ref(quest, quests_dir, ref)
             if error:
