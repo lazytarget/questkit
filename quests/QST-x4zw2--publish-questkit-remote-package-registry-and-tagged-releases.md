@@ -153,6 +153,67 @@ Credential scanners and a private deny-list solve different problems:
 - Wired in `.pre-commit-config.yaml` (`pre-commit install` installs both the
   commit and push stages) and in `ci.yml` (gitleaks on GitHub only).
 
+### Keeping a truncated GitHub history in sync with the full Gitea one
+
+A commit id is a hash of its tree, author, message **and parent ids**. So two
+remotes share a commit only if they share every ancestor of it. This decides
+what is possible:
+
+- **"Squash for GitHub, then merge an empty commit back into Gitea"** does not
+  work. The merge commit `M` has the full Gitea history as one parent, so pushing
+  `M` (or anything built on it) to GitHub sends all of that history too. Git
+  always sends everything reachable.
+- **"Never send parents older than commit X"** has no push-side option in git.
+  A shallow clone cannot reliably push, and `git replace --graft` only changes
+  your local view until it is baked in (the baked commits get new ids).
+- **What does keep ids identical:** make the squashed commit `S` the shared base.
+  Gitea's `main` continues from `S` as well, and the old full history stays on
+  Gitea under an archive ref (for example `archive/pre-public` plus the existing
+  tags). From `S` on, both remotes get the same commits with the same ids.
+  Nothing is lost on Gitea, and PRs #1 to #3 keep resolving because their
+  commits are still reachable from the archive ref. The cost: Gitea's `main`
+  is replaced once (force-push), and a Gitea push mirror must not mirror the
+  archive ref or the old tags (mirror `main` and new tags only, or push by
+  script), or the old history reaches GitHub anyway.
+- **Alternative, Gitea untouched:** a deterministic transform (graft the cut,
+  optionally redact terms) applied to every new Gitea commit by a script. The
+  public ids are then different from Gitea's but reproducible, so publishing is
+  a fast-forward. No push mirror and no shared ids.
+
+Squashing only the employer-name span (first to last match, 85 commits) and
+keeping the commits before and after it individually is possible but gives up
+the commit granularity there. A text redaction keeps all 110 commits, so it is
+the better public history if shared ids with Gitea are not needed.
+
+### Packages belong to the owner, linked to the repo
+
+Gitea package registries are owner-scoped: the upload URL is
+`/api/packages/<owner>/pypi`, never per repository. A package is then
+*linked* to a repository so that it shows on the repository's Packages tab
+(package settings, or `POST /api/v1/packages/<owner>/pypi/<name>/-/link/<repo>`).
+`questkit` is linked to `peter/questkit`.
+
+### Releasing by hand with twine
+
+```sh
+uv build                                  # dist/*.whl and dist/*.tar.gz
+uvx twine check dist/*                    # validates the metadata and README
+export TWINE_REPOSITORY_URL=https://<gitea-host>/api/packages/peter/pypi
+export TWINE_USERNAME=peter
+export TWINE_PASSWORD="$(op read 'op://The Realm/gitea-user-peter/PAT/gitea-pypi-reg')"
+uvx twine upload dist/*                   # add --skip-existing to re-run safely
+```
+
+Install: the registry must be an *extra* index, because `--index-url` would
+replace PyPI and lose the dependencies:
+
+```sh
+uv pip install --extra-index-url https://peter:<token>@<gitea-host>/api/packages/peter/pypi/simple questkit
+```
+
+A version can be deleted with `DELETE /api/v1/packages/peter/pypi/questkit/<version>`
+but not re-uploaded under the same number with different content.
+
 ### Deploying to the Gitea registry
 
 State: the registry token and the repository secrets and variable are set.
@@ -287,7 +348,8 @@ version number.
 - [x] gitleaks on staged changes (pre-commit) and, on GitHub, over history in CI
 - [ ] Rewrite history to remove the employer names (85 of 110 commits get new ids), or decide to publish without that
 - [ ] Push mirror from Gitea to `github.com/lazytarget/questkit`, or the decision to move instead
-- [ ] Gitea PyPI registry: a local dev upload succeeds, then a manual workflow run, then the real tag
+- [x] Gitea PyPI registry: a local `.dev1` upload succeeded, the package is linked to `peter/questkit` and installs from the registry
+- [ ] Gitea PyPI registry: a manual workflow run (after the merge to `main`), then the real tag
 - [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`)
 
 ## Log
@@ -298,4 +360,5 @@ version number.
 - 2026-10-16: History audit done (no credentials; personal and infrastructure detail found); follow-up criteria added.
 - 2026-10-16: Recorded decisions, history-rewrite effects, mirror vs move, and the Gitea PyPI registry setup. Hostname, peteraslund.me, IPs and VM ids approved as public; family name redacted in the tree; version bump deferred until 0.4.0 is complete.
 - 2026-10-16: Measured the cost of each redaction with scripts/sensitive_scan.py (employer names: 85 of 110 rewritten, 25 keep ids); wired gitleaks and the private deny-list into pre-commit and pre-push; registry deploy steps recorded.
+- 2026-10-16: Verified the Gitea registry end to end: uploaded a .dev1 build, linked the package to peter/questkit, installed it from the registry. Recorded the history-sync analysis and a twine guide.
 
