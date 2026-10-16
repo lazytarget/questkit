@@ -110,9 +110,9 @@ def bump_modified_main(argv: list[str] | None = None) -> int:
             print(
                 f"[quest-bump-modified] {path.name}: modified {old_modified} \u2192 {today_str}"
             )
-        quest.save()
+        rewritten = quest.save()
 
-        if bumped or backfilled:
+        if bumped or backfilled or rewritten:
             # pre-commit fails a hook that leaves *unstaged* changes, whatever
             # its exit code. Staging our own edit lets the hook pass and puts
             # the bump in the same commit.

@@ -277,3 +277,21 @@ def test_both_hook_manifests_set_verbose_on_bump_modified():
     hooks += [h for r in config["repos"] for h in r["hooks"] if h["id"] == "quest-bump-modified"]
     assert len(hooks) == 2
     assert all(h.get("verbose") is True for h in hooks)
+
+
+def test_a_resave_that_only_normalizes_is_still_staged(tmp_path, monkeypatch):
+    """`modified` is already today, but the save rewrites the file (here: the
+    missing blank line at the end) -- that edit must be staged too, or
+    pre-commit sees an unstaged diff and fails the hook."""
+    repo = tmp_path
+    _git_init(repo)
+    path = repo / "QST-aaaaa--t.md"
+    _write_quest(path, status="draft")
+    _commit(repo, path)
+    monkeypatch.setattr("questkit.hooks.today", lambda: "2026-08-14")  # same as `modified`
+    path.write_text(path.read_text(encoding="utf-8") + "edited\n", encoding="utf-8")  # hand edit
+    subprocess.run(["git", "add", "--", path.name], cwd=repo, check=True)
+
+    bump_modified_main([str(path)])
+
+    assert _unstaged(repo) == []
