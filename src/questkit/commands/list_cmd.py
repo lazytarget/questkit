@@ -14,7 +14,7 @@ from typing import Any
 
 from .. import computed, query, schema
 from ..config import ConfigVersionError, QuestLogConfig
-from ..discovery import resolve_log_set
+from ..discovery import project_labels, resolve_log_set, warn_project_collisions
 from ..quest import Quest, count_sync_conflicts, glob_quests, load_frontmatter_only
 
 # `blocked` is gone: it left the status enum (a status value and a computed
@@ -459,6 +459,11 @@ def _collect_rows(
     """
     logs = resolve_log_set(in_dirs=args.in_dirs, all_logs=args.all_logs, root=args.root)
     multi = len(logs) > 1 or args.all_logs
+    # Two logs sharing a `project:` (git worktrees) must stay two groups: the
+    # label is the per-log key everywhere below, and `project:` itself is
+    # left untouched on each row.
+    warn_project_collisions(logs, "quest list")
+    labels = project_labels(logs)
     view_name = getattr(args, "view", None) or "default"
     lazy_fields = set(computed.LAZY_FIELD_NAMES)
 
@@ -480,12 +485,13 @@ def _collect_rows(
             sort_schema = config.schema
         valid_fields |= set(config.schema.fields)
         project = config.project or quests_dir.name
-        terminal_by_log[project] = config.schema.terminal_statuses
-        schemas_by_log[project] = config.schema
+        label = labels[quests_dir]
+        terminal_by_log[label] = config.schema.terminal_statuses
+        schemas_by_log[label] = config.schema
         logs_info.append(
             LogInfo(
                 quests_dir=quests_dir,
-                project=project,
+                project=label,
                 fields=frozenset(schema.CORE_FIELDS) | frozenset(config.schema.fields),
             )
         )
@@ -517,7 +523,7 @@ def _collect_rows(
                 frontmatter = load_frontmatter_only(path)
                 row = _to_plain(frontmatter)
             row.setdefault("project", project)
-            row[_LOG_KEY] = project
+            row[_LOG_KEY] = label
             rows.append(row)
     computed.annotate_rows(rows, terminal_by_log, _LOG_KEY)
     return rows, sort_schema, frozenset(valid_fields), logs_info, schemas_by_log

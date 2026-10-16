@@ -20,7 +20,13 @@ import sys
 
 from .. import computed, schema
 from ..config import ConfigVersionError, QuestLogConfig
-from ..discovery import resolve_log_set, resolve_mutation_target, resolve_sweep_roots
+from ..discovery import (
+    project_labels,
+    resolve_log_set,
+    resolve_mutation_target,
+    resolve_sweep_roots,
+    warn_project_collisions,
+)
 from ..gitutil import find_git_root, repo_status
 from ..quest import Quest, glob_quests
 
@@ -204,7 +210,7 @@ def _dependencies(own_row: dict | None, by_id: dict, corpus: list[dict]) -> list
 def _report_back(quest: Quest, quests_dir, config: QuestLogConfig) -> list[str]:
     """`quest done` is always safe -- it reads the schema's own terminal_statuses
     ([[QST-lcsza]] etc. already rely on this). The "start work" line has no
-    such schema-driven equivalent: a renamed vocabulary (household.yaml's
+    such schema-driven equivalent: a renamed vocabulary (a schema's
     waiting/doing in place of todo/in-progress) has no declared concept of
     which status means "actively being worked". Rather than guess wrong --
     "-progress" not existing in that log's statuses would tell someone to run
@@ -255,18 +261,21 @@ def _sweep_corpus(args: argparse.Namespace) -> tuple[list[dict], dict[str, tuple
     logs = resolve_log_set(in_dirs=args.in_dirs, all_logs=not args.in_dirs, root=args.root)
     rows: list[dict] = []
     terminal_by_log: dict[str, tuple] = {}
+    warn_project_collisions(logs, "quest brief")
+    labels = project_labels(logs)
     for quests_dir in logs:
         try:
             config = QuestLogConfig.load(quests_dir)
         except (ConfigVersionError, schema.SchemaExtendsError, schema.SchemaConfigError):
             continue
         project = config.project or quests_dir.name
-        terminal_by_log[project] = config.schema.terminal_statuses
+        label = labels[quests_dir]
+        terminal_by_log[label] = config.schema.terminal_statuses
         for path in glob_quests(quests_dir, config.pattern):
             fm = Quest.load(path).frontmatter
             row = {key: (list(value) if isinstance(value, list) else value) for key, value in fm.items()}
             row.setdefault("project", project)
-            row[_LOG_KEY] = project
+            row[_LOG_KEY] = label
             row["__path__"] = str(path)
             rows.append(row)
     return rows, terminal_by_log

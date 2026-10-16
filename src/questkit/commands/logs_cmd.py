@@ -10,7 +10,7 @@ from pathlib import Path
 
 from .. import schema
 from ..config import ConfigVersionError, QuestLogConfig
-from ..discovery import resolve_log_set, resolve_sweep_roots
+from ..discovery import resolve_log_set, resolve_sweep_roots, warn_project_collisions
 from ..quest import Quest, glob_quests
 
 
@@ -18,10 +18,9 @@ from ..quest import Quest, glob_quests
 class LogEntry:
     """One discovered log's identity, counts, and schema surface.
 
-    A collision on `project:` is a hard error rather than a field here --
-    `--in`'s name resolution (QST-fmk0p) assumes `project:` is identity, so a
-    collision means that assumption is already false somewhere in the corpus,
-    and `run()` reports it immediately rather than building a row for it.
+    A collision on `project:` (typically a git worktree checkout of the same
+    project) is not an error here: both logs get a row, told apart by `path`,
+    and one stderr warning names them (QST-f0329).
     """
 
     quests_dir: Path
@@ -42,7 +41,7 @@ def run(args: argparse.Namespace) -> int:
 
     entries: list[LogEntry] = []
     warnings: list[str] = []
-    seen_projects: dict[str, Path] = {}
+    warn_project_collisions(logs, "quest logs")
 
     for quests_dir in logs:
         try:
@@ -66,16 +65,6 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         project = config.project
-        if project:
-            if project in seen_projects:
-                other = seen_projects[project]
-                print(
-                    f"[quest logs] error: project '{project}' is declared by both "
-                    f"{other} and {quests_dir} -- project: must be unique per log",
-                    file=sys.stderr,
-                )
-                return 1
-            seen_projects[project] = quests_dir
 
         paths = glob_quests(quests_dir, config.pattern)
         quests = [Quest.load(p) for p in paths]
@@ -97,7 +86,7 @@ def run(args: argparse.Namespace) -> int:
             )
         )
 
-    entries.sort(key=lambda e: e.project or "")
+    entries.sort(key=lambda e: (e.project or "", str(e.quests_dir)))
 
     if args.format == "json":
         print(json.dumps([_as_dict(e, roots) for e in entries], indent=2, ensure_ascii=False))

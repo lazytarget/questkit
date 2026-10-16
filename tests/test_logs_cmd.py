@@ -167,15 +167,15 @@ def test_a_broken_schema_extends_still_appears_as_a_row_with_a_warning(
     assert "warning" in result.out.lower() or "warning" in result.err.lower()
 
 
-def test_duplicate_project_across_two_logs_is_an_error_naming_both(isolated, make_log, run):
+def test_duplicate_project_across_two_logs_warns_and_lists_both(isolated, make_log, run):
     a = make_log(isolated / "one", "dup", project="dup")
     b = make_log(isolated / "two", "dup", project="dup")
 
     result = run("logs", "--root", str(isolated))
 
-    assert result.code == 1
-    assert str(a) in result.out or str(a) in result.err
-    assert str(b) in result.out or str(b) in result.err
+    assert result.code == 0
+    assert str(a) in result.err and str(b) in result.err
+    assert result.out.count("dup") >= 2
 
 
 def test_logs_is_read_only(isolated, make_log, write_quest, run):

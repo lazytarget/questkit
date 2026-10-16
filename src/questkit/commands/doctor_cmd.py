@@ -29,6 +29,7 @@ from ..discovery import (
     QUEST_LOG_ENV,
     find_all_logs,
     resolve_sweep_roots,
+    warn_project_collisions,
 )
 from ..quest import count_sync_conflicts, glob_quests, load_frontmatter_only
 
@@ -57,6 +58,9 @@ def run(args: argparse.Namespace) -> int:
     roots = resolve_sweep_roots(explicit=getattr(args, "root", None))
     logs = _dedupe_paths([log for root in roots for log in find_all_logs(root)])
 
+    # Same project: on two logs is routine (git worktrees), not a problem:
+    # warn once, never a finding (see docs: duplicate policy).
+    warn_project_collisions(logs, "quest doctor")
     findings: list[Finding] = []
     findings += _check_duplicate_ids(logs)
     findings += _check_sync_conflicts(logs)
