@@ -101,3 +101,19 @@ def test_publish_can_be_dry_run_with_a_dev_version():
 def test_publish_is_skipped_where_no_registry_is_configured():
     job = _load("publish.yml")["jobs"]["publish"]
     assert "vars.PYPI_REGISTRY_URL" in job["if"]
+
+
+def _hook_config() -> dict:
+    return yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+
+
+def test_quest_hooks_do_not_run_on_push():
+    """A hook with no `stages` runs at every installed stage. The quest hooks
+    rewrite and stage files, which on `git push` re-dirties quest files that were
+    deliberately left alone, so they must be limited to the commit stage."""
+    assert _hook_config()["default_stages"] == ["pre-commit"]
+
+
+def test_the_push_scan_declares_the_push_stage():
+    hooks = {h["id"]: h for r in _hook_config()["repos"] for h in r["hooks"]}
+    assert hooks["sensitive-scan-push"]["stages"] == ["pre-push"]

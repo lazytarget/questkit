@@ -18,6 +18,8 @@
 # contract, not questkit's HEAD.
 # `pre-commit install` installs both stages.
 default_install_hook_types: [pre-commit, pre-push]
+# Hooks run on commit unless they say otherwise; the quest hooks rewrite files.
+default_stages: [pre-commit]
 
 repos:
   # Credentials: tokens, keys and high-entropy strings, in the staged diff.
