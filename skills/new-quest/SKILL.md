@@ -1,61 +1,58 @@
 ---
 name: new-quest
 description: Capture a quest (ticket) with the questkit CLI in a throwaway worktree, then push and open a PR. Use for "create a quest", "new quest", "ticket this", /new-quest. Capture only; never implements.
+compatibility: Needs git, the questkit `quest` CLI, and `tea` or `gh` for the PR step.
 ---
 
 # /new-quest
 
-Write the ticket in a fresh worktree so the main checkout's uncommitted work stays untouched. Implement the quest only if the user also asks.
+Write the ticket in a fresh worktree so the main checkout's uncommitted work stays untouched. Implement the quest only if the user also asks. `--keep` ("keep the worktree") skips step 6.
 
-`--keep` ("keep the worktree") skips step 6.
-
-Run from the repo whose `quests/` log should hold the quest.
+`S` = `scripts/new-quest.sh` beside this file.
 
 ## 1. Worktree
 
-- Remote: the only one, else the one `AGENTS.md`/docs name primary, else after `git fetch --all` the one whose default branch has the newest `git log -1 --format=%ct`.
-- Default branch: `git ls-remote --symref <remote> HEAD`, then `git fetch <remote> <branch>`.
-- `git worktree add -b quest/<slug> .claude/worktrees/<slug> <remote>/<branch>` (or the repo's documented convention), then `cd` in.
+Run from inside the target repo: `S start <slug> [--remote R]`. It prints `WORKTREE`, `REMOTE`, `BASE`, `BRANCH`, `HOOKS`, and one `LOG project=… dir=… git=…` line per quest log.
+
+- Several remotes: the script picks the newest. Pass `--remote` when `AGENTS.md`/docs name a primary.
+- `cd $WORKTREE` for the remaining steps.
 
 ## 2. Quest
 
+Pick the log: the `LOG` line whose `project` matches the quest's subject (one log: that one; ambiguous: ask). Always pass it explicitly, never rely on the working directory: `--in <project>`, or `--in <dir>` when `project` is empty.
+
 ```bash
-quest new "<title>" --type task --status draft --priority low --tag <tag> \
-  --description "<one line>" --body - <<'BODY'
+quest new "<title>" --in <project> --type task --status draft --priority low \
+  --tag <tag> --description "<one line>" --body - <<'BODY'
 ...
 BODY
 ```
 
-- `quest schema quest` lists valid enum values.
+- `quest schema quest --in <project>` lists valid enum values.
 - Body: description, questions to answer, suggested approach, related links, open questions. Label unverified claims as unverified.
-- Refine with `quest set <id> field=value` or edit the frontmatter.
+- Refine with `quest set <id> field=value --in <project>` or edit the frontmatter.
 
 ## 3. Hooks
 
-Questkit hooks (`quest-format`, `quest-validate`) absent from `.pre-commit-config.yaml` or `.git/hooks`: run `quest format && quest validate`. Done when validate reports 0 errors.
+`HOOKS=inactive`: run `quest format --in <project> && quest validate --in <project>`. Done when validate reports 0 errors.
 
-## 4. Push
+## 4. Commit
+
+`git: auto` logs commit `quest new`/`quest set` themselves. After any direct file edit run `git status --porcelain`, and commit what remains:
 
 ```bash
-git add quests && git commit -m "quest(<project>): <QST-id>, <title>"
-git push -u <remote> quest/<slug>
+git add <log dir> && git commit -m "quest(<project>): <QST-id>, <title>"
 ```
 
-Follow the repo's commit and attribution rules. Push to the primary remote only.
+Follow the repo's commit and attribution rules.
 
-## 5. PR
+## 5. Push and PR
 
-`tea pulls create --login <login> --repo <owner>/<repo> --base <branch> --head quest/<slug> --title ... --description ...` (Gitea), or `gh pr create --base ... --head ... --title ... --body ...` (GitHub). No authenticated CLI: report the branch instead.
+`S push`, then `tea pulls create --login <login> --repo <owner>/<repo> --base $BASE --head $BRANCH --title ... --description ...` (Gitea) or `gh pr create --base $BASE --head $BRANCH --title ... --body ...` (GitHub). No authenticated CLI: report the branch instead.
 
 ## 6. Purge
 
-Push and PR succeeded, no `--keep`:
-
-```bash
-cd <repo root> && git worktree remove .claude/worktrees/<slug> && git branch -D quest/<slug>
-```
-
-The remote branch stays until the PR merges. Push failed: keep the worktree.
+Push and PR succeeded, no `--keep`: `S purge <slug>`. The remote branch stays until the PR merges. Push failed: keep the worktree.
 
 ## Report
 
