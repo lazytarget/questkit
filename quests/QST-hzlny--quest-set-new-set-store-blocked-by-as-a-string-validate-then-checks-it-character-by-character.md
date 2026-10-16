@@ -11,14 +11,14 @@ tags:
   - cli
   - correctness
 created: 2026-10-13
-modified: 2026-10-13
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-hzlny
 blocked_by: []
 component:
 effort: s
-milestone:
+milestone: 0.4.0
 related_adrs:
 ---
 
@@ -75,8 +75,10 @@ Workaround used: hand-edit the frontmatter to a YAML list.
 ## Log
 
 - 2026-10-13: hit while creating home-lab QST-2aow5 (blocked by QST-eg94z); root cause read from `set_cmd._coerce` and `validate_cmd` on `main`
+- 2026-10-16: Added to milestone 0.4.0.
 
 ## Related
 
 - [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] - typed fields; coercion should use them
 - [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] - other `blocked_by` work
+

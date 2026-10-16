@@ -9,13 +9,13 @@ tags:
   - questkit
   - ci
 created: 2026-08-22
-modified: 2026-08-22
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-8hq61
 blocked_by: []
 component:
-milestone: 0.9.0
+milestone: 0.5.0
 related_adrs:
 ---
 
@@ -38,3 +38,5 @@ From R&D catalog CI-2.
 ## Log
 
 - 2026-08-22: captured from R&D catalog CI-2 (draft, milestone 0.9.0)
+- 2026-10-16: Moved 0.9.0 -> 0.5.0.
+

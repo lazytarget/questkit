@@ -12,7 +12,7 @@ tags:
   - automation
   - ci
 created: 2026-10-13
-modified: 2026-10-14
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-2z8db
@@ -45,7 +45,7 @@ made (a grilling session is the natural way) before it can be groomed to `afk`.
 Related: [[QST-xk7js--quest-brief-a-self-contained-work-order-and-the-batch-capture-that-feeds-it]],
 [[QST-79rt8--quest-ready-a-scriptable-readiness-predicate]] (the `quest ready && ...` primitive this wants),
 [[QST-nxxk8--expose-questkit-as-an-mcp-server-with-purpose-specific-tools]],
-[[QST-tf4wc--gitea-actions-ci-for-the-questkit-repo]], [[QST-8hq61--reusable-ci-recipe-for-repos-hosting-a-quest-log]],
+[[QST-tf4wc--github-actions-ci-for-the-questkit-repo]], [[QST-8hq61--reusable-ci-recipe-for-repos-hosting-a-quest-log]],
 [[QST-22gdn--commit-trailers-transition-quests-from-code-repos]],
 [[QST-u90gs--personalised-implement-quest-skill-for-epic-and-blueprint-quests]] (epic/blueprint harness skill),
 [[QST-d5zdg--r-d-round-2-idea-catalog-for-0-5-0-and-later-beads-ticgit-tix-cli-markdown-ticket]]
@@ -257,3 +257,4 @@ wrapping, model selection tables and the Omnigent link follow as separate quests
 - 2026-10-14: added decision 8 and acceptance criteria after Matt Pocock's skills v1.3 (`/implement-spec`, `/pr`, `/retro`); personalised `/implement-quest` split out as QST-u90gs; no `blocked_by` between them because the tracer bullet runs on spark quests and does not need the skill
 
 - 2026-10-13: captured from a request to automate AFK quest implementation end to end (worktree, branch, implement, update quest, Gitea PR); open decisions listed, nothing decided yet
+

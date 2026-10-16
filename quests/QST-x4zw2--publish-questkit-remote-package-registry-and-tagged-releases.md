@@ -43,18 +43,19 @@ From R&D catalog REL-4. Draft by request; originally deferred to milestone 0.9.0
 Pulled into 0.4.0, and widened: questkit goes **public on GitHub**
 (`github.com/lazytarget/questkit`). The self-hosted Gitea remote does not go
 away; it stays the private-first working remote, and GitHub is the public
-mirror. That changes two of the notes above: public PyPI is no longer an
-"if/when" (it is in scope), and the Gitea registry is optional rather than
-the only registry.
+mirror. Registry decision: the Gitea PyPI-compatible
+registry for now; GitHub / PyPI publishing follows once the setup is more
+mature (0.9.0).
 
 ## Acceptance Criteria
 
 - [ ] Audit the Gitea Git repo history for secrets and sensitive data (tokens, hostnames, personal data, Realm-internal paths) before anything is published to GitHub. The Gitea remote continues to live after GitHub goes live
 - [ ] Push the code to the public GitHub repo `github.com/lazytarget/questkit`
-- [ ] Set up a package registry on GitHub / PyPI so `pip install questkit` works
+- [ ] Set up a Gitea PyPI-compatible package registry so `pip install --index-url <gitea>/api/packages/<owner>/pypi/simple questkit` works. GitHub / PyPI publishing follows once the setup is more mature (0.9.0)
 
 ## Log
 
 - 2026-08-22: captured from R&D catalog REL-4 (draft, milestone 0.9.0)
 - 2026-10-16: Bumped 0.9.0 -> 0.4.0; added public-GitHub scope (secret audit, push to github.com/lazytarget/questkit, GitHub/PyPI registry). Gitea remote stays.
+- 2026-10-16: Registry decision: Gitea PyPI for now; GitHub / PyPI publishing at 0.9.0.
 
