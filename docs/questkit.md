@@ -245,8 +245,12 @@ or naming a directory that exists on disk, is a **path**; anything else is a
 name. Disk existence wins the tie, so a directory that happens to share a
 project's name still resolves as the path.
 
-`project:` is therefore **identity, not a label** — unique per log, enforced by
-`quest logs` and `quest validate`. A path that is not itself a log, but has
+`project:` is meant to be **identity, not a label** — one name per log — but
+nothing can stop two checkouts (git worktrees) from declaring the same one. A
+name that matches more than one log is an **error listing every candidate
+path**, never a silent pick; pass a path (`--in <path>`, a log's `quests/`
+directory or the project directory above it) to disambiguate. See
+[Duplicate policy](#duplicate-policy). A path that is not itself a log, but has
 logs beneath it, expands to all of them for a read command (`--in
 projects/my-app` behaves like `--in projects/my-app/quests`); a single-target command (`new`, `show`,
 `set`, ...) errors naming the candidates instead of guessing. Errors are
@@ -1099,7 +1103,7 @@ identical to text mode. Shape:
 above, and only `"error"` findings count toward the exit code. `rule` is a
 stable slug naming which check produced the finding (`required-field`,
 `enum`, `undeclared-field`, `identity`, `slug-drift`, `project-drift`,
-`unique-field`, `reference`, `parse-error`) — an agent can filter or dedupe
+`unique-field`, `list-type`, `reference`, `parse-error`) — an agent can filter or dedupe
 on it without parsing `message` prose, which stays free-form and may change
 wording between releases. `--format json` composes with **`--no-notes`**
 (note-kind findings are simply omitted) and with **`--report FILE`** (the
@@ -1371,11 +1375,10 @@ scope of any sweep is device-dependent and must be stated, not implied. A
 **fully archived log is excluded from the footer totals** (its work is done);
 its own row still reports its real counts.
 
-**`project:` uniqueness is enforced here.** A duplicate `project:` across two
-logs is a hard error naming both paths — `--in`'s name resolution
-([§9](#9-multi-zone-setup)) depends on that uniqueness being true, so a
-collision is caught at the one command whose whole job is inventorying every
-log at once.
+**Duplicate `project:` names are warned about, not rejected.** Two logs
+declaring the same `project:` (typically a git worktree checkout) both get a
+row, told apart by PATH, plus one stderr warning naming both paths. See
+[Duplicate policy](#duplicate-policy).
 
 `--format json` emits one object per log with the full config surface —
 project, path, counts, `git`, declared custom fields, `strict`, `field_order`
@@ -1500,7 +1503,7 @@ you will never see a raw Python traceback from normal usage.
 | `priority` | Yes | enum | `critical \| high \| medium \| low \| deferred` |
 | `effort` | No | enum | `xs \| s \| m \| l \| xl` |
 | `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (A convention such as a short first name per person is a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
-| `agentic` | No | enum | `afk \| hitl`. Declared by a shared named schema (e.g. `development`; questkit ships none), not the core — `afk\|hitl` is not a universal vocabulary, and plenty of work (chores, errands) has no unsupervised-agent axis. See [§13](#13-agentic-support). |
+| `agentic` | No | enum | `afk \| hitl`. Declared by a shared named schema (e.g. the example `schemas/development.yaml`), not the core — `afk\|hitl` is not a universal vocabulary, and plenty of work (chores, errands) has no unsupervised-agent axis. See [§13](#13-agentic-support). |
 | `archived` | No | bool | Whether this quest should still be in front of you. **Orthogonal to `status`**: archiving answers a retention question, scrapping answers what happened to the work, and a `done` quest in a wound-up project is archived and emphatically not scrapped. Sorts into the alphabetical tail of `field_order` — rarely set, never scanned. |
 | `milestone` | No | free text | A planning bucket (`0.4.0`, `spring-2027`), declared by a shared named schema such as `development`. Named `milestone` because it is a bucket that can slip, not a fact. **Not** a membership link — questkit has no parent/child concept. |
 | `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§8](#8-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
@@ -1640,6 +1643,15 @@ so `--sort component:asc` works. `type: enum` with no `values:` is a schema
 error (an enum with no vocabulary validates nothing), and `values:` on a
 non-enum type is too.
 
+**List fields.** The core `tags`, `blocked_by` and `aliases` are list-typed, and
+a custom field joins them with `type: list`. `quest set <id> field=value` and
+`quest new --set field=value` coerce by that declared type rather than by field
+name: `blocked_by=QST-a`, `blocked_by=QST-a,QST-b` and `blocked_by=[QST-a, QST-b]`
+all write a YAML list, and an empty value (`blocked_by=` or `[]`) writes `[]`.
+Other fields keep the raw string. `quest validate` reports a scalar sitting in
+a list field as a single `list-type` error (`blocked_by must be a list, got
+string 'QST-a'`) and does not try to resolve its characters as references.
+
 **Context-varying vocabulary goes in a schema, not the core** (QST-onxad).
 Something a reader might reach for as a new core field — a language hint, a
 per-team label — usually isn't universal; it's a fact about *one* log's
@@ -1692,16 +1704,18 @@ suffix is a **path**, resolved relative to the `.questkit.yaml`. Anything else
 is a **name**, looked up as `<dir>/<name>.yaml` along a search path:
 `QST_SCHEMA_PATH` (`os.pathsep`-separated) first, then
 `99-system/questkit/schemas/` in each ancestor directory of the log (a fixed
-relative path, `REALM_SCHEMA_DIR` in `schema.py`; set `QST_SCHEMA_PATH` to use
+relative path, `SHARED_SCHEMA_DIR` in `schema.py`; set `QST_SCHEMA_PATH` to use
 any other location). And
 `schema: development` as a bare scalar is shorthand for
 `schema: {extends: development}`, which is the common case — several logs
 sharing one named schema and adding nothing.
 
-**questkit ships no named schemas.** Names such as `development` and
-`personal` in this document refer to schema files you (or your team) keep in
-a shared schema directory; they are examples of the pattern, not files in this
-repository.
+**Example schema.** questkit does not install any named schema. The
+repository carries one example, [`schemas/development.yaml`](../schemas/development.yaml),
+which its own quest log extends by path
+(`schema: ../schemas/development.yaml`); copy it into a shared schema directory
+to use it as `schema: development`. Other names in this document, such as
+`personal`, are illustrations of the pattern.
 
 **Keep shared schemas where every machine sees them.** If your logs live in
 several independently synced folders, put the schema directory inside a
@@ -1790,16 +1804,18 @@ takes a second, explicit path — the destination — which follows the
 regular `--in`-style resolution instead, i.e. must already be a log.)
 Resolution for the id itself:
 
-1. **`--in DIR`**, if given, is the only place searched — a miss there is
-   a miss, full stop. No fallback, no sweep past it. This preserves `--in`
-   as an unambiguous escape hatch for the rare case an id exists in more
-   than one log (shouldn't normally happen, given random ids, but `--in`
-   still lets you be exact).
+1. **`--in LOG`** (a project name or a path), if given, is the only place
+   searched — a miss there is a miss, full stop. No fallback, no sweep past
+   it. This preserves `--in <path>` as an unambiguous escape hatch for the
+   case an id exists in more than one log (a git worktree holds a copy of
+   every quest on its branch). A name that matches several logs, or an id
+   found in several of the searched logs, is an error, not a pick.
 2. Otherwise: the **nearest log** (today's walk-up, see above) is checked
    first.
 3. If the id isn't there: every other quest log found by recursive descent
    from the **sweep root** is checked, in sorted-path order, until one
-   matches. The sweep root is: an explicit `--root`-equivalent (not
+   matches — and if the id turns up in **more than one** of them, that is an
+   error listing each file, not "first sorted path wins". The sweep root is: an explicit `--root`-equivalent (not
    exposed on these three commands directly, but see `QST_ROOT` next) →
    the `QST_ROOT` environment variable → the git root of cwd → cwd itself.
 4. No match anywhere: a clean `no quest matching id '<id>' found` message,
@@ -1843,6 +1859,49 @@ for `.questkit.yaml`, pruning as it goes:
   `schema.extends`, broken `ignore` `#include`) doesn't abort the whole
   sweep — it's skipped with a `[quest]`/`[quest list]` warning printed to
   stderr, and everything else still gets discovered.
+
+### Duplicate policy
+
+The same quest or log can show up more than once for four reasons. They share
+a root cause — discovery assumes a key is unique and the first match wins —
+and one policy:
+
+| Source | Duplicated key | Handled by |
+|--------|----------------|------------|
+| Git worktree checkouts | `project:` per log, and every quest id inside it | this section |
+| Syncthing conflict copies | quest id (`QST-x.sync-conflict-….md`) | excluded from enumeration and id lookup; `quest doctor` reports them |
+| Re-capturing the same idea | title (different ids) | `quest new` warns on a same-title capture |
+| Ids colliding across logs | quest id | `quest doctor` check `duplicate-id`; id resolution refuses to guess |
+
+**Git worktrees are the common real-world trigger.** A feature-branch
+checkout (`<repo>-worktrees/<branch>/`) is a normal state that can last
+weeks, and it holds real quest state, so it must not be pruned from
+discovery. It does carry the same `project:` as the primary checkout, and a
+copy of every quest id on its branch. That is not a mistake, so it is not a
+failure:
+
+- **Enumeration warns and labels, never fails.** `quest logs`, `quest list
+  -A`, `quest brief`, `quest doctor` and the other sweeps print one stderr
+  warning per colliding name listing every log path, then carry on. `quest
+  logs` lists both checkouts with their paths. `quest list -A` groups by
+  *log*, not by name: colliding groups are headed `── name (parent/quests)`
+  with the shortest trailing path that tells them apart. The `project`
+  column/field of each row is unchanged.
+- **Single-log resolution never guesses.** `--in NAME` (and everything that
+  resolves one log by name: `set`, `done`, `scrap`, `mv`, `edit`, `open`,
+  `show`, `new`, `archive`, ...) errors listing every candidate path when
+  the name matches more than one log. The same goes for an id present in
+  several searched logs. A **path** always works: `--in` accepts a log's
+  `quests/` directory or the project directory above it, everywhere `--in`
+  is accepted (the content of two worktrees on one commit is byte-identical,
+  so only the path can tell them apart).
+- **Obsidian Bases.** The generated `quests/quests.base` filters on file
+  name only (`file.name.startsWith("QST-")`), vault-wide, so a worktree
+  synced into the same vault shows each quest once per checkout. questkit
+  cannot generate a folder filter (`file.inFolder()`) because the
+  vault-relative path of the log is not known at `quest init` time, and the
+  template is deliberately limited to Bases syntax verified to work; keep
+  worktrees outside the vault, or add a folder filter to the Base by hand.
 
 ### `quest list -A`
 
@@ -2236,8 +2295,8 @@ agent alone."
 **`agentic` is not universal, so it is not core.** Personal errands have no
 unsupervised-agent axis, and shipping this vocabulary in the core would be
 questkit having an opinion about what kind of work its users do. A log adopts
-it by extending a shared schema that declares it (such as a `development`
-schema you maintain — questkit ships none; see [§8](#8-questkityaml-configuration-reference)),
+it by extending a shared schema that declares it (such as the example
+`schemas/development.yaml`; see [§8](#8-questkityaml-configuration-reference)),
 and under `strict: true` (the default) `--set agentic=afk` in a log that
 hasn't is a hard error naming the fields that *are* declared.
 

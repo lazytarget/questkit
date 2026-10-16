@@ -1,7 +1,7 @@
 """Tests for QST-e6g6t's `quest commit`: exact tracked pathspec, deterministic
 message, and hook-failure propagation.
 
-Only the in-repo pieces are covered here -- the realm-01 systemd timer is
+Only the in-repo pieces are covered here -- the systemd timer is
 infrastructure outside this repository and is not testable from it (see the
 quest's own Log).
 """

@@ -134,10 +134,10 @@ def test_resolve_log_still_resolves_explicit_paths(isolated, make_log, monkeypat
 
 
 def test_resolve_log_a_single_child_log_directory(isolated, make_log, monkeypatch):
-    log = make_log(isolated / "grocy-ecosystem", "grocy-ecosystem")
+    log = make_log(isolated / "app-ecosystem", "app-ecosystem")
     monkeypatch.setenv("QST_ROOT", str(isolated))
 
-    assert resolve_log(explicit=str(isolated / "grocy-ecosystem")) == log
+    assert resolve_log(explicit=str(isolated / "app-ecosystem")) == log
 
 
 def test_resolve_log_errors_ambiguously_for_a_single_target_command(isolated, make_log, monkeypatch):

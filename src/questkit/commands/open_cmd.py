@@ -6,7 +6,7 @@ scheme through the platform opener (`open` on macOS, `xdg-open` on Linux,
 `os.startfile` on Windows) -- Obsidian itself resolves which open vault (if
 any) contains that absolute path, so no vault name needs to be known or
 guessed here. When a path lies inside more than one open vault (a
-realm-root vault and a nested per-zone vault both open on it), Obsidian
+root vault and a nested per-project vault both open on it), Obsidian
 picks whichever vault claims the longest/most specific matching root --
 in practice the more deeply nested vault wins, since its root is a more
 specific prefix of the path.

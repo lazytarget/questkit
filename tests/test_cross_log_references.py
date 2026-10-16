@@ -42,13 +42,13 @@ def test_a_qualified_ref_naming_an_absent_log_is_a_note_not_an_error(
     isolated, make_log, write_quest, run, monkeypatch
 ):
     beta = make_log(isolated, "beta", project="beta")
-    write_quest(beta, "QST-bbbbb", slug="b", status="todo", blocked_by=["work-a/QST-aaaaa"])
+    write_quest(beta, "QST-bbbbb", slug="b", status="todo", blocked_by=["other/QST-aaaaa"])
     monkeypatch.setenv("QST_ROOT", str(isolated))
 
     result = run("validate", "--in", str(beta), "--notes")
 
     assert result.code == 0
-    assert "work-a" in result.out
+    assert "other" in result.out
 
 
 def test_a_qualified_ref_naming_a_present_log_with_a_missing_id_is_an_error(

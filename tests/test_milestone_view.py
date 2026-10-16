@@ -17,7 +17,7 @@ from questkit.config import QuestLogConfig
 
 
 def test_the_development_schema_declares_views_milestone():
-    """Characterization test for 99-system/questkit/schemas/development.yaml,
+    """Characterization test for schemas/development.yaml,
     which this repo's own log already adopts (see test_agentic_demotion.py)."""
     quests_dir = Path(__file__).resolve().parents[1] / "quests"
     config = QuestLogConfig.load(quests_dir)

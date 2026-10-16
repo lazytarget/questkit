@@ -13,14 +13,14 @@ from questkit.config import (
 
 
 def test_save_and_load_round_trip(tmp_path):
-    config = QuestLogConfig(git="auto", project="pensieve")
+    config = QuestLogConfig(git="auto", project="notes")
     config.save(tmp_path)
     assert config_exists(tmp_path)
 
     loaded = QuestLogConfig.load(tmp_path)
 
     assert loaded.git == "auto"
-    assert loaded.project == "pensieve"
+    assert loaded.project == "notes"
     assert loaded.pattern == "QST-*.md"
 
 

@@ -68,11 +68,11 @@ def test_ready_and_state_are_separate_lines(isolated, make_log, write_quest, run
 
 
 def test_ready_comes_from_the_schemas_own_readiness_rules_only(isolated, make_log, write_quest, run):
-    """A household schema needing only a description reports READY, with no
+    """A minimal-readiness schema needing only a description reports READY, with no
     hardcoded spec/acceptance-criteria requirement."""
     log = make_log(
         isolated,
-        project="household",
+        project="chores",
         schema={"readiness": [{"require": {"where": "description:exists"}, "message": "no description"}]},
     )
     write_quest(log, "QST-aaaaa", status="todo", description="Buy milk", body="## Description\n\nBuy milk.\n")
@@ -178,12 +178,12 @@ def test_report_back_names_exact_commands_and_the_commit_prefix(isolated, make_l
 def test_report_back_omits_the_start_work_line_when_the_schema_renamed_in_progress(
     isolated, make_log, write_quest, run
 ):
-    """A schema that renamed `in-progress` (e.g. household.yaml's `doing`) has
+    """A schema that renamed `in-progress` (e.g. a `doing` status) has
     no declared equivalent -- REPORT BACK must never suggest a status value
     that isn't actually in this log's own vocabulary."""
     log = make_log(
         isolated,
-        project="household",
+        project="chores",
         schema={"statuses": ["draft", "waiting", "doing", "done", "scrapped"]},
     )
     write_quest(log, "QST-aaaaa", status="waiting", body=_SPEC_BODY)

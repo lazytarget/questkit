@@ -125,8 +125,7 @@ def _resolve_ignore_entries(
 ) -> list[str]:
     """Expand `#include <path>` entries in an `ignore:` list, recursively.
 
-    Mirrors the Realm's own `syncthing.yaml` / `#include` convention (see
-    `99-system/scripts/scaffold_syncthing.py`'s `resolve_stignore`): an entry
+    Mirrors the Syncthing `.stignore` `#include` convention: an entry
     starting with `#include ` (path relative to `base_dir`) pulls in another
     file's lines as further patterns -- comments (`//` or bare `#`) are
     skipped, everything else is a literal directory-name/glob pattern. A

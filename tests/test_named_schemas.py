@@ -1,10 +1,8 @@
 """Tests for named schema resolution and the `archived` core field.
 
-Shared schemas live at `99-system/questkit/schemas/<name>.yaml`, resolved via
-a search path -- **not** the Realm root. `99-system/syncthing.yaml` has no
-folder for `.`: the Realm root is a local composition of independently-synced
-folders, not a synced entity. A schema file there would resolve on one machine
-and fail silently on every other, which is the worst possible failure shape.
+Shared schemas live at `99-system/questkit/schemas/<name>.yaml` (the built-in
+default directory), resolved via a search path along the log's ancestors, or
+via `QST_SCHEMA_PATH`.
 """
 
 from __future__ import annotations
@@ -26,7 +24,7 @@ def _schemas_dir(root):
 # --- resolution -------------------------------------------------------------------
 
 
-def test_a_bare_name_resolves_from_the_realm_schema_dir(isolated, make_log, write_schema):
+def test_a_bare_name_resolves_from_the_shared_schema_dir(isolated, make_log, write_schema):
     write_schema(_schemas_dir(isolated), "development", {"types": ["task", "bug"]})
     log = make_log(isolated / "project", "alpha", schema={"extends": "development"})
 
@@ -67,14 +65,14 @@ def test_the_env_search_path_accepts_several_directories(
     first = isolated / "first"
     second = isolated / "second"
     first.mkdir()
-    write_schema(second, "household", {"types": ["chore"]})
+    write_schema(second, "chores", {"types": ["chore"]})
     monkeypatch.setenv("QST_SCHEMA_PATH", os.pathsep.join([str(first), str(second)]))
-    log = make_log(isolated, schema={"extends": "household"})
+    log = make_log(isolated, schema={"extends": "chores"})
 
     assert QuestLogConfig.load(log).schema.types == ("chore",)
 
 
-def test_the_env_search_path_wins_over_the_realm_dir(
+def test_the_env_search_path_wins_over_the_shared_dir(
     isolated, make_log, write_schema, monkeypatch
 ):
     write_schema(_schemas_dir(isolated), "development", {"types": ["task"]})
@@ -116,10 +114,10 @@ def test_a_log_key_overrides_the_named_schema(isolated, make_log, write_schema):
     assert QuestLogConfig.load(log).schema.types == ("chore",)
 
 
-def test_the_realm_dir_is_found_by_walking_up(isolated, make_log, write_schema):
+def test_the_shared_dir_is_found_by_walking_up(isolated, make_log, write_schema):
     """A log nested several levels down still finds 99-system/questkit/schemas."""
     write_schema(_schemas_dir(isolated), "development", {"types": ["task"]})
-    log = make_log(isolated / "02-projects" / "lazytarget" / "thing", "alpha",
+    log = make_log(isolated / "projects" / "team" / "thing", "alpha",
                    schema={"extends": "development"})
 
     assert QuestLogConfig.load(log).schema.types == ("task",)

@@ -4,7 +4,7 @@
 schema authoring, not new engine code: `type=bug` gains a conditional rule
 requiring a `## Repro` section before the brief reads READY. Loaded the same
 way test_milestone_view.py and test_agentic_demotion.py characterize the real
-`99-system/questkit/schemas/development.yaml` -- via this repo's own
+`schemas/development.yaml` -- via this repo's own
 `quests/` log, which already adopts `schema: development`.
 """
 

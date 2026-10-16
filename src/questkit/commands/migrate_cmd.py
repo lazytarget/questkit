@@ -10,7 +10,7 @@ Verified in questkit's own log on 2026-08-19:
 
 A line-oriented substitution corrupts both. Only a frontmatter-aware tool can
 rename a *value of a field* without touching prose that happens to use the
-same word -- and questkit is the only thing in the Realm that parses this
+same word -- and questkit is the only thing that parses this
 format.
 
 Deliberately absent: schema *file* migration, rollback (git is the undo), and
