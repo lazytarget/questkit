@@ -316,3 +316,37 @@ def test_list_md_format_no_matches(isolated, make_log, run):
     result = run("list", "--in", str(log), "--where", "status=done", "--format", "md")
 
     assert result.out.strip() == "(no matching quests)"
+
+
+# --- default columns include `type` ----------------------------------------------
+
+
+def test_default_table_columns_include_type(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug")
+
+    result = run("list", "--in", str(log), "--quiet")
+
+    header = result.out.splitlines()[0].split()
+    assert header == ["ID", "TYPE", "STATUS", "PRIORITY", "TITLE"]
+    assert "bug" in result.out
+
+
+@pytest.mark.parametrize("view", ["next", "stale", "blocked"])
+def test_the_builtin_views_include_type_too(isolated, make_log, write_quest, run, view):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug", blocked_by=["QST-bbbbb"])
+    write_quest(log, "QST-bbbbb", slug="b", status="todo", type="bug")
+
+    result = run(view, "--in", str(log), "--quiet", "--where", "status:exists")
+
+    assert "TYPE" in result.out.splitlines()[0]
+
+
+def test_default_csv_columns_include_type(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug")
+
+    result = run("list", "--in", str(log), "--quiet", "--format", "csv")
+
+    assert result.out.splitlines()[0] == "id,type,status,priority,title"

@@ -23,7 +23,7 @@ from ..quest import Quest, count_sync_conflicts, glob_quests, load_frontmatter_o
 # The old hardcoded default-status list is gone too -- it's `schema.DEFAULT_VIEWS
 # ["default"]` now, so a log overriding `statuses:` overrides its filter in
 # the same file rather than a second config key that could disagree with it.
-DEFAULT_COLUMNS = ("id", "status", "priority", "title")
+DEFAULT_COLUMNS = ("id", "type", "status", "priority", "title")
 
 # `--format md`'s default column set absent `--select` (QST-f6otu): "the
 # changelog primitive" cares about what changed and how to bucket it, not
