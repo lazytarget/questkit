@@ -13,7 +13,7 @@ tags:
   - automation
 created: 2026-08-19
 status_changed: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic: afk
 aliases:
   - QST-e6g6t
@@ -168,4 +168,3 @@ be a machine nobody edits from.
 - 2026-08-22: closed for v0.3. The two remaining items (`git: auto` unification, the realm-prod-01 timer) are split out to [[QST-kxo5m--designated-committer-timer-and-git-auto-unification]] at `milestone: 0.5.0` — both are infrastructure/refactor work outside what this repository can deploy or test, and `quest commit` itself needs a release of real-world use before `git: auto` is rebuilt on top of it.
 - 2026-08-20: `quest commit`, `tracked:`, `quest validate --report`, and `quest init`'s `.gitignore` handling are implemented and tested (`commands/commit_cmd.py`, `tests/test_commit_cmd.py`, `tests/test_validate_report_and_gitignore.py`). Two acceptance criteria are deliberately left open rather than marked done by assumption: **`git: auto` reimplemented via `quest commit`** would mean rerouting `new_cmd`/`set_cmd`/`mv_cmd`/`migrate_cmd`'s existing `gitutil.auto_commit` call sites onto the new tracked-pathspec-plus-derived-message path, changing the exact commit message format every prior batch's tests assert on (`quest(<log-dir-name>): new <id> <title>` etc.) — a real refactor with real regression surface, not a drive-by rename, and better done as its own reviewed change. **The realm-prod-01 timer** is a systemd unit on a specific always-on host outside this git repository; it cannot be deployed or tested from here. The snippet in this quest's Spec is ready to hand to whoever provisions that machine.
 - 2026-08-19: captured. The `.git/index` behavior was measured, not assumed — pathspec was expected to avoid the write and does not.
-

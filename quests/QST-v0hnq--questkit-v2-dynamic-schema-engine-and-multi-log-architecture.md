@@ -12,7 +12,7 @@ tags:
   - schema
 created: 2026-08-13
 status_changed: 2026-08-14
-modified: 2026-10-16
+modified: 2026-08-20
 aliases:
   - QST-v0hnq
 blocked_by: []
@@ -142,4 +142,3 @@ have to guess or hallucinate valid enum values.
   `_split_candidates()` helper in `list_cmd.py`; `docs/questkit.md`'s
   `--where` grammar section updated with the OR-vs-AND distinction spelled
   out explicitly.
-

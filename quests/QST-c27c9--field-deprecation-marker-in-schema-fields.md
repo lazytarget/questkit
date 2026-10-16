@@ -9,7 +9,7 @@ tags:
   - questkit
   - schema
 created: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic:
 aliases:
   - QST-c27c9
@@ -32,4 +32,3 @@ happens; until then this is speculative.
 ## Log
 
 - 2026-08-22: captured from R&D catalog SCH-6 (draft, no milestone)
-

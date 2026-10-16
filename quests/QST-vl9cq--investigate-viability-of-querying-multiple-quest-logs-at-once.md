@@ -11,7 +11,7 @@ tags:
   - dx
 created: 2026-08-13
 status_changed: 2026-08-14
-modified: 2026-10-16
+modified: 2026-08-20
 aliases:
   - QST-vl9cq
 blocked_by: []
@@ -118,4 +118,3 @@ Open questions to resolve before building anything:
   per call, no bulk multi-log write). The `.stversions`/noise-in-`grep`
   problem this quest's investigation notes flagged is solved structurally
   by `discovery.find_all_logs()`'s default ignore list, not by convention.
-

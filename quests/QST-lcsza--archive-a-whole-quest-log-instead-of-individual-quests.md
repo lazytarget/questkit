@@ -12,7 +12,7 @@ tags:
   - multi-log
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-08-20
 aliases:
   - QST-lcsza
 blocked_by:
@@ -151,4 +151,3 @@ quests leaves `idle` untouched, so `stale` is unaffected by the archival itself.
 - 2026-08-20: implemented. `archived` was already a core field and honored by `computed.py`/`logs_cmd.py` from earlier batches ([[QST-b9lqo--computed-fields-and-comparison-operators-for-where]], [[QST-3ehhu--quest-logs-inventory-every-quest-log-under-a-root]]) — this quest added the write surface and the query axis. New `commands/archive_cmd.py`: `archive`/`unarchive` are sugar over `set_cmd.run` (like `done`); `archive-log`/`unarchive-log` bulk-iterate a resolved log's own quests directly, skipping any already at the target state (idempotent, and never bumps `modified` on a no-op). `set_cmd._coerce` gained bool coercion for `archived`; `set_cmd.run` now warns on stderr (not an error) when the target is already archived, which every command sugared over it (`done`, `scrap`, `archive`, `unarchive`) inherits for free. `list_cmd` gained `--archived exclude|include|only` (default `exclude`), filtered before view/where — so `next`/`stale`/`blocked` exclude archived quests automatically, with no code duplicated per view. `quest show` notes an archived id on stderr; `quest deps` labels an archived node `[archived]`. `logs_cmd`'s table gained an ARCHIVED column (JSON already had the count). 18 new tests in `tests/test_archival.py`.
 - 2026-08-19: captured after grilling the archive question.
 - 2026-08-19: reversed from log-config-only to a core per-quest field. Two corrections drove it: archiving and scrapping answer different questions (retention vs. the work's fate), and a stored field is the only form visible to Obsidian, Bases and grep — i.e. to the family. Retitled; the filename slug is deliberately left alone (filenames are immutable by design) — see [[QST-ombky--quest-validate-reports-informational-slug-drift-as-a-hard-error]].
-

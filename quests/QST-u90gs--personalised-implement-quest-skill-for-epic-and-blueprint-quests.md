@@ -11,7 +11,7 @@ tags:
   - agentic
   - skills
 created: 2026-10-14
-modified: 2026-10-16
+modified: 2026-10-14
 agentic: hitl
 aliases:
   - QST-u90gs
@@ -145,4 +145,3 @@ exercised once against a real small epic in this log.
 ## Log
 
 - 2026-10-14: captured from Matt Pocock's skills v1.3 review; no `quests/` log exists in `lazytarget/skills`, so the quest lives in the questkit log (the runner is the first consumer) and the skill itself will be authored in `lazytarget/skills`
-

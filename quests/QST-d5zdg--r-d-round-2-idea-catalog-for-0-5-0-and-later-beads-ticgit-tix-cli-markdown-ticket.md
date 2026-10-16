@@ -11,7 +11,7 @@ tags:
   - planning
   - agentic
 created: 2026-10-14
-modified: 2026-10-16
+modified: 2026-10-14
 agentic: hitl
 aliases:
   - QST-d5zdg
@@ -85,4 +85,3 @@ Headline findings to react to first:
 ## Log
 
 - 2026-10-14: catalog drafted from reading the four projects (README/docs plus GitHub API metadata); several repo-specific facts verified in this repo (batch refs, JSON contract, epic modelling); nothing reviewed yet
-

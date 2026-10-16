@@ -10,7 +10,7 @@ tags:
   - agentic
   - dx
 created: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic: hitl
 aliases:
   - QST-xlvml
@@ -41,4 +41,3 @@ From R&D catalog AX-5.
 ## Log
 
 - 2026-08-22: captured from R&D catalog AX-5 (draft, hitl — revisit with Realm workflow improvements)
-

@@ -12,7 +12,7 @@ tags:
   - dx
 created: 2026-08-16
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-08-20
 agentic: afk
 aliases:
   - QST-8hjjk
@@ -85,4 +85,3 @@ quest list -A --select project,status --distinct --format csv
 - 2026-08-21: implemented (batch B4). Rows are projected to the selected fields exactly once, up front in `run()` -- `_project(row, fields)` -- so `json` and `prompt` inherit `--select` for free rather than needing per-renderer branches; the old `--columns` only ever reached `table`/`csv`. `--distinct` collapses on the already-projected row's values (tuple-ifying any list field first, since `tags` is unhashable), preserving first-seen order. `--count` short-circuits before sort/limit/offset, matching the spec's "these are different questions" framing exactly. One test caught a real gap early: repeatable multi-log `--in` doesn't exist yet on `quest list` (it is `QST-iqwjm`'s job) -- `--in` twice silently keeps only the last value, since the flag isn't `action="append"`. Adjusted the multi-log `--distinct` test to use `--all` instead of chasing that quest's scope.
 - 2026-08-16: captured
 - 2026-08-19: groomed as part of [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]. Added `--count` and the `--columns` retirement.
-

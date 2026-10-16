@@ -11,7 +11,7 @@ tags:
   - obsidian
   - dx
 created: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic: afk
 aliases:
   - QST-9bsnv
@@ -80,4 +80,3 @@ shipped) can drive an HA notification to someone who will never see a terminal.
 ## Log
 
 - 2026-08-22: captured. Split out of [[QST-5rjla--obsidian-capture-surface-generated-template-md-topology-rows-bases-triage-view]] and retargeted to `milestone: 0.5.0`, so v0.3 isn't blocked on infrastructure outside this repository.
-

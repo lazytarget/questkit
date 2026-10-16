@@ -10,7 +10,7 @@ tags:
   - mobile
   - capture
 created: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic: hitl
 aliases:
   - QST-lxwag
@@ -41,4 +41,3 @@ From R&D catalog MOB-4.
 ## Log
 
 - 2026-08-22: captured from R&D catalog MOB-4 (draft, hitl, priority low)
-

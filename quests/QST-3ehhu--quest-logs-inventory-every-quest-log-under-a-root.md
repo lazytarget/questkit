@@ -13,7 +13,7 @@ tags:
   - multi-log
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-08-20
 agentic: afk
 aliases:
   - QST-3ehhu
@@ -120,4 +120,3 @@ None. The terminal-status question is decided in
 - 2026-08-21: implemented (batch B4), landing last within the batch since it reuses `discovery.resolve_log_set()` (built earlier in this batch) rather than rolling its own root-sweep-and-dedupe logic. Duplicate `project:` is a hard error printed immediately and the command exits 1 -- not collected as a warning -- because `--in`'s name resolution ([[QST-fmk0p--resolving-questkit-log-in-specified-path-via]]) is already load-bearing on that uniqueness, so a collision here means a real, pre-existing inconsistency in the corpus, not a soft heads-up. Ran against the real Realm as a sanity check: 7 logs, 145 quests, and `career-transition`/`grocy-ecosystem`/`pensieve` correctly report `OPEN == QUESTS` because their `status: completed` values predate the corpus-wide `completed`→`done` migration, which is still deliberately deferred (see the plan's §13) -- not a bug, exactly the behavior `terminal_statuses` should produce against an unmigrated log.
 - 2026-08-19: captured during a design grilling session on questkit's next feature set.
 - 2026-08-19: folded into [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]; the terminal-status question moved to [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] and `project:` uniqueness enforcement added.
-

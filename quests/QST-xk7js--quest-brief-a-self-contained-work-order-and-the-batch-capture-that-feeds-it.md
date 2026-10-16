@@ -12,7 +12,7 @@ tags:
   - agentic
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-08-20
 agentic: afk
 aliases:
   - QST-xk7js
@@ -223,4 +223,3 @@ optional (`nargs="?"` plus a mutual-exclusion check).
 - 2026-08-19: READY rewired to the schema's `readiness:` list after `agentic` left the core; `brief` now hardcodes no readiness rule at all.
 - 2026-08-19: readiness split into READY (document quality) and STATE (right-now eligibility) — they fail for different reasons and a blocked quest must still be briefable.
 - 2026-08-19: captured. The default output was deliberately shrunk from an earlier verbose draft; the schema block's conditional presence is the principled half of that, not just the shorter one.
-

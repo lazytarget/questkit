@@ -11,7 +11,7 @@ tags:
   - cli
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-08-20
 agentic: afk
 aliases:
   - QST-ombky
@@ -71,4 +71,3 @@ the same channel, so this is a structure, not a special case for one rule.
 
 - 2026-08-21: implemented (batch B0). Sequenced first in the batch rather than treated as independent: "the corpus validates clean" is the gate every later batch checks itself against, and questkit's own log was the only thing failing it — on exactly the two retitles this check was documented to tolerate. `--notes/--no-notes` uses `argparse.BooleanOptionalAction` so one declaration gives both. A fixture lesson came out of it too: `write_quest` now defaults its slug from the title, because a test about something else should not have to know that passing `slug="broken"` also produces a drift note — which is precisely how one of these tests first miscounted.
 - 2026-08-19: captured. Found while grooming [[QST-fmk0p--resolving-questkit-log-in-specified-path-via]] — the retitle that caused the drift is exactly the supported operation the check was documented to tolerate.
-

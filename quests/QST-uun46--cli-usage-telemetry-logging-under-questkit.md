@@ -11,7 +11,7 @@ tags:
   - telemetry
   - dx
 created: 2026-09-03
-modified: 2026-10-16
+modified: 2026-09-03
 agentic:
 aliases:
   - QST-uun46
@@ -79,4 +79,3 @@ recorded CLI events could close it — not in scope here.
 ## Log
 
 - 2026-09-03: captured from user request (not yet in R&D ideas catalog)
-

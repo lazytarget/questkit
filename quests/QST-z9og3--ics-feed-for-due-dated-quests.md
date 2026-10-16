@@ -10,7 +10,7 @@ tags:
   - integrations
   - calendar
 created: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic:
 aliases:
   - QST-z9og3
@@ -38,4 +38,3 @@ From R&D catalog INT-2.
 ## Log
 
 - 2026-08-22: captured from R&D catalog INT-2 (draft, priority low, no milestone)
-

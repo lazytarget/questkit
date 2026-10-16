@@ -8,7 +8,7 @@ priority: medium
 tags:
   - Obsidian
 created: 2026-08-20
-modified: 2026-10-16
+modified: 2026-08-20
 agentic:
 aliases:
   - QST-2zgfk
@@ -27,4 +27,3 @@ related_adrs:
 ## Log
 
 - 2026-08-20: captured
-

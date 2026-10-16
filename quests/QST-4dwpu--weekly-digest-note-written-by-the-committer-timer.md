@@ -9,7 +9,7 @@ tags:
   - questkit
   - reporting
 created: 2026-08-22
-modified: 2026-10-16
+modified: 2026-08-22
 agentic:
 aliases:
   - QST-4dwpu
@@ -38,4 +38,3 @@ From R&D catalog REP-3. Draft by request, milestone 0.5.0.
 ## Log
 
 - 2026-08-22: captured from R&D catalog REP-3 (draft, milestone 0.5.0)
-
