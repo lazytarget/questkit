@@ -9,4 +9,4 @@ defaults:
   status: draft
   priority: medium
 project: questkit
-schema: development
+schema: ../schemas/development.yaml

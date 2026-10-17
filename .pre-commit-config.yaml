@@ -16,9 +16,38 @@
 #
 # Consuming repos should keep pinning a released rev -- they want a stable
 # contract, not questkit's HEAD.
+# `pre-commit install` installs both stages.
+default_install_hook_types: [pre-commit, pre-push]
+# Hooks run on commit unless they say otherwise; the quest hooks rewrite files.
+default_stages: [pre-commit]
+
 repos:
+  # Credentials: tokens, keys and high-entropy strings, in the staged diff.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+
   - repo: local
     hooks:
+      # Names, employers and hosts you want private. The deny-list lives OUTSIDE
+      # the repository (see scripts/sensitive_scan.py); with no list configured
+      # these hooks pass, so contributors are never blocked by them.
+      - id: sensitive-scan
+        name: sensitive-scan (staged changes)
+        entry: .venv/bin/python scripts/sensitive_scan.py staged
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: sensitive-scan-push
+        name: sensitive-scan (commits being pushed)
+        entry: .venv/bin/python scripts/sensitive_scan.py push --pre-commit
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       - id: quest-format
         name: quest-format
         description: Normalize quest frontmatter formatting (arrays, date quoting, quote style).
