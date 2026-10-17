@@ -2,7 +2,7 @@
 title: questkit v3 — loop closure, multi-log UX, and agent handoff
 description: "Design record for questkit v3: the decisions, the evidence behind them, and the alternatives rejected along the way."
 created: 2026-08-19
-modified: 2026-10-16
+modified: 2026-10-17
 type: plan
 status: active
 tags:
@@ -281,7 +281,7 @@ Shared schemas live at **`99-system/questkit/schemas/<name>.yaml`**, resolved vi
 
 **Not the Realm root.** `99-system/syncthing.yaml` has no folder for `.` — the Realm root is a *local composition* of independently-synced folders, not a synced entity. A schema file there would resolve on one machine and fail silently on every other, which is the worst possible failure shape. Generalizes: any questkit artifact that must reach every device belongs under `99-system/`.
 
-Two schemas planned. **`development`** first (`questkit`, `pensieve`, `realm-system`, `grocy-ecosystem`) — it is where the demand signal already lives, since 35 of grocy's 66 titles carry a hand-typed component prefix. **`household`** second (`family`, `home-b`) — it exercises *vocabulary override* rather than custom fields, and doubles as the partner test. `consulting` is held: three logs that do not exist yet is a schema written for hypothetical users.
+Two schemas planned. **`development`** first (`questkit`, `pensieve`, `realm-system`, `grocy-ecosystem`) — it is where the demand signal already lives, since 35 of grocy's 66 titles carry a hand-typed component prefix. **`household`** second (`family`, `home`) — it exercises *vocabulary override* rather than custom fields, and doubles as the partner test. `consulting` is held: three logs that do not exist yet is a schema written for hypothetical users.
 
 ## 5. Query engine
 
@@ -482,7 +482,7 @@ Routing rule, first test that fires wins:
 
 | Log | Verdict | Test |
 |-----|---------|------|
-| `home-b`, `work-a`, `work-c`, `work-b` | create | 1 — already separate sync folders with distinct device sets |
+| `home`, `work-a`, `work-c`, `work-b` | create | 1 — already separate sync folders with distinct device sets |
 | `pensieve`, `questkit`, `realm-system` | keep | 2 |
 | `grocy-ecosystem` | keep as one log, add `component` | 3 — 35 of 66 titles already carry a hand-typed prefix |
 | `family` | keep | 1 |

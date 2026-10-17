@@ -13,7 +13,7 @@ tags:
   - dx
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-10-17
 agentic: afk
 aliases:
   - QST-j68u5
@@ -36,7 +36,7 @@ defaults worth ordering, and `--set` is unsafe until the schema can say which
 field names are real.
 
 v2 built the schema engine with **no consumer in the room**. The first real ones
-(`development` for the four code logs, `household` for family/home-b) bend it in
+(`development` for the four code logs, `household` for family/home) bend it in
 three places at once, which is the argument for building against a real
 vocabulary rather than writing reference docs for a shape that cannot survive
 contact.

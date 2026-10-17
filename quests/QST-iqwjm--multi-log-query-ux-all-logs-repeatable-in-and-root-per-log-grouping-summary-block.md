@@ -13,7 +13,7 @@ tags:
   - multi-log
 created: 2026-08-19
 status_changed: 2026-08-20
-modified: 2026-10-16
+modified: 2026-10-17
 agentic: afk
 aliases:
   - QST-iqwjm
@@ -36,7 +36,7 @@ the scope of a query hard to know and impossible to state:
   phone, so `quest list --all` reports a smaller world there than on the ProArt,
   and says nothing about it. A partial answer that does not announce itself is
   worse than a narrower one that does.
-- **There is no way to query two logs.** "House contexts" is `family + home-b`;
+- **There is no way to query two logs.** "House contexts" is `family + home`;
   "code contexts" is `questkit + pensieve + realm-system`. Neither is one log and
   neither is every log.
 - **The default status filter is invisible.** `quest list` silently injects

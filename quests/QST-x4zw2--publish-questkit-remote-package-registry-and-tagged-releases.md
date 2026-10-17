@@ -12,7 +12,7 @@ tags:
   - infra
 created: 2026-08-22
 status_changed: 2026-10-16
-modified: 2026-10-16
+modified: 2026-10-17
 agentic:
 aliases:
   - QST-x4zw2
@@ -92,6 +92,11 @@ hostnames, addresses and email addresses.
   `milestone: 0.4.0` quest is complete.
 - **Registry:** Gitea PyPI-compatible registry, owner `peter`. GitHub / PyPI
   publishing follows at 0.9.0.
+- **Approved to publish (2026-10-17):** 1Password item paths such as
+  `op://The Realm/...`. They name a vault and an item, not a secret.
+- **Placeholders in the tree:** employer and client names became `work-a`,
+  `work-b` and `work-c`, and one household name became `home`. The mapping to
+  the real names exists only in the private deny-list file.
 
 ### What the audit found, by category
 
@@ -340,17 +345,86 @@ enabled, which is the default). The registry for the user `peter` lives at:
 A published version cannot be overwritten; a failed release needs a new
 version number.
 
+### Agreed plan for the history (2026-10-17)
+
+The tree and the commit graph are kept. Only the commits that introduced
+sensitive text are redacted, which gives new ids to every descendant of the first
+match, more than 85 commits. That cost is accepted.
+
+1. **Merge order.** #4 (CI, hooks, scanner) and #5 (QST-03fim) are merged. Update
+   #3 from `main`, review, merge it. Done before any rewrite, so the rewrite sees
+   the final tree.
+2. **Back up** the whole repository as a `git bundle` in the archive folder, then
+   run `git bundle verify` on it. Keep the filter-repo commit map next to the
+   bundle once step 4 has produced it.
+3. **Rename** the current Gitea repository to `questkit---backup` (the name is
+   accepted). Renaming keeps PRs #1 to #5, the Actions history and the registry
+   package with the old repository. It becomes the private archive.
+4. **Rewrite in a fresh clone**, never in a working checkout or a worktree. Clone
+   the backup repository, run `git filter-repo` with the private deny-list
+   replacements, and append a `Rewritten-from: <old commit id>` trailer to every
+   commit whose id changes. The set of such commits is the first match and all its
+   descendants; `scripts/sensitive_scan.py history --json` already finds the first
+   match, so listing the set is a small addition. Tags are rewritten too, and the
+   signatures on the signed tag and 30 signed commits are lost. Unverified:
+   filter-repo's exact callback for the trailer. Try it on a throwaway clone first.
+5. **Verify** in that clone before pushing anywhere: `sensitive_scan.py history`
+   reports 0 matches, the commit count is unchanged, the tip tree differs from the
+   pre-rewrite tip only in the redacted terms, tests pass, gitleaks is clean.
+6. **Create fresh repositories** named `questkit` on Gitea and on
+   `github.com/lazytarget/questkit`, push the rewritten history, then redo what is
+   per repository: Actions variable and secrets, runner scope, the registry package
+   link. PR numbers restart.
+7. **Re-clone.** Every existing clone and worktree points at ids that no longer
+   exist, so they are recreated rather than repaired.
+
+Recompute the numbers with `scripts/sensitive_scan.py history` in the fresh clone
+just before step 4; the figure of 85 of 110 predates the 0.4.0 commits.
+
+Still open: how the two remotes stay in sync (next section), whether the rewrite
+waits for the remaining 0.4.0 quests, and whether the private repository names
+stay in history (left as is unless decided otherwise).
+
+### Answers recorded (2026-10-17)
+
+These come from memory and secondary sources, not from the Gitea or GitHub
+documentation. Verify the marked points before relying on them.
+
+- **Why two remotes.** Gitea is the private working remote: the runner, agent
+  pull requests and the package registry behind the tailnet. GitHub is the public
+  side: discovery, contributions and later PyPI.
+- **Push or pull.** A Gitea push mirror force-pushes, so anything merged only on
+  GitHub is overwritten on the next sync (unverified). The safer shape is a
+  non-force push of `main` and `v*` tags from the runner: a GitHub `main` that has
+  diverged then fails loudly instead of being clobbered. A pull mirror is
+  read-only (unverified), which would end the PR flow on Gitea.
+- **Two-way sync.** Nothing native. A scheduled job could fast-forward Gitea from
+  GitHub when GitHub is strictly ahead and open a PR when it has diverged. Not
+  worth building before outside contributions exist.
+- **Releases and packages.** Tags are plain refs and sync. Releases and packages
+  do not sync as such (unverified); each target gets its own publish step from the
+  same tag. `scripts/release.py` already assembles the changelog section, which a
+  workflow can reuse for both release pages.
+- **SHA-256.** Not now. SHA-1 and SHA-256 repositories cannot exchange objects, and
+  GitHub support is unconfirmed. Revisit once GitHub documents it.
+
 ## Acceptance Criteria (follow-up)
 
 - [x] Redact the family member's name in the current tree
-- [x] Redact employer and client names in the current tree
-- [x] A private deny-list scanner with history, tree, staged and push modes, and hooks wired in
-- [x] gitleaks on staged changes (pre-commit) and, on GitHub, over history in CI
-- [ ] Rewrite history to remove the employer names (85 of 110 commits get new ids), or decide to publish without that
-- [ ] Push mirror from Gitea to `github.com/lazytarget/questkit`, or the decision to move instead
+- [x] Redact employer and client names in the current tree (placeholders `work-a`, `work-b`, `work-c`, `home`)
+- [x] A private deny-list scanner with history, tree, staged and push modes, and hooks wired in (#4)
+- [x] gitleaks on staged changes (pre-commit) and, on GitHub, over history in CI (#4, not yet run on a real runner)
+- [x] Reusing one deny-list across repos captured as QST-03fim (#5)
 - [x] Gitea PyPI registry: a local `.dev1` upload succeeded, the package is linked to `peter/questkit` and installs from the registry
-- [ ] Gitea PyPI registry: a manual workflow run (after the merge to `main`), then the real tag
-- [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`)
+- [ ] First real run of `ci.yml` on a runner, after #3 is merged
+- [ ] Manual run of `publish.yml` publishes a `.devN` version
+- [ ] Full history backed up as a `git bundle` in the archive folder and checked with `git bundle verify`, with the filter-repo commit map kept beside it
+- [ ] Current Gitea repository renamed to `questkit---backup` and kept private
+- [ ] History rewritten in a fresh clone: employer names redacted, a `Rewritten-from: <old id>` trailer on every commit whose id changes, `sensitive_scan.py history` reports 0 matches, commit count unchanged, tip tree identical apart from the redacted terms, tests pass
+- [ ] Fresh `questkit` repositories on Gitea and at `github.com/lazytarget/questkit`; Actions variable and secrets re-added; registry package re-linked
+- [ ] Decide how the two remotes stay in sync (non-force push of `main` and `v*` tags, or a push mirror)
+- [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`) on the rewritten history
+- [ ] Publish 0.4.0 to the Gitea registry from the tag
 
 ## Log
 
@@ -361,4 +435,5 @@ version number.
 - 2026-10-16: Recorded decisions, history-rewrite effects, mirror vs move, and the Gitea PyPI registry setup. Hostname, peteraslund.me, IPs and VM ids approved as public; family name redacted in the tree; version bump deferred until 0.4.0 is complete.
 - 2026-10-16: Measured the cost of each redaction with scripts/sensitive_scan.py (employer names: 85 of 110 rewritten, 25 keep ids); wired gitleaks and the private deny-list into pre-commit and pre-push; registry deploy steps recorded.
 - 2026-10-16: Verified the Gitea registry end to end: uploaded a .dev1 build, linked the package to peter/questkit, installed it from the registry. Recorded the history-sync analysis and a twine guide.
+- 2026-10-17: #4 and #5 merged. Agreed the history plan: bundle backup, rename the current Gitea repo to questkit---backup, redact in a fresh clone with a Rewritten-from trailer, fresh repos on Gitea and GitHub. Recorded answers on remotes, sync, releases and SHA-256 (marked unverified). Placeholders: work-a/b/c and home. op:// paths approved as public.
 
