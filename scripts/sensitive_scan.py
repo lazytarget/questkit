@@ -38,6 +38,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -99,28 +100,49 @@ def collect_terms(term: list[str], pattern: list[str], terms_file: str | None) -
 # --- git helpers ----------------------------------------------------------------------
 
 
+class GitError(Exception):
+    """git exited non-zero; the message is its first line of stderr."""
+
+
+def _first_line(text: str) -> str:
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return "git failed"
+
+
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    result = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
         text=True,
         errors="replace",
-        check=check,
     )
+    if check and result.returncode != 0:
+        raise GitError(_first_line(result.stderr))
+    return result
 
 
 def _git_lines(repo: Path, *args: str):
-    """Stream a git command's stdout line by line (history can be large)."""
-    proc = subprocess.Popen(
-        ["git", "-C", str(repo), *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        errors="replace",
-    )
-    assert proc.stdout is not None
-    yield from proc.stdout
-    proc.wait()
+    """Stream a git command's stdout line by line (history can be large).
+
+    A non-zero exit raises GitError once the output is exhausted: a scan that
+    could not read the diff must not look like a scan that found nothing.
+    """
+    with tempfile.TemporaryFile("w+", errors="replace") as err:
+        proc = subprocess.Popen(
+            ["git", "-C", str(repo), *args],
+            stdout=subprocess.PIPE,
+            stderr=err,
+            text=True,
+            errors="replace",
+        )
+        assert proc.stdout is not None
+        yield from proc.stdout
+        proc.wait()
+        if proc.returncode != 0:
+            err.seek(0)
+            raise GitError(_first_line(err.read()))
 
 
 def _matching(terms: list[Term], text: str) -> set[str]:
@@ -428,7 +450,15 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print("sensitive-scan: no terms configured, skipping", file=sys.stderr)
         return 0
-    return args.func(args, terms)
+    try:
+        _git(args.repo, "rev-parse", "--git-dir")  # fail early, with git's own words
+        return args.func(args, terms)
+    except GitError as exc:
+        print(f"sensitive-scan: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:  # git itself is missing
+        print(f"sensitive-scan: cannot run git: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
