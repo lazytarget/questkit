@@ -14,7 +14,7 @@ tags:
   - beans-migration
 created: 2026-08-13
 status_changed: 2026-08-14
-modified: 2026-08-20
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-whm2e
@@ -80,7 +80,7 @@ tier: spark                   # spark | brief | blueprint — optional, spec-wor
 status: draft                 # draft | todo | in-progress | blocked | parked | completed | scrapped
 priority: medium              # critical | high | medium | low | deferred
 effort: m                     # xs | s | m | l | xl — optional
-owner: peter                  # peter | jenika — optional, human accountability
+owner: peter                  # peter | <partner> — optional, human accountability
 agentic: hitl                 # afk | hitl — optional; absent = not yet triaged for handoff
 project: pensieve             # optional; CLI-stamped at creation, `quest validate` warns on path drift
 due: 2026-09-01                # optional — YYYY-MM-DD
@@ -160,7 +160,7 @@ Obsidian **Bases** (core plugin) is already enabled in every vault/profile on th
 - In-code TODO/FIXME sweep mechanics (per-comment quest vs. batch triage) — needs its own design pass. Not started.
 - Whether `quest validate`'s AFK-readiness check (Acceptance Criteria + `## Spec`/design substance present) needs to be configurable per-project, or is fine as a fixed rule. Not revisited.
 - Trello import stays deferred (see Out of Scope) — untouched by this implementation pass.
-- `owner` is currently free text with no enum, by design (questkit is generic OSS) — the Realm-specific `peter`/`jenika` convention is a usage pattern, not a schema constraint. Worth confirming that stays the right call once more than one person actually uses a shared log.
+- `owner` is currently free text with no enum, by design (questkit is generic OSS) — the Realm-specific `peter`/`<partner>` convention is a usage pattern, not a schema constraint. Worth confirming that stays the right call once more than one person actually uses a shared log.
 
 ## Log
 
@@ -217,3 +217,4 @@ Obsidian **Bases** (core plugin) is already enabled in every vault/profile on th
 - [[../../../../99-system/workflow/README.md]] — spark/brief/blueprint tier definitions, inherited unchanged
 - [[../../../../03-knowledge/realm-metadata-standard.md]] — the frontmatter standard this schema extends
 - [[../../realm-hooks/README.md]] — hub-and-spoke hook model questkit's own hooks follow
+

@@ -8,7 +8,7 @@ from pathlib import Path
 from .. import macros
 from ..config import CONFIG_FILENAME, ConfigVersionError, QuestLogConfig, config_exists
 from ..discovery import resolve_log
-from ..quest import Quest, QuestFileError
+from ..quest import Quest, QuestFileError, glob_quests
 from ..schema import SchemaConfigError, SchemaExtendsError
 
 
@@ -95,7 +95,7 @@ def _glob_log(quests_dir: Path) -> list[Path]:
         config = QuestLogConfig.load(quests_dir)
     except ConfigVersionError as exc:
         raise TargetError(str(exc)) from exc
-    return sorted(quests_dir.glob(config.pattern))
+    return glob_quests(quests_dir, config.pattern)
 
 
 def _dedupe(paths: list[Path]) -> list[Path]:

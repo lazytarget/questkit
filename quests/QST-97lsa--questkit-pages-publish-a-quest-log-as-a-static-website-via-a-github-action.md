@@ -12,14 +12,14 @@ tags:
   - github-actions
   - web
 created: 2026-10-14
-modified: 2026-10-14
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-97lsa
 blocked_by: []
 component: pages
 effort: xl
-milestone:
+milestone: 0.5.0
 owner: peter
 related_adrs:
 tier: blueprint
@@ -130,3 +130,5 @@ Not blockers except S1; each is independently valuable:
 ## Log
 
 - 2026-10-14: captured. Scope agreed in a design session: separate repo, `--format json` as the data route, prerendered SvelteKit with client-side hydration, `configure-pages` for base path, namespaced URLs opt-in for emission but always resolvable
+- 2026-10-16: Added to milestone 0.5.0.
+

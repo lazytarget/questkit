@@ -15,8 +15,7 @@ from .quest import find_by_id
 QUEST_LOG_ENV = "QUEST_LOG"
 QST_ROOT_ENV = "QST_ROOT"
 
-# Baseline directory-name/glob patterns pruned during a cross-log sweep, mirroring
-# 99-system/metadata/frontmatter.schema.yaml's `skip_dirs` -- an explicit named
+# Baseline directory-name/glob patterns pruned during a cross-log sweep, an explicit named
 # default list, not a dot-prefix heuristic. A log's own `.questkit.yaml` `ignore:`
 # entries (see QuestLogConfig.resolved_ignores) extend this for its own subtree.
 DEFAULT_IGNORE_DIRS = (
@@ -96,9 +95,9 @@ def resolve_by_name_or_path(
 
     A path that **is** a log resolves to just itself. A path that is **not**
     a log, but has logs somewhere beneath it, expands to all of them --
-    `--in 02-projects/grocy-ecosystem` behaves like
-    `--in 02-projects/grocy-ecosystem/quests`, and `--in .` from the Realm
-    root is honestly equivalent to `-A`. Callers that need exactly one log
+    `--in projects/app` behaves like
+    `--in projects/app/quests`, and `--in .` from the top
+    of a tree is honestly equivalent to `-A`. Callers that need exactly one log
     (write commands) reject more than one result themselves --
     `resolve_by_name_or_path` never picks for them.
     """
@@ -128,10 +127,63 @@ def resolve_by_name_or_path(
         )
     if len(matches) > 1:
         raise QuestLogNotFoundError(
-            f"project name '{value}' matches multiple logs: {[str(m) for m in matches]} -- "
-            "each log's project: must be unique; fix the duplicate and retry"
+            f"project name '{value}' matches {len(matches)} logs (a git worktree "
+            f"checkout of the same project is the usual cause): {_listing(matches)}. "
+            "Name one by path instead: --in <path>"
         )
     return matches
+
+
+def _listing(paths: list[Path]) -> str:
+    return "; ".join(str(p) for p in paths)
+
+
+def project_collisions(logs: list[Path]) -> dict[str, list[Path]]:
+    """`project:` names declared by more than one of `logs` -> those logs.
+
+    Only named logs can collide; a log with no `project:` is never in a group.
+    """
+    by_project: dict[str, list[Path]] = {}
+    for log in logs:
+        project = _project_of(log)
+        if project:
+            by_project.setdefault(project, []).append(log)
+    return {name: group for name, group in by_project.items() if len(group) > 1}
+
+
+def project_labels(logs: list[Path]) -> dict[Path, str]:
+    """A display label per log, unique across `logs`.
+
+    The `project:` name (or the directory name for a nameless log), except
+    where several logs share one name: those get `name (tail)`, where `tail`
+    is the shortest trailing path that tells them apart -- so two checkouts of
+    one project are never grouped under one indistinguishable header.
+    """
+    labels = {log: _project_of(log) or log.name for log in logs}
+    for name, group in project_collisions(logs).items():
+        depth = 2
+        while depth < max(len(g.parts) for g in group):
+            tails = {g: "/".join(g.parts[-depth:]) for g in group}
+            if len(set(tails.values())) == len(group):
+                break
+            depth += 1
+        for g in group:
+            labels[g] = f"{name} ({'/'.join(g.parts[-depth:])})"
+    return labels
+
+
+def warn_project_collisions(logs: list[Path], prog: str) -> None:
+    """Print one stderr warning per colliding project name, listing every log.
+
+    Enumeration (`logs`, `list -A`, `doctor`, ...) warns and carries on; only
+    single-log resolution refuses to guess (see `resolve_by_name_or_path`).
+    """
+    for name, group in sorted(project_collisions(logs).items()):
+        print(
+            f"[{prog}] warning: project '{name}' is declared by {len(group)} logs: "
+            f"{_listing(group)} -- disambiguate with --in <path>",
+            file=sys.stderr,
+        )
 
 
 def _as_root_list(root: Path | list[Path] | None, start: Path | None) -> list[Path]:
@@ -274,13 +326,10 @@ def resolve_mutation_target(
     """
     if explicit_in is not None:
         values = [explicit_in] if isinstance(explicit_in, str) else explicit_in
-        for quests_dir in _dedupe_paths(
+        candidates = _dedupe_paths(
             [log for value in values for log in resolve_by_name_or_path(value, start=start)]
-        ):
-            hit = find_by_id(quests_dir, quest_id)
-            if hit is not None:
-                return quests_dir, hit
-        return None
+        )
+        return _single_hit(quest_id, [(d, find_by_id(d, quest_id)) for d in candidates])
 
     start = (start or Path.cwd()).resolve()
     nearest = _walk_up(start)
@@ -290,13 +339,22 @@ def resolve_mutation_target(
             return nearest, hit
 
     root = resolve_sweep_root(start=start)
-    for log in find_all_logs(root):
-        if log == nearest:
-            continue
-        hit = find_by_id(log, quest_id)
-        if hit is not None:
-            return log, hit
-    return None
+    return _single_hit(
+        quest_id, [(log, find_by_id(log, quest_id)) for log in find_all_logs(root) if log != nearest]
+    )
+
+
+def _single_hit(
+    quest_id: str, probes: list[tuple[Path, Path | None]]
+) -> tuple[Path, Path] | None:
+    """The one (log, file) holding `quest_id`; two or more is an error, never a pick."""
+    hits = [(log, path) for log, path in probes if path is not None]
+    if len(hits) > 1:
+        raise QuestLogNotFoundError(
+            f"id '{quest_id}' exists in {len(hits)} logs: {_listing([p for _, p in hits])}. "
+            "Name one by path instead: --in <path>"
+        )
+    return hits[0] if hits else None
 
 
 def find_all_logs(root: Path) -> list[Path]:

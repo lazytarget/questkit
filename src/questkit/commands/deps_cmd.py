@@ -15,7 +15,7 @@ import argparse
 from .. import schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import resolve_log_set
-from ..quest import Quest
+from ..quest import Quest, glob_quests
 
 
 def run(args: argparse.Namespace) -> int:
@@ -28,7 +28,7 @@ def run(args: argparse.Namespace) -> int:
         except (ConfigVersionError, schema.SchemaExtendsError, schema.SchemaConfigError):
             continue
         project = config.project or quests_dir.name
-        for path in sorted(quests_dir.glob(config.pattern)):
+        for path in glob_quests(quests_dir, config.pattern):
             fm = Quest.load(path).frontmatter
             quest_id = fm.get("id")
             nodes[quest_id] = {

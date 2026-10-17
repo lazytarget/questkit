@@ -4,14 +4,15 @@ title: Per-type readiness rules in the development schema
 description: Schema authoring, not code — when-guarded readiness rules per type, e.g. type=bug requires a Repro section before the brief reads READY.
 project: questkit
 type: task
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - schema
   - agentic
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-z1exq
@@ -45,3 +46,5 @@ discoverable for other schemas.
 ## Log
 
 - 2026-08-22: captured from R&D catalog SCH-4, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

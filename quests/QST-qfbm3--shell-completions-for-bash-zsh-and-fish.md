@@ -4,14 +4,15 @@ title: Shell completions for bash zsh and fish
 description: quest completion <shell> generating completions, with dynamic completion of quest ids, project names, and schema fields where feasible.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: high
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-qfbm3
@@ -46,3 +47,5 @@ the more sustainable source; `qst` must get the same completions.
 ## Log
 
 - 2026-08-22: captured from R&D catalog CLI-1, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

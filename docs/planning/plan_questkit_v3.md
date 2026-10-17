@@ -2,7 +2,7 @@
 title: questkit v3 — loop closure, multi-log UX, and agent handoff
 description: "Design record for questkit v3: the decisions, the evidence behind them, and the alternatives rejected along the way."
 created: 2026-08-19
-modified: 2026-08-21
+modified: 2026-10-17
 type: plan
 status: active
 tags:

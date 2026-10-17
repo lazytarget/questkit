@@ -4,15 +4,15 @@ title: quest-bump-modified stages its own bump instead of failing the commit
 description: Stage the modified-date bump and pass with one informational line, so a stale date no longer fails the commit and forces a second attempt.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - hooks
   - dx
 created: 2026-10-02
-status_changed: 2026-10-02
-modified: 2026-10-08
+status_changed: 2026-10-08
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-reakz
@@ -79,3 +79,5 @@ content change worth seeing, unlike a date bump.
 ## Log
 
 - 2026-10-02: captured after the bump hook forced a second commit attempt on `b35421b`
+- 2026-10-08: Implemented: hook stages its own bump, prints old → new, skips files unchanged from HEAD; verbose: true in both hook manifests.
+

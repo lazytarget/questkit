@@ -1,6 +1,6 @@
 """Tests for `agentic` leaving the core schema entirely.
 
-`afk|hitl` is not a universal vocabulary -- household work has no
+`afk|hitl` is not a universal vocabulary -- non-software work has no
 unsupervised-agent axis, so shipping one in the core is questkit having an
 opinion about what kind of work its users do. Both hardcoded rules that
 guarded it (AFK requires a non-draft status; agentic is meaningless on an
@@ -94,7 +94,7 @@ def test_set_agentic_afk_succeeds_in_a_log_that_declares_it(isolated, make_log, 
 
 
 def test_the_development_schema_declares_agentic_component_related_adrs_and_milestone():
-    """A characterization test for 99-system/questkit/schemas/development.yaml,
+    """A characterization test for schemas/development.yaml,
     which this repo's own log already adopts."""
     from pathlib import Path
 

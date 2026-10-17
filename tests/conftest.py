@@ -244,7 +244,7 @@ def isolated(tmp_path, monkeypatch):
 def multi_log(isolated, make_log, write_quest, monkeypatch):
     """Three logs under one sweep root, with `QST_ROOT` pointed at it.
 
-    Shaped after the real Realm: distinct project names, a mix of `git`
+    Shaped like a real multi-project tree: distinct project names, a mix of `git`
     modes, and quests spread across statuses so a default-filter or
     grouping assertion has something to bite on. Returns the log paths by
     project name.

@@ -208,3 +208,292 @@ def test_set_on_each_computed_field_name_is_rejected(quest_log, run):
     for name in ("blocked", "blocks", "idle", "age"):
         result = run("set", quest_id, f"{name}=1")
         assert result.code == 1, name
+
+
+# --- criteria_done / criteria_total (QST-bo3xs) ------------------------------
+
+_CRITERIA_BODY = """## Acceptance Criteria
+
+- [x] one
+- [x] two
+- [ ] three
+"""
+
+
+def test_criteria_total_and_done_counted_from_the_checklist(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo", body=_CRITERIA_BODY)
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,criteria_total,criteria_done", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert rows[0]["criteria_total"] == 3
+    assert rows[0]["criteria_done"] == 2
+
+
+def test_criteria_fields_are_zero_with_no_acceptance_criteria_section(
+    isolated, make_log, write_quest, run
+):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo", body="## Description\n\nno checklist here\n")
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,criteria_total,criteria_done", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert rows[0]["criteria_total"] == 0
+    assert rows[0]["criteria_done"] == 0
+
+
+def test_criteria_fields_usable_in_where_and_sort(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="done", body=_CRITERIA_BODY)
+    write_quest(
+        log, "QST-bbbbb", slug="b", status="done",
+        body="## Acceptance Criteria\n\n- [x] only\n",
+    )
+
+    result = run(
+        "list", "--in", str(log), "--where", "status=done",
+        "--where", "criteria_done<criteria_total", "--where", "criteria_total>0",
+        "--select", "id", "--format", "csv",
+    )
+
+    lines = [line for line in result.out.splitlines() if line.strip()]
+    assert lines == ["id", "QST-aaaaa"]
+
+
+def test_criteria_body_is_not_read_when_not_referenced(
+    isolated, make_log, write_quest, run, monkeypatch
+):
+    import questkit.commands.list_cmd as list_cmd
+
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo", body=_CRITERIA_BODY)
+
+    calls = []
+    real_load = list_cmd.Quest.load
+
+    def _tracking_load(path):
+        calls.append(path)
+        return real_load(path)
+
+    monkeypatch.setattr(list_cmd.Quest, "load", staticmethod(_tracking_load))
+
+    result = run("list", "--in", str(log), "--where", "status:exists", "--select", "id")
+    assert "QST-aaaaa" in result.out
+    assert calls == []
+
+    calls.clear()
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,criteria_total",
+    )
+    assert calls != []
+
+
+def test_set_on_criteria_fields_is_rejected(quest_log, run):
+    result = run("new", "A quest", "--status", "todo")
+    quest_id = result.lines[-1].split()[0].split("/")[-1].split("--")[0]
+
+    for name in ("criteria_done", "criteria_total"):
+        result = run("set", quest_id, f"{name}=1")
+        assert result.code == 1, name
+
+
+# --- overdue / due_in (QST-nij1y) --------------------------------------------
+
+
+def test_due_in_is_days_until_due_and_can_be_negative(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", due=date.fromisoformat(_iso(-5)))
+    write_quest(log, "QST-bbbbb", slug="b", status="todo", due=date.fromisoformat(_iso(3)))
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,due_in", "--format", "json",
+    )
+
+    rows = {r["id"]: r["due_in"] for r in json.loads(result.out)}
+    assert rows["QST-aaaaa"] == 5
+    assert rows["QST-bbbbb"] == -3
+
+
+def test_overdue_true_when_due_has_passed_and_status_is_non_terminal(
+    isolated, make_log, write_quest, run
+):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", due=date.fromisoformat(_iso(5)))
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,overdue", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert rows[0]["overdue"] is True
+
+
+def test_overdue_false_once_status_is_terminal(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="done", due=date.fromisoformat(_iso(5)))
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,overdue", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert rows[0]["overdue"] is False
+
+
+def test_overdue_false_when_archived(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(
+        log, "QST-aaaaa", slug="a", status="todo", due=date.fromisoformat(_iso(5)), archived=True
+    )
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists", "--archived", "only",
+        "--select", "id,overdue", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert rows[0]["overdue"] is False
+
+
+def test_due_in_and_overdue_absent_when_no_due_date(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo")
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,overdue,due_in", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert rows[0]["overdue"] is False
+    assert rows[0]["due_in"] is None
+
+
+def test_views_due_surfaces_dated_quests_soonest_first(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", due=date.fromisoformat(_iso(-1)))
+    write_quest(log, "QST-bbbbb", slug="b", status="todo", due=date.fromisoformat(_iso(5)))
+    write_quest(log, "QST-ccccc", slug="c", status="todo")
+
+    result = run(
+        "list", "--in", str(log), "--view", "due", "--select", "id,due_in", "--format", "csv"
+    )
+
+    lines = [line for line in result.out.splitlines() if line.strip()]
+    assert lines == ["id,due_in", "QST-bbbbb,-5", "QST-aaaaa,1"]
+
+
+def test_set_on_due_derived_fields_is_rejected(quest_log, run):
+    result = run("new", "A quest", "--status", "todo")
+    quest_id = result.lines[-1].split()[0].split("/")[-1].split("--")[0]
+
+    for name in ("overdue", "due_in"):
+        result = run("set", quest_id, f"{name}=1")
+        assert result.code == 1, name
+
+
+# --- body as a lazily-loaded queryable field (QST-vy4vt) ---------------------
+
+
+def test_where_body_contains_matches_case_insensitively(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", body="## Notes\n\nfixed the SyncThing bug.\n")
+    write_quest(log, "QST-bbbbb", slug="b", status="todo", body="## Notes\n\nunrelated work.\n")
+
+    result = run("list", "--in", str(log), "--where", "status:exists", "--where", "body~syncthing")
+
+    assert "QST-aaaaa" in result.out
+    assert "QST-bbbbb" not in result.out
+
+
+def test_any_group_can_combine_body_with_other_fields(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug", body="## Repro\n\nnothing special.\n")
+    write_quest(log, "QST-bbbbb", slug="b", status="todo", type="feature", body="## Repro\n\nsteps here.\n")
+    write_quest(log, "QST-ccccc", slug="c", status="todo", type="feature", body="## Notes\n\nno repro section.\n")
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--any", "body~## Repro;type=bug",
+    )
+
+    assert "QST-aaaaa" in result.out
+    assert "QST-bbbbb" in result.out
+    assert "QST-ccccc" not in result.out
+
+
+def test_body_search_composes_with_a_view(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(
+        log, "QST-aaaaa", slug="a", status="todo",
+        status_changed=date.fromisoformat(_iso(30)), body="## Notes\n\nTODO: fix this.\n",
+    )
+    write_quest(
+        log, "QST-bbbbb", slug="b", status="todo",
+        status_changed=date.fromisoformat(_iso(30)), body="## Notes\n\nall done.\n",
+    )
+
+    result = run("stale", "--in", str(log), "--where", "body~TODO")
+
+    assert "QST-aaaaa" in result.out
+    assert "QST-bbbbb" not in result.out
+
+
+def test_select_body_is_included_for_json(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo", body="## Notes\n\nhello there.\n")
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,body", "--format", "json",
+    )
+
+    rows = json.loads(result.out)
+    assert "hello there." in rows[0]["body"]
+
+
+def test_select_body_is_rejected_for_table_and_csv(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo")
+
+    for fmt in ("table", "csv", "md"):
+        result = run(
+            "list", "--in", str(log), "--where", "status:exists",
+            "--select", "id,body", "--format", fmt,
+        )
+        assert result.code == 1, fmt
+
+
+def test_body_not_read_when_not_referenced(isolated, make_log, write_quest, run, monkeypatch):
+    import questkit.commands.list_cmd as list_cmd
+
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", status="todo", body="## Notes\n\nhello.\n")
+
+    calls = []
+    real_load = list_cmd.Quest.load
+
+    def _tracking_load(path):
+        calls.append(path)
+        return real_load(path)
+
+    monkeypatch.setattr(list_cmd.Quest, "load", staticmethod(_tracking_load))
+
+    result = run("list", "--in", str(log), "--where", "status:exists", "--select", "id")
+    assert "QST-aaaaa" in result.out
+    assert calls == []
+
+    result = run("list", "--in", str(log), "--where", "status:exists", "--where", "body~hello")
+    assert calls != []

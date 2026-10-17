@@ -198,7 +198,7 @@ def test_quest_validate_does_not_enforce_readiness(isolated, make_log, write_que
     assert run("validate", "--in", str(log)).code == 0
 
 
-def test_the_household_style_schema_can_override_the_list_to_one_rule(isolated, make_log, write_quest, run):
+def test_the_minimal_style_schema_can_override_the_list_to_one_rule(isolated, make_log, write_quest, run):
     log = make_log(isolated, schema={
         "readiness": [{"require": {"where": "description:exists"}, "message": "needs a description"}],
     })

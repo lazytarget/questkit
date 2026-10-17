@@ -1,9 +1,10 @@
 ---
 id: QST-f0329
 title: "Duplicate project: names across logs resolve inconsistently"
+description: Colliding project names across logs (typically git worktrees) are now labelled and warned about when listing, and refused when a single log must be chosen.
 project: questkit
 type: bug
-status: draft
+status: done
 priority: high
 tags:
   - questkit
@@ -11,7 +12,8 @@ tags:
   - discovery
   - correctness
 created: 2026-09-03
-modified: 2026-10-08
+status_changed: 2026-10-16
+modified: 2026-10-16
 agentic: hitl
 aliases:
   - QST-f0329
@@ -144,29 +146,29 @@ Learnings since capture:
 
 ## Acceptance Criteria
 
-- [ ] Decide and document the policy for warn-vs-error, and where each
+- [x] Decide and document the policy for warn-vs-error, and where each
       applies (enumeration/list vs single-log resolution/write)
-- [ ] `quest list -A` never silently merges two physically distinct logs
+- [x] `quest list -A` never silently merges two physically distinct logs
       under one indistinguishable header — collisions are visible in the
       output (grouped-but-labeled by path, or similar)
-- [ ] `--in PROJECT` (and anything that resolves a single log by name:
+- [x] `--in PROJECT` (and anything that resolves a single log by name:
       `set`, `done`, `scrap`, `mv`, ...) never silently picks one of several
       matches — either errors with both candidate paths, or accepts a way
       to disambiguate (e.g. `--in <path>` as well as `--in <project-name>`)
-- [ ] `quest logs`' existing hard error is reconciled with whatever the
+- [x] `quest logs`' existing hard error is reconciled with whatever the
       chosen policy is (today it's the strictest of all the commands, by
       accident rather than design)
-- [ ] Covered by a test fixture with two logs sharing one `project:` name
-- [ ] Docs note git worktrees as the common real-world trigger
+- [x] Covered by a test fixture with two logs sharing one `project:` name
+- [x] Docs note git worktrees as the common real-world trigger
 - [ ] `quests.base` generation (`src/templates/quests.base` →
       `quests/quests.base`) resolved against the same policy: either
       `project:` is enforced/treated as globally unique so `project ==
       "<name>"` stays a safe filter, or the generated Base filters on a key
       that actually is unique per physical log
-- [ ] One documented duplicate policy shared by the four sources in the
+- [x] One documented duplicate policy shared by the four sources in the
       table above (worktrees, conflict copies, same-title captures,
       cross-log ids)
-- [ ] `--in` accepts a log path as well as a project name, matching the MCP
+- [x] `--in` accepts a log path as well as a project name, matching the MCP
       server's `log` parameter
 
 ## Log
@@ -183,3 +185,5 @@ Learnings since capture:
   Reproduced again outside questkit (`home-lab` worktree breaks
   `quest logs` at the Realm root). Noted that content hashes can't tell
   worktrees apart, so the log path is the disambiguator.
+- 2026-10-16: Implemented: warn on enumeration, refuse to guess on single-log resolution, --in accepts a path, duplicate policy documented. Not done: the generated Obsidian Base is unchanged (the template does not filter on project, and a folder filter needs a vault-relative path quest init cannot know); limitation documented.
+

@@ -86,7 +86,8 @@ class Quest:
         buf = io.StringIO()
         _yaml.dump(self.frontmatter, buf)
         body = self.body.strip("\n")
-        return f"---\n{buf.getvalue()}---\n\n{body}\n"
+        # Always one blank line before EOF: the body ends in `\n\n`.
+        return f"---\n{buf.getvalue()}---\n\n{body}\n\n"
 
     def save(self) -> bool:
         """Normalize and write. Returns True only if the file's bytes changed.
@@ -106,6 +107,16 @@ class Quest:
             return False
         self.path.write_text(content, encoding="utf-8")
         return True
+
+    def append_log(self, message: str, when: str) -> None:
+        """Append `- YYYY-MM-DD: message` to the body's `## Log` section (QST-46rdv).
+
+        Creates the section at the end of the body when missing -- `--log`
+        must work on any quest, not just ones seeded from the packaged
+        template. Appending anywhere but the end of the existing section
+        would put the newest entry out of chronological reading order.
+        """
+        self.body = _append_log_entry(self.body, when, message)
 
     def get(self, key, default=None):
         return self.frontmatter.get(key, default)
@@ -133,6 +144,31 @@ class Quest:
             self.frontmatter[key] = value
             return
         self.frontmatter.insert(keys.index(anchor) + 1, key, value)
+
+
+_LOG_HEADING_RE = re.compile(r"^##[ \t]+Log[ \t]*$", re.MULTILINE)
+_HEADING_RE = re.compile(r"^##[ \t]+\S", re.MULTILINE)
+
+
+def _append_log_entry(body: str, when: str, message: str) -> str:
+    """Append `- when: message` to `body`'s `## Log` section, creating it if absent."""
+    bullet = f"- {when}: {message}"
+    heading = _LOG_HEADING_RE.search(body)
+    if heading is None:
+        stripped = body.rstrip("\n")
+        sep = "\n\n" if stripped else ""
+        return f"{stripped}{sep}## Log\n\n{bullet}\n"
+
+    section_start = heading.end()
+    next_heading = _HEADING_RE.search(body, section_start)
+    section_end = next_heading.start() if next_heading else len(body)
+    section = body[section_start:section_end].rstrip("\n")
+
+    new_section = f"{section}\n{bullet}\n" if section.strip() else f"\n\n{bullet}\n"
+    tail = body[section_end:]
+    if next_heading and not new_section.endswith("\n\n"):
+        new_section += "\n"
+    return body[:section_start] + new_section + tail
 
 
 def _split_frontmatter(text: str, path: Path) -> tuple[str, str]:
@@ -236,7 +272,72 @@ def effective_status_changed(frontmatter) -> str | None:
     return None
 
 
+def load_frontmatter_only(path: Path) -> CommentedMap:
+    """Parse just a quest file's frontmatter block, without its body.
+
+    `quest list`'s common case (QST-vy4vt/QST-bo3xs) never touches the body
+    text at all -- `--where`/`--select`/`--sort` on `body`, `criteria_done`
+    or `criteria_total` are the only things that need it. Stopping at the
+    closing `---` line, rather than reading the whole file the way
+    `Quest.load` does, means a query that never references the body pays
+    nothing for a quest with a huge one.
+    """
+    with path.open("r", encoding="utf-8") as handle:
+        first = handle.readline()
+        if first.strip() != "---":
+            raise QuestFileError(f"{path}: missing YAML frontmatter block")
+        raw_lines: list[str] = []
+        closed = False
+        for line in handle:
+            if line.strip() == "---":
+                closed = True
+                break
+            raw_lines.append(line)
+    if not closed:
+        raise QuestFileError(f"{path}: frontmatter block is never closed")
+    frontmatter = _yaml.load("".join(raw_lines))
+    return frontmatter if frontmatter is not None else CommentedMap()
+
+
 def find_by_id(quests_dir: Path, quest_id: str) -> Path | None:
-    """Find a quest file by id, matching either `ID--slug.md` or bare `ID.md`."""
-    matches = sorted(quests_dir.glob(f"{quest_id}*.md"))
+    """Find a quest file by id, matching either `ID--slug.md` or bare `ID.md`.
+
+    Excludes Syncthing conflict copies (QST-oe92z): `ID*.md` alone also
+    matches `ID--slug.sync-conflict-TIMESTAMP-DEVICE.md`, since Syncthing
+    inserts the marker *before* the extension rather than after the glob's
+    reach. Left unfiltered, id resolution would only "work" by accident of
+    `.md` sorting before `.sync-conflict-...`.
+    """
+    matches = sorted(
+        p for p in quests_dir.glob(f"{quest_id}*.md") if not is_sync_conflict_copy(p.name)
+    )
     return matches[0] if matches else None
+
+
+# Syncthing inserts this marker before the extension on a conflicting write:
+# `ID--slug.md` -> `ID--slug.sync-conflict-20260814-120000-ABCDEFG.md`. Any
+# glob shaped like `ID*.md` or `QST-*.md` matches a conflict copy too (`*`
+# doesn't stop at a literal `.`), so every enumeration site needs the same
+# exclusion -- see `glob_quests` and `find_by_id` above.
+SYNC_CONFLICT_MARKER = ".sync-conflict-"
+
+
+def is_sync_conflict_copy(name: str) -> bool:
+    """Whether a filename is a Syncthing conflict copy."""
+    return SYNC_CONFLICT_MARKER in name
+
+
+def glob_quests(quests_dir: Path, pattern: str) -> list[Path]:
+    """Every file matching `pattern` in `quests_dir`, sorted, conflict copies excluded.
+
+    The one enumeration point every command should glob through (`list`,
+    `validate`, `logs`, `deps`, `migrate`, `archive`, `brief`, `format`) --
+    a bare `quests_dir.glob(config.pattern)` picks up Syncthing conflict
+    copies as phantom/duplicate quests (QST-oe92z).
+    """
+    return sorted(p for p in quests_dir.glob(pattern) if not is_sync_conflict_copy(p.name))
+
+
+def count_sync_conflicts(quests_dir: Path, pattern: str) -> int:
+    """How many conflict copies of quest files exist in `quests_dir`, matching `pattern`."""
+    return sum(1 for p in quests_dir.glob(pattern) if is_sync_conflict_copy(p.name))

@@ -165,7 +165,20 @@ def test_terminal_statuses_are_ordered_so_quest_done_has_a_first_entry(isolated,
 # --- the computed-field collision rule --------------------------------------------
 
 
-@pytest.mark.parametrize("reserved", ["blocked", "blocks", "idle", "age", "archived"])
+@pytest.mark.parametrize(
+    "reserved",
+    [
+        "blocked",
+        "blocks",
+        "idle",
+        "age",
+        "archived",
+        "criteria_done",
+        "criteria_total",
+        "overdue",
+        "due_in",
+    ],
+)
 def test_declaring_an_enum_value_named_after_a_computed_field_is_an_error(
     isolated, make_log, reserved
 ):

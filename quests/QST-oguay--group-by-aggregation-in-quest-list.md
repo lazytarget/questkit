@@ -4,14 +4,15 @@ title: Group-by aggregation in quest list
 description: Group-by turns list into vocabulary-ordered aggregate counts across one or two fields; supersedes and removes the unused --distinct.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - query
   - cli
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-oguay
@@ -49,3 +50,5 @@ declared vocabulary order.
 ## Log
 
 - 2026-08-22: captured from R&D catalog QRY-3, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

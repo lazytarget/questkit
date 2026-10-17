@@ -39,7 +39,17 @@ OBSIDIAN_RESERVED_FIELDS = ("cssclasses", "cssclass", "permalink", "publish", "c
 # two different questions one word apart, and a quest could satisfy either
 # without the other. Enforced at config load, which is what makes `blocked`
 # leaving the status enum permanent rather than a tidy-up someone reverses.
-COMPUTED_FIELD_NAMES = ("blocked", "blocks", "idle", "age", "archived")
+COMPUTED_FIELD_NAMES = (
+    "blocked",
+    "blocks",
+    "idle",
+    "age",
+    "archived",
+    "criteria_done",
+    "criteria_total",
+    "overdue",
+    "due_in",
+)
 
 # Which vocabulary each sortable field draws its order from.
 _FIELD_VOCABULARIES = {
@@ -139,6 +149,10 @@ CORE_FIELD_SPECS = {
     },
 }
 
+# Core fields whose frontmatter value is a YAML list. Custom fields join them
+# by declaring `type: list`; see `SchemaConfig.is_list_field`.
+CORE_LIST_FIELDS = ("tags", "blocked_by", "aliases")
+
 DEFAULT_STATUS = "draft"
 DEFAULT_TYPE = "task"
 DEFAULT_PRIORITY = "medium"
@@ -212,6 +226,7 @@ DEFAULT_VIEWS = {
     "next": View(where=("blocked=false",), sort="priority:asc,effort:asc,idle:desc", limit=1),
     "stale": View(where=("idle>14",), sort="idle:desc"),
     "blocked": View(where=("blocked=true",), sort="blocks:desc"),
+    "due": View(where=("due:exists",), sort="due_in:asc"),
 }
 
 
@@ -234,6 +249,7 @@ class FieldSpec:
     required: bool = False
     values: tuple = ()  # only meaningful for type: enum; ordered, so it sorts
     default: object = None
+    unique: bool = False  # `quest validate` errors on a shared non-null value log-wide
 
     @property
     def has_static_default(self) -> bool:
@@ -272,6 +288,29 @@ class SchemaConfig:
         fields to `--set`.
         """
         return frozenset(CORE_FIELDS) | frozenset(self.fields)
+
+    def is_list_field(self, name: str) -> bool:
+        """Whether `name` is declared list-typed: a core list field or a `type: list` custom one."""
+        if name in CORE_LIST_FIELDS:
+            return True
+        spec = self.fields.get(name)
+        return spec is not None and spec.type == "list"
+
+    def coerce(self, name: str, raw: str):
+        """Turn a CLI string into the value the schema's type for `name` calls for.
+
+        Shared by `quest set` and `quest new --set`, so both write the same
+        thing. List-typed fields accept a comma list (`a,b`) or a YAML flow
+        list (`[a, b]`); an empty value (or `[]`) is an empty list. Any other
+        field keeps the raw string.
+        """
+        if not self.is_list_field(name):
+            return raw
+        text = raw.strip()
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        items = [item.strip().strip("'\"").strip() for item in text.split(",")]
+        return [item for item in items if item]
 
     @classmethod
     def default(cls) -> SchemaConfig:
@@ -364,6 +403,7 @@ def _field_spec(name: str, spec: dict) -> FieldSpec:
         required=bool(spec.get("required", False)),
         values=values,
         default=spec.get("default"),
+        unique=bool(spec.get("unique", False)),
     )
 
 
@@ -397,7 +437,7 @@ def _resolve_readiness(merged: dict) -> tuple:
 
     A merge-by-key scheme would need a name-based identity for rules that
     have none; full replacement is what the rest of this file already does
-    for `statuses`/`fields`/etc., so a `household` schema overriding the list
+    for `statuses`/`fields`/etc., so a schema overriding the list
     down to one rule is one YAML list, not a diff against four unwritten ones.
     """
     if "readiness" not in merged:
@@ -522,13 +562,10 @@ def _resolve_terminal_statuses(merged: dict, statuses: tuple) -> tuple:
 SCHEMA_PATH_ENV = "QST_SCHEMA_PATH"
 
 # Where a *named* schema (`extends: development`) is looked up, relative to an
-# ancestor of the log. Deliberately under `99-system/`, not the Realm root:
-# `99-system/syncthing.yaml` has no folder for `.`, so the root is a local
-# composition of independently-synced folders rather than a synced entity. A
-# schema file there would resolve on one machine and fail silently on every
-# other -- the worst possible failure shape. Generalizes: any questkit artifact
-# that must reach every device belongs under `99-system/`.
-REALM_SCHEMA_DIR = ("99-system", "questkit", "schemas")
+# ancestor of the log. A fixed relative directory rather than the tree's root,
+# so a tree made of independently-synced folders can keep shared schemas in one
+# folder that reaches every device. `QST_SCHEMA_PATH` overrides it.
+SHARED_SCHEMA_DIR = ("99-system", "questkit", "schemas")
 
 
 def _resolve_schema_extends(
@@ -573,7 +610,7 @@ def _looks_like_a_path(extends: str) -> bool:
 def _schema_search_path(quests_dir: Path) -> list[Path]:
     """Where named schemas are looked for, most specific first.
 
-    `QST_SCHEMA_PATH` wins so a standalone (non-Realm) user, or a test, can
+    `QST_SCHEMA_PATH` wins so a standalone user, or a test, can
     point questkit somewhere else entirely without inventing a config key that
     every log would then have to repeat.
     """
@@ -585,7 +622,7 @@ def _schema_search_path(quests_dir: Path) -> list[Path]:
         )
     current = quests_dir.resolve()
     while True:
-        candidates.append(current.joinpath(*REALM_SCHEMA_DIR))
+        candidates.append(current.joinpath(*SHARED_SCHEMA_DIR))
         if current.parent == current:
             break
         current = current.parent
@@ -614,11 +651,19 @@ def _resolve_extends_target(quests_dir: Path, extends: str) -> Path:
 
 
 class ValidationError:
-    """A single problem found while validating a quest file."""
+    """A single problem found while validating a quest file.
 
-    def __init__(self, path, message: str) -> None:
+    `rule` is a stable slug naming which check produced this finding --
+    QST-njwu7's `quest validate --format json` surfaces it verbatim so
+    agents/CI can filter or dedupe on it without parsing `message` prose.
+    Defaults to `"generic"` for call sites that predate the field, rather
+    than making every constructor call name a rule explicitly.
+    """
+
+    def __init__(self, path, message: str, rule: str = "generic") -> None:
         self.path = path
         self.message = message
+        self.rule = rule
 
     def __repr__(self) -> str:
         return f"ValidationError({self.path!r}, {self.message!r})"
@@ -640,13 +685,23 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
 
     for name in _SCALAR_REQUIRED_FIELDS:
         if _blank(fm.get(name)):
-            errors.append(ValidationError(quest.path, f"missing required field '{name}'"))
+            errors.append(
+                ValidationError(
+                    quest.path, f"missing required field '{name}'", rule="required-field"
+                )
+            )
 
     if fm.get("tags") is None:
-        errors.append(ValidationError(quest.path, "missing required field 'tags'"))
+        errors.append(
+            ValidationError(quest.path, "missing required field 'tags'", rule="required-field")
+        )
 
     if fm.get("status") != "draft" and _blank(fm.get("description")):
-        errors.append(ValidationError(quest.path, "missing required field 'description'"))
+        errors.append(
+            ValidationError(
+                quest.path, "missing required field 'description'", rule="required-field"
+            )
+        )
 
     errors.extend(_check_enum(quest.path, fm, "type", schema_config.types))
     errors.extend(_check_enum(quest.path, fm, "tier", schema_config.tiers))
@@ -657,14 +712,41 @@ def validate_quest(quest, schema_config: SchemaConfig | None = None) -> list[Val
     for field_name, spec in schema_config.fields.items():
         if spec.required and _blank(fm.get(field_name)):
             errors.append(
-                ValidationError(quest.path, f"missing required custom field '{field_name}'")
+                ValidationError(
+                    quest.path,
+                    f"missing required custom field '{field_name}'",
+                    rule="required-field",
+                )
             )
         if spec.type == "enum":
             errors.extend(_check_enum(quest.path, fm, field_name, spec.values))
 
+    errors.extend(_check_list_types(quest, schema_config))
     errors.extend(_check_undeclared_fields(quest, schema_config))
     errors.extend(_check_identity(quest))
 
+    return errors
+
+
+def _check_list_types(quest, schema_config: SchemaConfig) -> list[ValidationError]:
+    """A list-typed field holding a scalar is one error, not one per character."""
+    errors: list[ValidationError] = []
+    names = list(CORE_LIST_FIELDS) + [
+        name for name, spec in schema_config.fields.items() if spec.type == "list"
+    ]
+    for name in names:
+        value = quest.frontmatter.get(name)
+        if value is None or isinstance(value, list):
+            continue
+        kind = {str: "string", bool: "boolean", int: "number", float: "number"}.get(
+            type(value), type(value).__name__
+        )
+        shown = f" '{value}'" if isinstance(value, str) else f" {value}"
+        errors.append(
+            ValidationError(
+                quest.path, f"{name} must be a list, got {kind}{shown}", rule="list-type"
+            )
+        )
     return errors
 
 
@@ -682,7 +764,9 @@ def _check_undeclared_fields(quest, schema_config: SchemaConfig) -> list[Validat
         return []
     allowed = schema_config.declared_field_names | frozenset(OBSIDIAN_RESERVED_FIELDS)
     return [
-        ValidationError(quest.path, f"undeclared field '{key}' (strict schema)")
+        ValidationError(
+            quest.path, f"undeclared field '{key}' (strict schema)", rule="undeclared-field"
+        )
         for key in quest.frontmatter
         if key not in allowed
     ]
@@ -705,14 +789,20 @@ def _check_identity(quest) -> list[ValidationError]:
     if fm_id and fm_id != file_id:
         errors.append(
             ValidationError(
-                quest.path, f"filename id '{file_id}' disagrees with frontmatter id '{fm_id}'"
+                quest.path,
+                f"filename id '{file_id}' disagrees with frontmatter id '{fm_id}'",
+                rule="identity",
             )
         )
 
     aliases = quest.frontmatter.get("aliases") or []
     if fm_id and fm_id not in aliases:
         errors.append(
-            ValidationError(quest.path, f"aliases does not include this quest's own id '{fm_id}'")
+            ValidationError(
+                quest.path,
+                f"aliases does not include this quest's own id '{fm_id}'",
+                rule="identity",
+            )
         )
 
     return errors
@@ -741,6 +831,7 @@ def check_slug_drift(quest) -> list[ValidationError]:
             quest.path,
             f"filename slug '{file_slug}' disagrees with the title-derived slug "
             f"'{expected_slug}' (title may have changed since creation)",
+            rule="slug-drift",
         )
     ]
 
@@ -756,6 +847,6 @@ def _check_enum(path, fm, name, allowed) -> list[ValidationError]:
     value = fm.get(name)
     if value is None or value in allowed:
         return []
-    return [ValidationError(path, f"{name} '{value}' not in {list(allowed)}")]
+    return [ValidationError(path, f"{name} '{value}' not in {list(allowed)}", rule="enum")]
 
 

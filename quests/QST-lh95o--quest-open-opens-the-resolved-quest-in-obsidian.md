@@ -4,7 +4,7 @@ title: Quest open opens the resolved quest in Obsidian
 description: quest open <id> opens the resolved quest via an obsidian:// URI with $EDITOR fallback — the gh --web analog.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
@@ -12,7 +12,8 @@ tags:
   - dx
   - obsidian
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-lh95o
@@ -43,3 +44,5 @@ path. `--editor` flag to skip Obsidian explicitly.
 ## Log
 
 - 2026-08-22: captured from R&D catalog CLI-4, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

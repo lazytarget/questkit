@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 from ..config import CONFIG_FILENAME, QuestLogConfig, config_exists
-from ..gitutil import find_git_root
+from ..gitutil import find_git_root, git_hooks_dir
 from ..templates import generate_template
 
 
@@ -108,6 +108,45 @@ def _init_hooks(target: Path) -> None:
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.decode(errors="replace").strip() if exc.stderr else str(exc)
         print(f"[quest init] 'pre-commit install' failed: {stderr}")
+
+    _init_trailers_hook(zone_root)
+
+
+def _init_trailers_hook(zone_root: Path) -> None:
+    """Wire the `post-commit` hook that runs `quest-apply-trailers` (QST-22gdn).
+
+    A plain native git hook script, not a `.pre-commit-config.yaml` entry:
+    unlike `quest-format`/`quest-validate`/`quest-bump-modified`, this one
+    reads the *whole commit message* of an arbitrary commit -- it isn't
+    scoped to staged quest files, so the pre-commit framework's per-file
+    `files:` matching model doesn't fit it. Appends into an existing
+    `post-commit` hook rather than overwriting it (a repo may already run
+    something else there), and is safe to re-run -- a second `--hooks`
+    invocation is a no-op once `quest-apply-trailers` is already present.
+    """
+    hooks_dir = git_hooks_dir(zone_root)
+    if hooks_dir is None:
+        print(f"[quest init] {zone_root}: could not resolve git hooks dir, skipping post-commit hook")
+        return
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    hook_path = hooks_dir / "post-commit"
+    call_line = "quest-apply-trailers\n"
+
+    if hook_path.exists():
+        text = hook_path.read_text(encoding="utf-8")
+        if "quest-apply-trailers" in text:
+            print(f"[quest init] {hook_path}: quest-apply-trailers already present, skipping")
+            return
+        needs_newline = bool(text) and not text.endswith("\n")
+        with hook_path.open("a", encoding="utf-8") as handle:
+            handle.write(("\n" if needs_newline else "") + call_line)
+        print(f"[quest init] {hook_path}: appended quest-apply-trailers")
+    else:
+        hook_path.write_text(f"#!/bin/sh\n{call_line}", encoding="utf-8")
+        print(f"[quest init] {hook_path}: wrote post-commit hook (quest-apply-trailers)")
+
+    hook_path.chmod(hook_path.stat().st_mode | 0o111)
 
 
 def _hook_repo_entry() -> str:

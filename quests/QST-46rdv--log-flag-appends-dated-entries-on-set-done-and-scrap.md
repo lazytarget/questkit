@@ -4,14 +4,15 @@ title: Log flag appends dated entries on set done and scrap
 description: A --log message flag on set, done and scrap appends a dated bullet to the quest's Log section (created if missing) in the same save.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
   - cli
   - dx
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-46rdv
@@ -46,3 +47,5 @@ directory concept and `quest logs` the inventory command
 ## Log
 
 - 2026-08-22: captured from R&D catalog CLI-3 (revised — flag, not a verb), accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

@@ -68,11 +68,11 @@ def test_ready_and_state_are_separate_lines(isolated, make_log, write_quest, run
 
 
 def test_ready_comes_from_the_schemas_own_readiness_rules_only(isolated, make_log, write_quest, run):
-    """A household schema needing only a description reports READY, with no
+    """A minimal-readiness schema needing only a description reports READY, with no
     hardcoded spec/acceptance-criteria requirement."""
     log = make_log(
         isolated,
-        project="household",
+        project="chores",
         schema={"readiness": [{"require": {"where": "description:exists"}, "message": "no description"}]},
     )
     write_quest(log, "QST-aaaaa", status="todo", description="Buy milk", body="## Description\n\nBuy milk.\n")
@@ -178,12 +178,12 @@ def test_report_back_names_exact_commands_and_the_commit_prefix(isolated, make_l
 def test_report_back_omits_the_start_work_line_when_the_schema_renamed_in_progress(
     isolated, make_log, write_quest, run
 ):
-    """A schema that renamed `in-progress` (e.g. household.yaml's `doing`) has
+    """A schema that renamed `in-progress` (e.g. a `doing` status) has
     no declared equivalent -- REPORT BACK must never suggest a status value
     that isn't actually in this log's own vocabulary."""
     log = make_log(
         isolated,
-        project="household",
+        project="chores",
         schema={"statuses": ["draft", "waiting", "doing", "done", "scrapped"]},
     )
     write_quest(log, "QST-aaaaa", status="waiting", body=_SPEC_BODY)
@@ -210,6 +210,33 @@ def test_schema_block_is_present_when_the_log_declares_custom_fields(isolated, m
     result = run("brief", "QST-aaaaa", "--in", str(log))
 
     assert "SCHEMA" in result.out
+
+
+def test_header_metadata_line_surfaces_a_schema_declared_custom_field_value(
+    isolated, make_log, write_quest, run
+):
+    """QST-onxad: a schema-declared custom field (e.g. `language`) reaches the
+    header's metadata line for free, the same way `effort`/`tier` do -- no
+    core field, no brief_cmd change needed per log."""
+    log = make_log(
+        isolated,
+        project="proj",
+        schema={"fields": {"language": {"type": "enum", "values": ["sv", "en"], "default": "sv"}}},
+    )
+    write_quest(log, "QST-aaaaa", status="todo", body=_SPEC_BODY, language="sv")
+
+    result = run("brief", "QST-aaaaa", "--in", str(log))
+
+    assert "language=sv" in result.out
+
+
+def test_header_metadata_line_omits_a_custom_field_with_no_value(isolated, make_log, write_quest, run):
+    log = make_log(isolated, project="proj", schema={"fields": {"language": {"type": "string"}}})
+    write_quest(log, "QST-aaaaa", status="todo", body=_SPEC_BODY, language=None)
+
+    result = run("brief", "QST-aaaaa", "--in", str(log))
+
+    assert "language=" not in result.out
 
 
 def test_output_contains_no_vendor_specific_text(isolated, make_log, write_quest, run):

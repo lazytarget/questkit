@@ -25,7 +25,19 @@ pip install questkit
 
 This installs two identical entry points, `quest` and `qst` (pick whichever
 you'd rather type), plus `quest-format`, `quest-validate`, and
-`quest-bump-modified` for use as pre-commit hooks.
+`quest-bump-modified` for use as pre-commit hooks, and `quest-apply-trailers`
+for a `post-commit` hook that transitions quests referenced by a `Quest:`
+commit trailer in a plain code repo (see
+[docs/questkit.md §11](docs/questkit.md#11-git-hooks-and-validation)).
+
+Shell completions (bash/zsh/fish, including dynamic completion of quest ids,
+`--in` project names, and `--where`/`--select`/`--sort` field names):
+
+```bash
+eval "$(quest completion bash)"     # ~/.bashrc
+eval "$(quest completion zsh)"      # ~/.zshrc, after compinit
+quest completion fish | source      # ~/.config/fish/config.fish
+```
 
 ## Quickstart
 
@@ -36,6 +48,8 @@ quest new "Fix the garage door sensor"
 quest list                     # defaults to todo, in-progress
 quest next                     # the single best quest to work on right now
 quest set QST-x7k2m priority=high
+quest edit QST-x7k2m            # open it in $EDITOR
+quest open QST-x7k2m            # open it in Obsidian (gh --web analog)
 quest done QST-x7k2m
 quest validate
 ```
@@ -76,14 +90,18 @@ quest list --where "status=todo,in-progress"                # comma = OR within 
 quest list --where "tags~frontend" --where "tags~urgent"     # repeated --where = AND
 quest list -A --format json | jq '.[].title'                 # every log under QST_ROOT
 quest list --format prompt                                   # compact, agent-friendly digest
+quest list --where "milestone=0.4.0;status=done,scrapped" --format md  # changelog bullets
 quest stale                                                   # untouched status for 2+ weeks
 quest blocked                                                 # open dependency, ranked by blocks
+quest list --view due                                         # dated quests, soonest due_in first
+quest list --where "body~syncthing"                           # full-text search composes with --where
+quest list --where "status=done" --where "criteria_done<criteria_total"  # done with unchecked criteria
 quest deps QST-x7k2m                                          # walk its dependency graph
 quest brief QST-x7k2m                                         # self-contained agent work order
 quest schema quest status                                    # valid values, so nothing's guessed
 ```
 
-`--all` aggregates from every log found downward from `QST_ROOT` (an env
+`-A`/`--all-logs` aggregates from every log found downward from `QST_ROOT` (an env
 var — the sweep-root analogue of `QUEST_LOG`), the git root, or the
 current directory. Because ids are globally unique, targeted mutations
 are location-independent too: `quest set`/`show`/`done <id>` check the
@@ -116,9 +134,10 @@ aliases: [QST-x7k2m]             # surfaces the short id in Obsidian search/quic
 ```
 
 `agentic: afk | hitl` is not shown above — it is not a core field. It is
-declared by the `development` schema (`schema: development` in a log's
-`.questkit.yaml`), because "can an agent run this unsupervised" is not a
-universal vocabulary; household work has no such axis.
+declared by a shared named schema you maintain (e.g. `schema: development`
+in a log's `.questkit.yaml`; questkit ships none), because "can an agent run
+this unsupervised" is not a universal vocabulary; chores and errands have no
+such axis.
 
 ### Cross-referencing other quests in Obsidian
 
@@ -140,7 +159,7 @@ autocomplete matches on the alias and inserts the full link for you.
 This is also vault-scoped: wikilinks cannot resolve across separate
 Obsidian vaults at all, so a cross-reference between quests in different
 zones/logs only resolves when a vault containing both is open (e.g. a
-realm-root vault nesting every zone) — never when a narrower, per-zone
+vault at a parent folder nesting every log) — never when a narrower, per-log
 vault is open. For a genuinely cross-zone reference, prefer plain text
 (`QST-x7k2m`, greppable and `quest show`-able) over a wikilink that will
 silently fail to resolve in the common case.
@@ -169,9 +188,10 @@ pre-commit hook does the same for staged files on every commit (see
 
 `agentic: afk` is a claim, not a declaration — but `quest validate` no longer
 checks it. That check now lives in a schema's `readiness:` block (advisory,
-not commit-blocking): the `development` schema requires a `## Spec`/`##
-Design` section and an `## Acceptance Criteria` checklist before treating an
-AFK quest as handoff-ready. See [docs/questkit.md §13](docs/questkit.md#13-agentic-support).
+not commit-blocking): by default a quest needs a description, a non-draft
+status, a `## Spec`/`## Design` section and an `## Acceptance Criteria`
+checklist to count as handoff-ready (a schema can add rules such as
+"AFK work needs an owner"). See [docs/questkit.md §13](docs/questkit.md#13-agentic-support).
 
 ### What else `quest validate` checks
 
@@ -189,7 +209,28 @@ no cross-log reference concept, matching the vault-boundary limitation
 above.
 
 `owner` is intentionally free text, not a closed enum — questkit doesn't
-know who's on your team.
+know who's on your team. A custom field can also declare `unique: true`
+(see "Custom fields and per-log schema" below); `quest validate` then
+errors when two quests in the log share its non-null value, naming both
+files.
+
+`quest validate --format json` emits the same findings as structured
+`{file, id, kind, rule, message}` objects plus a summary, instead of the
+default stderr-friendly prose — for agents/CI that want to consume results
+without scraping text. See
+[docs/questkit.md §6](docs/questkit.md#6-cli-reference) for the exact shape
+and the full list of `rule` slugs.
+
+### `quest doctor`: environment-wide, read-only diagnosis
+
+`quest validate` checks one log's quest *content*; `quest doctor
+[--root DIR ...]` checks everything around the logs that `validate` never
+sees — duplicate ids across logs, Syncthing conflict copies, orphaned
+quest-shaped files, broken configs, stale pre-commit hook pins, install
+sanity, `QUEST_LOG`/`QST_ROOT` sanity, and generated-artifact drift. It
+never writes anything and exits `1` if it finds a problem. See
+[docs/questkit.md §6](docs/questkit.md#6-cli-reference) for the full list
+of checks and the `--format json` shape.
 
 ## Config (`.questkit.yaml`)
 
@@ -234,9 +275,10 @@ today's hardcoded vocabulary. When present, `types`/`statuses`/`tiers`/
 `priorities`/`efforts` override the built-in enums (an `extends: <path>`
 key can chain in a shared schema file first, with sibling keys fully
 replacing whatever it inherits), and `fields:` declares custom frontmatter
-fields with a `required` flag. `quest new` null-initializes every declared
-field and warns on stderr; `quest validate` fails if a `required: true`
-one is still null or missing. `ignore:` (optionally `#include <path>` to
+fields with a `required` flag (and, optionally, `unique: true`). `quest new`
+null-initializes every declared field and warns on stderr; `quest validate`
+fails if a `required: true` one is still null or missing, or if a
+`unique: true` one shares a non-null value with another quest in the log. `ignore:` (optionally `#include <path>` to
 reuse a shared ignore-pattern file) extends the default prune list for
 cross-log sweeps, scoped to that log's own project.
 
@@ -255,13 +297,22 @@ valid values/spec — instead of guessing or reading the YAML chain by hand.
   Skipped (not overwritten) if one already exists. Obsidian Bases is a
   fairly new file format; treat the generated file as a starting point, not
   a guarantee — check it opens the way you expect.
+- `--template` — write (or regenerate) `quests/_template.md` from the log's
+  merged schema, for capturing quests from Obsidian. Unlike the other flags it
+  overwrites on every call.
 - `--hooks` — wire questkit's own pre-commit hooks (`quest-format`,
   `quest-validate`, `quest-bump-modified`, in that order) into this repo's
   `.pre-commit-config.yaml`,
   creating the file if it doesn't exist, and run `pre-commit install`. A
   no-op (with a message) outside a git repo. Structural, not marker-based:
   re-running it never duplicates the entry. References questkit by local
-  path until it has a real Git remote to pin a release tag against.
+  path (your checkout). Also
+  writes (or appends to) a plain `post-commit` git hook script calling
+  `quest-apply-trailers` — so any commit in this repo carrying a `Quest:
+  QST-xxxxx <status>` trailer transitions that quest, and a bare `Quest:
+  QST-xxxxx` mention gets a `## Log` entry. See
+  [docs/questkit.md §11](docs/questkit.md#11-git-hooks-and-validation) for
+  the trailer syntax and idempotency rules.
 
 All of `quest init`'s effects are idempotent — re-running it any number of
 times converges to the same state and never overwrites something you've

@@ -4,21 +4,22 @@ title: quest set / new --set store blocked_by as a string; validate then checks 
 description: set_cmd._coerce only splits tags, so blocked_by=QST-x (or [QST-x]) is written as a YAML string; validate iterates the string and reports one 'not found' error per character.
 project: questkit
 type: bug
-status: todo
+status: done
 priority: high
 tags:
   - questkit
   - cli
   - correctness
 created: 2026-10-13
-modified: 2026-10-13
+status_changed: 2026-10-16
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-hzlny
 blocked_by: []
 component:
 effort: s
-milestone:
+milestone: 0.4.0
 related_adrs:
 ---
 
@@ -67,16 +68,19 @@ Workaround used: hand-edit the frontmatter to a YAML list.
 
 ## Acceptance Criteria
 
-- [ ] `quest set <id> blocked_by=QST-x` and `quest new ... --set blocked_by=QST-x` write a YAML list
-- [ ] Comma-separated and `[a, b]` forms both work; empty value clears to `[]`
-- [ ] `quest validate` reports one type error for a scalar in a list field
-- [ ] Coercion is driven by the schema's field types, shared by `set` and `new --set`
+- [x] `quest set <id> blocked_by=QST-x` and `quest new ... --set blocked_by=QST-x` write a YAML list
+- [x] Comma-separated and `[a, b]` forms both work; empty value clears to `[]`
+- [x] `quest validate` reports one type error for a scalar in a list field
+- [x] Coercion is driven by the schema's field types, shared by `set` and `new --set`
 
 ## Log
 
 - 2026-10-13: hit while creating home-lab QST-2aow5 (blocked by QST-eg94z); root cause read from `set_cmd._coerce` and `validate_cmd` on `main`
+- 2026-10-16: Added to milestone 0.4.0.
+- 2026-10-16: Implemented: schema-type-driven list coercion shared by set and new --set; validate reports one list-type error.
 
 ## Related
 
 - [[QST-j68u5--schema-engine-field-order-defaults-macros-typed-fields-strict-writes]] - typed fields; coercion should use them
 - [[QST-yiep7--qualified-cross-log-references-in-blocked-by]] - other `blocked_by` work
+

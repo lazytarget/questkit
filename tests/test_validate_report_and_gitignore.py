@@ -2,7 +2,7 @@
 `.gitignore` entry for `_validation.md`.
 
 `_validation.md` is derived state (Syncthing-transported, not git-tracked);
-both pieces exist so the realm-01 timer's `quest validate --report
+both pieces exist so the unattended timer's `quest validate --report
 quests/_validation.md || true` never leaves stale or untracked cruft behind.
 """
 

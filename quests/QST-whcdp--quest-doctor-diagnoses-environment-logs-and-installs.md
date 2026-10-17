@@ -4,7 +4,7 @@ title: Quest doctor diagnoses environment logs and installs
 description: One read-only diagnosis pass over env, logs and installs — duplicate ids, conflict copies, orphaned quest files, broken configs, stale hook pins.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: medium
 tags:
   - questkit
@@ -12,7 +12,8 @@ tags:
   - dx
   - maintenance
 created: 2026-08-22
-modified: 2026-08-22
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic:
 aliases:
   - QST-whcdp
@@ -55,3 +56,5 @@ Text output; `--format json` follows the validate finding shape
 ## Log
 
 - 2026-08-22: captured from R&D catalog CLI-5, accepted for 0.4.0
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

@@ -78,6 +78,8 @@ def _spec_dict(spec) -> dict:
         out["values"] = list(spec.values)
     if spec.default is not None:
         out["default"] = spec.default
+    if spec.unique:
+        out["unique"] = True
     return out
 
 

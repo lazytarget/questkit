@@ -21,7 +21,7 @@ from pathlib import Path
 from ..config import QuestLogConfig
 from ..discovery import resolve_log_set
 from ..gitutil import find_git_root
-from ..quest import Quest, QuestFileError
+from ..quest import SYNC_CONFLICT_MARKER, Quest, QuestFileError, is_sync_conflict_copy
 
 
 def run(args: argparse.Namespace) -> int:
@@ -52,8 +52,16 @@ def commit_one(
         for entry in config.resolved_tracked()
         if any(c in entry for c in "*?[") or (quests_dir / entry).exists()
     ]
+    # Syncthing conflict copies (QST-oe92z) match `config.pattern`'s glob just
+    # as well as a real quest file -- an exclude pathspec keeps them out of
+    # `git add`/`git commit` itself, not just out of the derived message.
+    pathspecs.append(f":(exclude){quests_rel}/*{SYNC_CONFLICT_MARKER}*")
 
-    changed = _changed_paths(git_root, pathspecs)
+    changed = [
+        (code, relpath)
+        for code, relpath in _changed_paths(git_root, pathspecs)
+        if not is_sync_conflict_copy(Path(relpath).name)
+    ]
     if not changed:
         print(f"[quest commit] {quests_dir}: nothing to commit")
         return 0
@@ -153,7 +161,7 @@ def _build_message(
 
 
 def _looks_like_a_quest(config: QuestLogConfig, path: Path) -> bool:
-    return fnmatch.fnmatch(path.name, config.pattern)
+    return fnmatch.fnmatch(path.name, config.pattern) and not is_sync_conflict_copy(path.name)
 
 
 def _read_field(path: Path, name: str):

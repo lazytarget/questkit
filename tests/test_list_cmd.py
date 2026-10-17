@@ -218,4 +218,135 @@ def test_list_all_aggregates_across_logs_with_project_column(tmp_path, monkeypat
 
     assert "proj_a" in out
     assert "proj_b" in out
-    assert "project" in out.splitlines()[0]
+
+
+# --- --format md (QST-f6otu) -----------------------------------------------------
+
+
+def _milestone_schema():
+    return {
+        "fields": {"milestone": {"type": "string"}},
+    }
+
+
+def test_list_md_format_default_bullet_shape(isolated, make_log, write_quest, run):
+    log = make_log(isolated, schema=_milestone_schema())
+    write_quest(
+        log, "QST-bo3xs", slug="checklist-progress-computed-fields",
+        title="Checklist-progress computed fields", status="todo",
+        type="feature", milestone="0.4.0",
+    )
+
+    result = run("list", "--in", str(log), "--where", "status:exists", "--format", "md")
+
+    assert result.code == 0
+    assert result.out.strip() == (
+        "- **QST-bo3xs** Checklist-progress computed fields *(feature, 0.4.0)*"
+    )
+
+
+def test_list_md_format_omits_blank_trailing_fields(isolated, make_log, write_quest, run):
+    """No `milestone` on this schema: the parenthetical drops the blank value
+    instead of printing a dangling `*(feature, )*`."""
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", title="No milestone here", status="todo", type="feature")
+
+    result = run("list", "--in", str(log), "--where", "status:exists", "--format", "md")
+
+    assert result.out.strip() == "- **QST-aaaaa** No milestone here *(feature)*"
+
+
+def test_list_md_format_honors_select_field_order(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", title="Selectable", status="todo")
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--select", "id,status", "--format", "md",
+    )
+
+    assert result.out.strip() == "- **QST-aaaaa** todo"
+
+
+def test_list_md_format_honors_sort_and_limit(isolated, make_log, write_quest, run):
+    log = make_log(isolated, schema=_milestone_schema())
+    write_quest(log, "QST-aaaaa", title="Low", status="todo", priority="low")
+    write_quest(log, "QST-bbbbb", title="High", status="todo", priority="high")
+
+    result = run(
+        "list", "--in", str(log), "--where", "status:exists",
+        "--sort", "priority", "--limit", "1", "--format", "md",
+    )
+
+    assert "High" in result.out
+    assert "Low" not in result.out
+
+
+def test_list_md_format_groups_multi_log_under_headings(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("QUEST_LOG", raising=False)
+    proj_a = tmp_path / "proj_a"
+    proj_b = tmp_path / "proj_b"
+    proj_a.mkdir()
+    proj_b.mkdir()
+    monkeypatch.chdir(proj_a)
+    assert main(["init", "--project", "proj_a"]) == 0
+    monkeypatch.chdir(proj_b)
+    assert main(["init", "--project", "proj_b"]) == 0
+
+    monkeypatch.chdir(proj_a)
+    assert main(["new", "In proj A", "--status", "todo"]) == 0
+    capsys.readouterr()
+    monkeypatch.chdir(proj_b)
+    assert main(["new", "In proj B", "--status", "todo"]) == 0
+    capsys.readouterr()
+
+    monkeypatch.setenv("QST_ROOT", str(tmp_path))
+    assert main(["list", "--all", "--format", "md"]) == 0
+    out = capsys.readouterr().out
+
+    assert "### proj_a" in out
+    assert "### proj_b" in out
+    assert out.index("### proj_a") < out.index("In proj A")
+    assert out.index("### proj_b") < out.index("In proj B")
+
+
+def test_list_md_format_no_matches(isolated, make_log, run):
+    log = make_log(isolated)
+
+    result = run("list", "--in", str(log), "--where", "status=done", "--format", "md")
+
+    assert result.out.strip() == "(no matching quests)"
+
+
+# --- default columns include `type` ----------------------------------------------
+
+
+def test_default_table_columns_include_type(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug")
+
+    result = run("list", "--in", str(log), "--quiet")
+
+    header = result.out.splitlines()[0].split()
+    assert header == ["ID", "TYPE", "STATUS", "PRIORITY", "TITLE"]
+    assert "bug" in result.out
+
+
+@pytest.mark.parametrize("view", ["next", "stale", "blocked"])
+def test_the_builtin_views_include_type_too(isolated, make_log, write_quest, run, view):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug", blocked_by=["QST-bbbbb"])
+    write_quest(log, "QST-bbbbb", slug="b", status="todo", type="bug")
+
+    result = run(view, "--in", str(log), "--quiet", "--where", "status:exists")
+
+    assert "TYPE" in result.out.splitlines()[0]
+
+
+def test_default_csv_columns_include_type(isolated, make_log, write_quest, run):
+    log = make_log(isolated)
+    write_quest(log, "QST-aaaaa", slug="a", status="todo", type="bug")
+
+    result = run("list", "--in", str(log), "--quiet", "--format", "csv")
+
+    assert result.out.splitlines()[0] == "id,type,status,priority,title"

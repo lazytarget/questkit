@@ -4,14 +4,14 @@ title: New frontmatter attributes
 description: Decide how a language hint reaches agents — resolved as a schema-declared field with a default, not a new core field.
 project: questkit
 type: feature
-status: todo
+status: done
 priority: low
 tags:
   - questkit
   - schema
 created: 2026-08-16
-status_changed: 2026-08-19
-modified: 2026-08-20
+status_changed: 2026-08-24
+modified: 2026-10-16
 agentic: afk
 aliases:
   - QST-onxad
@@ -80,3 +80,5 @@ schema declares — which is the actual goal: the hint reaching the agent.
 
 - 2026-08-16: captured as "Frontmatter attribute for `language:`"
 - 2026-08-19: groomed as part of [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]]. Resolved as a schema field rather than a core field; retitled to match the filename, which had already generalized to plural.
+- 2026-08-24: Implemented for questkit v4 (milestone 0.4.0), TDD, full suite green.
+

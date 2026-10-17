@@ -14,7 +14,7 @@ import argparse
 
 from ..config import QuestLogConfig
 from ..discovery import resolve_log
-from ..quest import Quest
+from ..quest import Quest, glob_quests
 from ..timeutil import today
 from . import set_cmd
 
@@ -42,7 +42,7 @@ def _bulk(args: argparse.Namespace, value: bool, verb: str) -> int:
     config = QuestLogConfig.load(quests_dir)
 
     changed = 0
-    for path in sorted(quests_dir.glob(config.pattern)):
+    for path in glob_quests(quests_dir, config.pattern):
         quest = Quest.load(path)
         # Idempotent: a quest already at the target state is left untouched,
         # including its `modified` -- re-running `archive-log` on a log with

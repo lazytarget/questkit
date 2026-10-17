@@ -9,7 +9,7 @@ know exactly what a given command or field does and why it exists.
 ## Table of contents
 
 1. [Purpose & design philosophy](#1-purpose--design-philosophy)
-2. [Role inside The Realm](#2-role-inside-the-realm)
+2. [Typical deployment](#2-typical-deployment)
 3. [Core concepts](#3-core-concepts)
 4. [Installation](#4-installation)
 5. [Development](#5-development)
@@ -36,11 +36,11 @@ requiring a server, a database, an account, or a sync service beyond
 whatever already moves your files around.
 
 It replaced two systems that both failed this test differently: **Beans**
-(an upstream ticket framework whose frontmatter didn't match the Realm's
-own metadata standard, and whose noun — "bean" — was welded to that one
+(an upstream ticket framework whose frontmatter didn't match our own
+metadata standard, and whose noun — "bean" — was welded to that one
 framework) and **Trello** (a real server, a real account, and — per the
 migration analysis in `QST-whm2e` — four boards running mostly on
-Butler/Home-Assistant automation with declining human engagement, which is
+bot automation with declining human engagement, which is
 what happens when the tracker lives somewhere you have to go to it instead
 of it being where you already are).
 
@@ -79,45 +79,32 @@ Five design commitments fall out of that:
   never guesses at a fix (see [§11](#11-git-hooks-and-validation) on why
   `--fix` was deliberately not built).
 
-## 2. Role inside The Realm
+## 2. Typical deployment
 
-questkit is deliberately a **standalone, Realm-agnostic** tool — nothing in
-`src/questkit/` imports or assumes anything about The Realm's directory
-topology, Syncthing folders, or Obsidian vaults. That's on purpose: it
-should work the same way if you dropped it into an unrelated project on an
-unrelated machine.
+questkit is deliberately a **standalone** tool — nothing in `src/questkit/`
+assumes a particular directory topology, sync tool, or Obsidian vault layout.
+It should work the same way if you drop it into an unrelated project on an
+unrelated machine. A typical multi-repo setup looks like this:
 
-Inside The Realm specifically, though, it plays a defined role:
-
-- **The catch-all log** lives at `02-projects/common/quests/` — a
-  dedicated Git repo whose root *is* the log (no nested `quests/` folder;
-  `QST-*.md` files sit directly at the top, alongside `.questkit.yaml`).
-  It holds anything without a home yet, and cross-cutting Realm-tooling
-  ideas. `git: auto` there, since the repo's only content is quest files.
-- **Per-zone logs** opt in one at a time via `quest init`, inside whatever
-  repo the work actually belongs to. As of this writing: `pensieve/quests/`
-  (`project: pensieve`, 26 quests, migrated from the old shared `beans`
-  repo), `99-system/quests/` (`project: realm-system`, migrated from
-  `TODOS.md`), `02-projects/peter/2026-career-transition/quests/`
-  (`project: career-transition`, migrated from `career-todos.md`), and
-  questkit's own `quests/` (`project: questkit` — questkit tracks its own
-  backlog in itself).
-- **The `quest`/`qst` CLI is used directly** — installed globally via `uv
-  tool install --editable` (part of `make setup-venv`; see §4.3). There is
-  no Make wrapper: an earlier `make quest`/`make status` shim was removed
-  in favor of calling the CLI itself everywhere.
-- **The Realm's root `AGENTS.md`** routes "bean"/"ticket"/"todo" — spoken
-  synonyms from before this existed — to quest creation, so an agent
-  primed on the Realm's conventions never has to be told twice.
+- **A catch-all log** — a dedicated Git repo whose root *is* the log (no
+  nested `quests/` folder; `QST-*.md` files sit directly at the top, alongside
+  `.questkit.yaml`). It holds anything without a home yet, and cross-cutting
+  tooling ideas. `git: auto` there, since the repo's only content is quest
+  files.
+- **Per-project logs** opt in one at a time via `quest init`, inside whatever
+  repo the work actually belongs to (e.g. a `quests/` folder with
+  `project: my-app`). questkit tracks its own backlog this way too
+  (`project: questkit`).
+- **The `quest`/`qst` CLI is used directly** (see §4.2) — there is no wrapper
+  script or Make shim.
+- **Agent routing** — a project-level `AGENTS.md`/`CLAUDE.md` can route
+  spoken synonyms ("ticket", "todo") to quest creation, so an agent never has
+  to be told twice (see [§13](#13-agentic-support)).
 - **`QST-whm2e`**, in questkit's own log, is the founding design document:
   every decision here, and every correction made discovering those
   decisions didn't quite survive contact with real data, is logged there
   with a date. Treat it as the historical record; treat this file as the
   current reference.
-
-The old `beans` repo (`02-projects/common/beans/`) is kept only as a
-frozen, marked-obsolete historical reference — do not create new tickets
-there.
 
 ## 3. Core concepts
 
@@ -125,9 +112,9 @@ there.
 |---|---|
 | **Quest** | One unit of work: a single `QST-<id>--<slug>.md` file, frontmatter + body. |
 | **Quest log** | A directory containing quest files plus a `.questkit.yaml` marker. The unit of scope for every command. |
-| **Zone** | Realm-specific term for "a repo that has opted a quest log in." Not a questkit concept — questkit just sees "a directory with `.questkit.yaml` in it." |
+| **Zone** | Informal term (also used in some command names and docs) for "a repo that has opted a quest log in." Not a questkit concept — questkit just sees "a directory with `.questkit.yaml` in it." |
 | **Marker** | `.questkit.yaml`'s real job: its mere *presence* inside a `quests/` directory is what makes that directory a log. A bare `quests/` folder with no marker is just a folder — this protects public repos from accidentally becoming a log just because someone made a folder with that name. |
-| **Central/catch-all log** | The one log with no natural project owner — in The Realm, `02-projects/common/quests/`. Reached via the `QUEST_LOG` environment variable when no nearer log exists. |
+| **Central/catch-all log** | The one log with no natural project owner — e.g. a dedicated catch-all repo. Reached via the `QUEST_LOG` environment variable when no nearer log exists. |
 
 Everything else in questkit is built out of these five ideas plus the
 resolution order described next.
@@ -139,73 +126,52 @@ There are three separate things you might want, and they're independent:
 ### 4.1 For development on questkit itself
 
 ```bash
-cd 02-projects/lazytarget/questkit
+cd path/to/questkit
 uv venv
 uv pip install -e ".[dev]"
 ```
 See [§5](#5-development) for the full loop.
 
-### 4.2 Shared per-OS venv (automatic, for 99-system tooling)
+### 4.2 For a bare `quest`/`qst` on your interactive shell PATH
 
-Nothing to do manually — `make setup-venv` (part of `make init-system`)
-already runs:
-
-```makefile
-@$(PIP_CMD) install -e $(DIR_PROJECTS)/lazytarget/questkit $(QUIET_REDIRECT)
-```
-
-installing questkit in editable mode into the same shared, per-OS venv
-`99-system` uses for everything else (`$(VENV)`, resolved per-OS/per-device
-— see the Makefile's OS-detection block). This isn't itself a way to get a
-bare `quest` command on your interactive shell PATH — for that, see §4.3.
-
-### 4.3 For a bare `quest`/`qst` on your interactive shell PATH
-
-This is the one manual, per-device step, and it's why: Syncthing already
-propagates questkit's *source* the moment it syncs to a device (it's just
-files, in an ordinary `realm-projects-lazytarget`-synced folder) — what it
-deliberately does **not** and *should* not propagate is a *compiled
-install* (a venv is a set of platform- and Python-version-specific
-binaries; syncing one across a Linux desktop, a Mac laptop, and Android
-Termux would not work even if it did sync).
-
-`make setup-venv` also runs this, best-effort:
-
-```makefile
--@uv tool install --editable $(DIR_PROJECTS)/lazytarget/questkit $(QUIET_REDIRECT)
-```
-
-The leading `-` means a missing `uv` doesn't fail the whole target — you
-still get the shared-venv install from §4.2 either way. If `uv` **is**
-present (install it once per device if not:
-<https://docs.astral.sh/uv/getting-started/installation/>), this step
-alone gets you a global `quest`/`qst`:
+If you use `uv` (install it once per device if not:
+<https://docs.astral.sh/uv/getting-started/installation/>), one command gets
+you a global `quest`/`qst`:
 
 ```bash
-$ uv tool install --editable /path/to/02-projects/lazytarget/questkit
-Installed 5 executables: qst, quest, quest-bump-modified, quest-format, quest-validate
+$ uv tool install --editable /path/to/questkit
+Installed 6 executables: qst, quest, quest-apply-trailers, quest-bump-modified, quest-format, quest-validate
 
 $ cd anywhere/at/all && quest list
-QST-0grby  in-progress  high      Integrate kivra-sync
+QST-0grby  feature  in-progress  high      Integrate the sync adapter
 ...
 ```
 
 `--editable` means future edits to questkit's source apply immediately —
-no reinstall needed, same property as the shared-venv install. Executables
-land in `~/.local/bin` (uv's managed tool-install location; it's added to
-PATH automatically by `uv` on first use on most setups).
+no reinstall needed. Executables land in `~/.local/bin` (uv's managed
+tool-install location; it's added to PATH automatically by `uv` on first use
+on most setups).
 
-### 4.4 Outside The Realm entirely
+A compiled install (a venv is a set of platform- and Python-version-specific
+binaries) should not be synced between machines; sync the *source* and run
+this install step once per device.
+
+### 4.3 With pip
 
 ```bash
 pip install -e .          # from a checkout, for now
 # pip install questkit    # once published to PyPI -- not yet
 ```
 
+The installed executables are `quest` and `qst` (the CLI) plus the
+pre-commit hook entry points `quest-format`, `quest-validate`,
+`quest-bump-modified` and `quest-apply-trailers` (see
+[§11](#11-git-hooks-and-validation)).
+
 ## 5. Development
 
 ```bash
-cd 02-projects/lazytarget/questkit
+cd path/to/questkit
 uv venv
 uv pip install -e ".[dev]"
 .venv/bin/pytest -q
@@ -214,8 +180,7 @@ uv pip install -e ".[dev]"
 
 Notes for anyone changing questkit itself:
 
-- **Test before you commit, every time** — `pytest` (99 tests as of this
-  writing) covers config load/save, discovery/resolution (including the
+- **Test before you commit, every time** — `pytest` (see `tests/`) covers config load/save, discovery/resolution (including the
   cross-log sweep, the ambiguity guard, and `ignore:`/`#include`
   resolution), id generation, the Quest round-trip and list-style
   normalization, schema validation (undeclared-field checks under
@@ -262,7 +227,7 @@ that one call (see [§9](#9-multi-zone-setup) for the full resolution
 order). Examples below assume you're standing inside an already-opted-in
 log unless `--in` is shown explicitly.
 
-**`quest --help` groups its ~20 commands** (Capture, Query, Modify, Logs,
+**`quest --help` groups its 28 commands** (Capture, Query, Modify, Logs,
 Maintain, Introspect) instead of rendering one flat, insertion-ordered list
 — the shape `git help -a` uses at a much larger scale. Grouping is purely a
 `--help` rendering concern: every command is unrenamed, unnested, and reached
@@ -273,18 +238,21 @@ since it's a prefilled `list` invocation accepting every `list` flag.
 ### Resolving `--in` by name
 
 Every command that takes `--in DIR` also accepts a **project name**: `--in
-family` resolves to whichever log declares `project: family`, matched against
+my-app` resolves to whichever log declares `project: my-app`, matched against
 every log discovered under the sweep root (`--root`, `QST_ROOT`, the git root,
 or cwd). **One rule** decides name vs. path: a value containing a `/` or `\`,
 or naming a directory that exists on disk, is a **path**; anything else is a
 name. Disk existence wins the tie, so a directory that happens to share a
 project's name still resolves as the path.
 
-`project:` is therefore **identity, not a label** — unique per log, enforced by
-`quest logs` and `quest validate`. A path that is not itself a log, but has
+`project:` is meant to be **identity, not a label** — one name per log — but
+nothing can stop two checkouts (git worktrees) from declaring the same one. A
+name that matches more than one log is an **error listing every candidate
+path**, never a silent pick; pass a path (`--in <path>`, a log's `quests/`
+directory or the project directory above it) to disambiguate. See
+[Duplicate policy](#duplicate-policy). A path that is not itself a log, but has
 logs beneath it, expands to all of them for a read command (`--in
-02-projects/grocy-ecosystem` behaves like `--in
-02-projects/grocy-ecosystem/quests`); a single-target command (`new`, `show`,
+projects/my-app` behaves like `--in projects/my-app/quests`); a single-target command (`new`, `show`,
 `set`, ...) errors naming the candidates instead of guessing. Errors are
 actionable: an unknown name lists the known project names and their paths.
 
@@ -315,7 +283,8 @@ they always name core fields.
 ```
 quest new "title" [--type X] [--tier X] [--status X] [--priority X]
                    [--project X] [--description X] [--tag X ...]
-                   [--in DIR] [--edit]
+                   [--set field=value ...] [--body - | TEXT] [--batch -]
+                   [--in DIR] [--edit] [--allow-duplicate]
 ```
 
 Generates a fresh random id, writes `QST-<id>--<slugified-title>.md` into
@@ -334,8 +303,8 @@ with a "captured" line dated today), and prints the created path.
   field is omitted entirely.
 - `--edit` opens `$EDITOR` on the new file afterward; silently skipped
   (with a message) if `$EDITOR` isn't set.
-- **`--body -`** reads the Markdown body from stdin instead of the packaged
-  default template — the missing inbound half to `quest brief`'s SPEC/
+- **`--body -`** reads the Markdown body from stdin (any other `--body TEXT`
+  is used literally) instead of the packaged default template — the missing inbound half to `quest brief`'s SPEC/
   ACCEPTANCE sections, for an agent that already has the content written.
   ```bash
   quest new "Add --select" --status todo --body - <<'EOF'
@@ -375,18 +344,33 @@ with a "captured" line dated today), and prints the created path.
   quest's frontmatter as explicit `null`, one `[warning]` per field printed
   to stderr, so an agent (or a human) notices the field needs filling in
   rather than silently missing it.
+- **Duplicate-title warning** (QST-lc3d7): before writing, the new title is
+  compared against every existing quest's title in the target log — an
+  exact slug match, or a token-overlap of at least 70% ignoring stopwords —
+  and a hit prints a `[warning]` naming the matching id(s), status and
+  title, then still creates the quest:
+  ```
+  [warning] similar quest(s) already in this log:
+      QST-8hjjk  todo   Allow for --select and --distinct when listing quests
+    created anyway as QST-p2m4x -- use `quest set QST-p2m4x status=scrapped` if duplicate
+  ```
+  **Never blocks, never prompts, exit code stays 0** — capture must stay a
+  two-second action. Detection is scoped to the target log only (no
+  cross-log sweep). `--allow-duplicate` suppresses the warning for the
+  intentional case.
 
 ```bash
 $ quest new "Fix the garage door sensor" --type task --priority high --tag home
-/home/.../quests/QST-x7k2m--fix-the-garage-door-sensor.md
+/path/to/quests/QST-x7k2m--fix-the-garage-door-sensor.md
 ```
 
 ### `quest list [options]`
 
 ```
-quest list [--where EXPR ...] [-A|--all-logs] [--root DIR ...] [--in LOG ...]
-           [--format table|json|csv|prompt] [--view NAME]
-           [--select a,b,c] [--distinct] [--count]
+quest list [--where EXPR ...] [--any EXPR[;EXPR ...] ...]
+           [-A|--all-logs] [--root DIR ...] [--in LOG ...]
+           [--format table|json|csv|prompt|md] [--view NAME]
+           [--select a,b,c] [--group-by field[,field2]] [--count]
            [--sort field[:asc|desc][,field[:asc|desc] ...]]
            [--limit N] [--offset N] [--out FILE] [--quiet|-q]
            [--archived exclude|include|only]
@@ -425,19 +409,43 @@ multi-log querying.
   (`--where "status=todo" --where "tags~frontend"` means status is todo
   **and** tags contains frontend).
 
+  **`;` inside one `--where` value is AND, sugar for repeating `--where`**
+  (QST-00myv): `--where "milestone=0.3.0;status=done,scrapped"` parses to the
+  exact same clause list as `--where "milestone=0.3.0" --where
+  "status=done,scrapped"` -- no new semantics, just fewer flags to type.
+
   **Default status filter is `todo,in-progress`** if no `--where` clause
   targets `status` at all — a synthesized `--where` clause under the hood; a
   freshly-`draft`-captured quest still doesn't show up until groomed past
   draft. (`blocked` left the core status enum in v0.3 — see
-  [§4](#7-frontmatter-reference) — so it can no longer appear in this list; a
+  [§7](#7-frontmatter-reference) — so it can no longer appear in this list; a
   quest with an open dependency is marked in the table instead, via the
   computed `blocked` field below.) Override the filter with an explicit
   `--where "status=..."`, or use `--where "status:exists"` as the "show every
   status" escape hatch.
 
-- **Computed fields** — `blocked`, `blocks`, `idle`, `age` — are derived once
-  per query over the whole active row set and behave like any other field for
-  `--where`, `--select` and `--sort`. They are **read-only**: `quest set <id>
+- **`--any EXPR[;EXPR ...]`** (repeatable) is an OR-group, complementing
+  `--where`'s AND: the group matches a row if **any** of its `;`-separated
+  expressions holds, and every `--any` group is itself ANDed with `--where`
+  and every other `--any` group (QST-00myv). One rule sums up the whole
+  grammar: `;` always separates a *list of expressions*, and it is the
+  **flag** — not the separator — that names the combinator. Comma is
+  unchanged: it still means OR within one field's own value list, inside a
+  single expression.
+
+  ```bash
+  # (type=bug OR feature) AND (effort=s OR m) AND (status=parked OR blocked=true)
+  quest list --any "status=parked;blocked=true" --any "effort=s,m" --where "type=bug,feature"
+  ```
+
+  Both computed fields (`blocked=true`) and declared custom fields work in
+  `--any` exactly as in `--where` — it is the same expression grammar,
+  parsed identically. The stderr summary discloses every `--any` group
+  verbatim, the same way it discloses `--where`.
+- **Computed fields** — `blocked`, `blocks`, `idle`, `age`, `criteria_done`,
+  `criteria_total`, `overdue`, `due_in` — are derived once per query over the
+  whole active row set and behave like any other field for `--where`,
+  `--select` and `--sort`. They are **read-only**: `quest set <id>
   blocked=true` is an error.
 
   | Field | Type | Meaning |
@@ -446,6 +454,10 @@ multi-log querying.
   | `blocks` | int | how many non-terminal, non-archived quests list this one in their own `blocked_by` |
   | `idle` | int | days since `status_changed` (falling back to `created` when absent) |
   | `age` | int | days since `created` |
+  | `criteria_total` | int | `- [ ]`/`- [x]` items under the body's `## Acceptance Criteria` heading |
+  | `criteria_done` | int | the checked (`- [x]`) subset of `criteria_total` |
+  | `overdue` | bool | `due` has passed, and `status` is non-terminal and the quest isn't archived |
+  | `due_in` | int \| null | days until `due` (negative once past); `null` when `due` isn't set |
 
   Both `blocked` and `blocks` resolve each referenced quest against **that
   quest's own log's** `terminal_statuses` — a cross-log reference (see
@@ -453,11 +465,49 @@ multi-log querying.
   actually lives in, not the querying log's vocabulary. A blocked row's
   `status` cell in table output reads `todo [blocked]`; JSON/CSV expose
   `blocked` as its own field instead, so nothing there is duplicated.
+  `overdue` applies that same terminal/archived judgment to `due`.
 
   ```bash
   quest list --where "idle>14"                 # stale: untouched status for 2+ weeks
   quest list --where "blocked=true" --sort blocks:desc
+  quest list --where "status=done" --where "criteria_done<criteria_total" --where "criteria_total>0"
   ```
+
+  `criteria_done`/`criteria_total` compare directly against each other in the
+  last example above — the right-hand side of a `>`/`<`/`>=`/`<=` clause is
+  read as *another field's own value* whenever it names one of that row's
+  actual fields, rather than as a literal string. This is the one place the
+  grammar looks at more than a single field: it is what "done with unchecked
+  criteria" means as one query instead of two passes.
+
+  `criteria_total`/`criteria_done` require reading a quest's Markdown body
+  off disk (see `body`, below) — a plain `quest list` with no `--where`,
+  `--select`, `--sort` or view clause naming either of them, `body`, never
+  pays that cost. A malformed or missing `## Acceptance Criteria` section
+  reads as `0`/`0`, not an error.
+- **`body`** is the quest's Markdown body itself, exposed as an ordinary
+  queryable field (QST-vy4vt) — full-text search composes with everything
+  else in this grammar instead of needing its own command:
+
+  ```bash
+  quest list --where "body~syncthing"                 # case-insensitive substring
+  quest list --any "body~## Repro;type=bug"            # composes with --any groups
+  quest stale --where "body~TODO"                      # and with every view
+  ```
+
+  `~` is the useful operator (case-insensitive substring, same as any other
+  field); `body:exists` is trivially true for any real quest file; the other
+  operators (`=`, `!=`, `>`, `<`, ...) are legal — `body` is a field like any
+  other — but not documented as useful against free-form prose. **Lazily
+  read**: like `criteria_total`/`criteria_done`, `body` costs nothing on a
+  query that never names it, `body`, `criteria_done` or `criteria_total`
+  (see "Body parsed only when a criteria field is referenced" above — one
+  lazy-load mechanism serves both). **Excluded from `--select` for
+  `table`/`csv`** — an unbounded multi-line cell has no sane fixed-width or
+  one-line-per-row rendering, and asking for it in either format is a
+  `[quest list] error:`, not silent truncation. `--select body` works for
+  `json` and `prompt`, both of which already show free-form text
+  (description, or the full frontmatter).
 - **`-A` / `--all-logs`** aggregates quests from every log found by recursive
   descent from `--root` (repeatable; or `QST_ROOT`, or the git root, or cwd —
   see [§9](#9-multi-zone-setup)), instead of resolving to just one log. No
@@ -474,8 +524,8 @@ multi-log querying.
   separated by `os.pathsep` (`:` on Linux/macOS, `;` on Windows — not a literal
   `:`, since a Windows `C:\` would shred a colon split).
 - **`--in LOG`** is repeatable and resolves each value by name or by path (see
-  [§8](#8-questkityaml-configuration-reference)) — `--in family --in
-  realm-common` sweeps exactly those two logs, expanding a directory value to
+  [§8](#8-questkityaml-configuration-reference)) — `--in my-app --in
+  shared-tools` sweeps exactly those two logs, expanding a directory value to
   every log beneath it. It stays a *bounded search set*: nothing beyond the
   named logs is ever swept in.
 - **More than one log in scope groups the `table` output** — a separator names
@@ -484,12 +534,31 @@ multi-log querying.
   own). `json` and `csv` stay flat arrays either way, ordered by log, so
   `quest list --format json | jq '.[].title'` is unaffected by grouping.
 - **`--format`**: `table` (default, human-readable, a header row plus the
-  resolved columns) · `json` (a JSON array — the full parsed frontmatter of
+  resolved columns — by default `id, type, status, priority, title`, with
+  `project` appended under `-A`) · `json` (a JSON array — the full parsed frontmatter of
   every matching quest, unless `--select` narrows it) · `csv`
   (spreadsheet-friendly, list fields joined with `;`) · `prompt` (a compact
   per-quest text block meant for pasting into an agent's context:
   id/status/priority/title, then type/tags, then description, blank line
-  between quests).
+  between quests) · `md` (one Markdown bullet per row — the changelog
+  primitive, see below).
+- **`--format md`** renders rows as a Markdown bullet list, honoring
+  `--select`/`--sort`/`--limit` and per-log grouping (a `### <project>`
+  heading per log, instead of `table`'s plain-text separator) exactly like
+  every other format. Absent `--select`, the default columns are `id`,
+  `title`, `type`, `milestone`:
+
+  ```
+  - **QST-bo3xs** Checklist-progress computed fields *(feature, 0.4.0)*
+  ```
+
+  The first column renders **bold** (identity), the second renders plain
+  right after it (title-shaped), and any further columns join into one
+  italic parenthetical — a blank trailing value (e.g. no `milestone` on a
+  schema that doesn't declare it) is dropped rather than leaving a dangling
+  `*(feature, )*`. `--select id,status` accordingly renders `- **QST-x**
+  todo`. This is the primitive `scripts/release.py` consumes to assemble
+  `CHANGELOG.md` sections — see "Releasing" just below `quest commit`.
 - **`--select a,b,c`** restricts output to the named fields, **in the given
   order**, and applies to **every** `--format` — table, csv, json and prompt
   alike. This is a **widened contract**, not a rename of the old `--columns`
@@ -498,18 +567,31 @@ multi-log querying.
   respect it too rather than always dumping the full frontmatter. Naming an
   unknown field is a hard error listing the valid fields (core fields plus
   every declared custom field across the logs in scope).
-- **`--distinct`** collapses rows identical across the `--select`'d fields,
-  preserving first-seen order. Requires `--select` — without a set of fields
-  to compare, "distinct" has nothing to mean, so it errors rather than
-  silently doing nothing.
+- **`--group-by field[,field2]`** switches `list` into aggregation: instead of
+  quest rows, output is one row per unique combination of the named field(s)
+  plus a `count`, sorted by each field's **declared vocabulary order** (the
+  same ranking `--sort` uses) rather than alphabetically. Supersedes the old
+  `--distinct` outright (removed in QST-oguay, unused in practice) —
+  `--select f --distinct` is now `--group-by f` minus the count.
+
+  - `table`/`csv`: the value column(s) plus `count`; `json`:
+    `[{"status": "todo", "count": 86}, ...]`; `format prompt` is a hard
+    error — an aggregate is not a quest digest.
+  - Implies counting; combining it with `--select` is an error (they answer
+    different questions about the same rows). `--where`, `-A`/`--in` and
+    `--archived` all apply *before* grouping, exactly as they do for a plain
+    listing.
+  - Two-field grouping is what a burnup consumes, e.g.
+    `quest list --group-by milestone,status` (see a `development`-style schema's
+    `views.milestone`, [§8](#8-questkityaml-configuration-reference)).
 - **`--count`** prints a bare integer to stdout, suitable for `$( )`. Honors
-  `--where`, `--select` and `--distinct`; **ignores** `--limit`/`--offset` —
+  `--where`, `--select` and `--group-by`; **ignores** `--limit`/`--offset` —
   "how many are there" and "show me the first ten" are different questions,
   and a `--count` that respected `--limit` could only ever return
   `min(n, limit)`.
 
   ```bash
-  quest list -A --select project --distinct              # which projects have open quests
+  quest list -A --group-by project                        # which projects have open quests, and how many
   quest list -A --select id,title --format prompt        # minimal agent digest
   quest list -A --where status=todo --count               # 86
   ```
@@ -550,9 +632,10 @@ multi-log querying.
   normal, *and* written to `FILE` (tee semantics, not a silent redirect).
 
 ```bash
-$ quest list --where "status=done" --where "tags~gdrive"
-QST-15xxa  done       medium  GDrive: Parse and Apply gdriveignore
-QST-4idp1  done       medium  GDrive: Document and Sheet Ingress Compilation
+$ quest list --where "status=done" --where "tags~api"
+ID         TYPE     STATUS  PRIORITY  TITLE
+QST-15xxa  feature  done    medium    API: Parse and apply ignore rules
+QST-4idp1  feature  done    medium    API: Document ingress compilation
 ...
 
 # tags~frontend,backend -- OR within the clause: either tag qualifies
@@ -570,7 +653,7 @@ Every `quest list` invocation prints a scope summary to **stderr**, silenced
 by `--quiet`/`-q`. Rows go to stdout, so `| jq` and `--out FILE` stay clean:
 
 ```
-$ quest list --in questkit --in realm-system
+$ quest list --in questkit --in my-app
 ...rows on stdout...
 [quest list] where  status=todo,in-progress
 [quest list]        ('default' view filter is a default -- override with --where status:exists)
@@ -584,17 +667,19 @@ the reader to infer it from a suspiciously short result. Running a named view
 other than `default` (`quest next`, `quest stale --view custom`, ...) prints
 `(view 'NAME')` in its place instead. When `--select` spans logs with
 different declared fields, a `note` line names which logs lack a selected
-field before the field-set (name-only, once) and enum-count lines. Deferred to
-a later quest: an `--archived` scope line (no `archived` query flag exists
-until archival ships) — it will extend this same block rather than inventing
-a second one.
+field before the field-set (name-only, once) and enum-count lines. There is
+no `--archived` scope line yet; one would extend this same block rather than
+inventing a second one.
 
 ### Views: `next`, `stale`, `blocked`, and `--view NAME`
 
 A **view** is a named prefill over `quest list` — a default `where`/`sort`/
 `limit`, declared once in a schema and shared by every log using it, rather
-than re-typing the same query by hand. Four ship built in, each reachable as
-its own bare subcommand as well as via `quest list --view NAME`:
+than re-typing the same query by hand. Five ship built in: `default`,
+`next`, `stale` and `blocked` are each also reachable as their own bare
+subcommand; `due` (QST-nij1y) is reached only via `quest list --view due` --
+not every built-in view gets a bare subcommand, the same way a schema-declared
+`views.milestone` doesn't:
 
 ```yaml
 views:
@@ -602,6 +687,7 @@ views:
   next:    { where: ["blocked=false"], sort: "priority:asc,effort:asc,idle:desc", limit: 1 }
   stale:   { where: ["idle>14"], sort: "idle:desc" }
   blocked: { where: ["blocked=true"], sort: "blocks:desc" }
+  due:     { where: ["due:exists"], sort: "due_in:asc" }
 ```
 
 - **`quest next`** — the single best quest to work on: unblocked, ranked by
@@ -613,9 +699,29 @@ views:
   other field.
 - **`quest blocked`** — quests with an open dependency, ranked by how many
   other quests they're in turn blocking (`blocks`).
+- **`quest list --view due`** — quests with a `due` date set, soonest (or
+  most overdue) first via `due_in` (`overdue`/`due_in`, [§6](#6-cli-reference)).
+  No bare `quest due` subcommand — `--view due` is how it's reached, the same
+  way a schema-declared `views.milestone` is.
 - **`quest list --view NAME`** reaches a view that isn't one of the three
   built-in bare subcommands — a log- or schema-specific view with no command
-  of its own.
+  of its own. A `development`-style named schema's own `views.milestone` (not shipped
+  with questkit; see [§8](#8-questkityaml-configuration-reference)) is one such
+  example:
+
+  ```yaml
+  views:
+    milestone: { where: ["milestone:exists"], sort: "milestone:desc,status:asc" }
+  ```
+
+  "Which milestone" needs no view parameter — two-layer precedence (below)
+  already answers it: `quest list --view milestone --where "milestone=0.4.0"`
+  replaces the view's own `milestone:exists` clause with the caller's. A
+  burnup's counts ride on `--group-by` (above) on top of the same view:
+
+  ```bash
+  quest list --view milestone --group-by milestone,status
+  ```
 
 Every field a view sets is a **default, not a lock**: `quest next --where
 priority=high`, `--sort`, `--limit`, `--in`, `-A` and every other `list` flag
@@ -624,7 +730,7 @@ of the view's own clause for that field entirely (two-layer precedence, same
 rule the schema's field defaults already follow). `views.default` is what
 finally removes the last hardcoded status list from `quest list` itself — a
 schema overriding `statuses:` declares its own `views.default` in the same
-file, so a `household` schema with `waiting`/`doing` lists correctly with no
+file, so a schema with `waiting`/`doing` lists correctly with no
 second config key to keep in sync.
 
 **Config overrides a built-in's *definition*, never its command name.**
@@ -713,6 +819,42 @@ field, so it's correct even if frontmatter were ever hand-edited to
 disagree (which `quest validate` would also catch —
 [§11](#11-git-hooks-and-validation)).
 
+### `quest edit <id> [--in DIR]`
+
+Opens the resolved quest file in `$EDITOR` — the same nearest-then-sweep
+id resolution as `quest show` (above), and the same `$EDITOR` handling as
+`quest new --edit` ([§6](#quest-new-title-options)): if `$EDITOR` isn't
+set, it prints a message and skips rather than failing. After the editor
+exits, the file is re-loaded and re-saved through `Quest.save()`, so a hand
+edit is normalized immediately — the same guarantee every other write path
+in questkit already gives.
+
+```bash
+$ EDITOR=vim quest edit QST-x7k2m
+```
+
+### `quest open <id> [--in DIR] [--editor]`
+
+The `gh --web` analog: launches the resolved quest via an
+`obsidian://open?path=<absolute path>` URI, through the platform opener
+(`open` on macOS, `xdg-open` on Linux, `os.startfile` on Windows).
+Obsidian resolves which currently-open vault (if any) the absolute path
+falls under itself — no vault name is passed or guessed here. When the
+path lies under more than one open vault (a vault at a parent folder and a nested
+per-project vault both open at once), Obsidian hands it to whichever vault's
+root is the more specific (longest) matching prefix — in practice, the
+more deeply nested vault wins.
+
+Fallback order when there's no opener, or nothing claims the URI:
+`$EDITOR` (same behavior as `quest edit`), then printing the path for you
+to open by hand. `--editor` skips Obsidian outright and opens `$EDITOR`
+directly.
+
+```bash
+$ quest open QST-x7k2m            # obsidian://open?path=/path/to/quests/QST-x7k2m--...md
+$ quest open QST-x7k2m --editor   # skip Obsidian, go straight to $EDITOR
+```
+
 ### `quest set <id> field=value [field=value ...] [--in LOG ...]`
 
 Applies one or more raw frontmatter assignments, then always bumps
@@ -734,10 +876,21 @@ there is a miss, with no silent sweep past it.
 
 ```bash
 $ quest set QST-x7k2m status=in-progress priority=high tags=home,urgent
-/home/.../quests/QST-x7k2m--fix-the-garage-door-sensor.md
+/path/to/quests/QST-x7k2m--fix-the-garage-door-sensor.md
 ```
 
-### `quest done <id> [--in LOG ...]` / `quest scrap <id> [--in LOG ...]`
+**`--log MESSAGE`** (QST-46rdv, also on `done`/`scrap` below) appends
+`- YYYY-MM-DD: MESSAGE` to the quest's `## Log` section in the same save —
+creating the section at the end of the body if the quest doesn't have one.
+`quest set <id> --log "..."` with zero `field=value` assignments is legal:
+a pure journal entry, and `modified` still bumps. Transitions get their
+"why" atomically:
+
+```bash
+$ quest scrap QST-x7k2m --log "superseded by QST-y8k2m"
+```
+
+### `quest done <id> [--in LOG ...] [--log MESSAGE]` / `quest scrap <id> [--in LOG ...] [--log MESSAGE]`
 
 `done` writes the log's **first** `terminal_statuses` entry, `scrap` its
 **last** — so a log declaring `terminal_statuses: [shipped, cancelled]` gets
@@ -745,7 +898,9 @@ $ quest set QST-x7k2m status=in-progress priority=high tags=home,urgent
 Under the default vocabulary that is `done` and `scrapped`.
 
 Otherwise exactly `quest set <id> status=...` — a shorter way to
-write the single most common transition. Same id resolution as `set`.
+write the single most common transition. Same id resolution as `set`, and
+`--log MESSAGE` behaves identically (§ above): the transition's "why" lands
+in `## Log` in the same save as the status change.
 
 ### `quest archive <id>` / `quest unarchive <id>` / `quest archive-log LOG` / `quest unarchive-log LOG`
 
@@ -812,8 +967,8 @@ What it does, in order:
    hooks to review and commit.
 
 What it deliberately does **not** do: rewrite the quest's own custom
-fields for the new log's schema, fix up hyperlinks/wikilinks elsewhere in
-the Realm that pointed at the old path, or resolve a filename/title slug
+fields for the new log's schema, fix up hyperlinks/wikilinks elsewhere that
+pointed at the old path, or resolve a filename/title slug
 disagreement (see [§1](#1-purpose--design-philosophy) and
 [§11](#11-git-hooks-and-validation) on `quest validate`'s slug-drift
 check). The filename itself never changes — moving and renaming are two
@@ -822,7 +977,7 @@ they differ) to see what it flags; a pre-commit hook does the same
 automatically if one's wired up on the destination.
 
 ```bash
-$ quest mv QST-x7k2m ../../lazytarget/some-project/quests
+$ quest mv QST-x7k2m ../some-project/quests
 [quest mv] project: 'common' -> 'some-project'
 [quest mv] /path/to/common/quests/QST-x7k2m--fix-the-garage-door-sensor.md -> /path/to/some-project/quests/QST-x7k2m--fix-the-garage-door-sensor.md
 [quest mv] run 'quest validate' to catch any custom-field drift or now-broken hyperlinks/paths
@@ -856,7 +1011,11 @@ design** — safe to run any number of times; never overwrites an existing
 - `--hooks` wires questkit's own pre-commit hooks into the *git repo*
   containing the target (walks up looking for `.git`; a no-op with a
   message if there isn't one) — see [§11](#11-git-hooks-and-validation)
-  for exactly what this does.
+  for exactly what this does. It also writes (or appends to) a
+  `post-commit` hook calling `quest-apply-trailers` in that same repo, so a
+  plain code repo gets `Quest:` commit-trailer support the moment `--hooks`
+  runs against it — see [§11](#11-git-hooks-and-validation)'s "Commit
+  trailers" subsection.
 - **Every run ensures `<log>/.gitignore` contains `_validation.md`**,
   idempotently — creating the file if it doesn't exist, appending the entry
   if it does and doesn't already have it. Several real logs are their own
@@ -876,12 +1035,13 @@ design** — safe to run any number of times; never overwrites an existing
   it) and from the Bases view's own `file.name.startsWith("QST-")` filter.
 
 ```bash
-$ quest init --project pensieve --git manual --hooks --base
-[quest init] .../pensieve/quests: wrote .questkit.yaml
-[quest init] .../pensieve/quests: created quests directory
-[quest init] .../pensieve/quests/quests.base: wrote Obsidian Bases view
-[quest init] .../pensieve/.pre-commit-config.yaml: appended questkit hooks
-[quest init] .../pensieve: pre-commit hook installed
+$ quest init --project my-app --git manual --hooks --base
+[quest init] .../my-app/quests: wrote .questkit.yaml
+[quest init] .../my-app/quests: created quests directory
+[quest init] .../my-app/quests/quests.base: wrote Obsidian Bases view
+[quest init] .../my-app/.pre-commit-config.yaml: appended questkit hooks
+[quest init] .../my-app: pre-commit hook installed
+[quest init] .../my-app/.git/hooks/post-commit: wrote post-commit hook (quest-apply-trailers)
 ```
 
 ### `quest validate [--in DIR]`
@@ -919,6 +1079,84 @@ Syncthing rather than git — see `quest init`'s `.gitignore` handling below
 and `quest commit`'s default `tracked:` set ([§6](#6-cli-reference)), both of
 which deliberately exclude it.
 
+**`--format json`** emits the same findings as structured data on stdout,
+instead of the `[!] path` / `error:` / `note:` prose above, so agents and CI
+can consume results without scraping stderr. Exit-code semantics are
+identical to text mode. Shape:
+
+```json
+{
+  "findings": [
+    {
+      "file": "quests/QST-aaaaa--a-quest.md",
+      "id": "QST-aaaaa",
+      "kind": "error",
+      "rule": "enum",
+      "message": "status 'nonsense' not in ['draft', 'todo', ...]"
+    }
+  ],
+  "summary": { "checked": 1, "errors": 1, "notes": 0 }
+}
+```
+
+`kind` is `"error"` or `"note"` — the same split as the text mode table
+above, and only `"error"` findings count toward the exit code. `rule` is a
+stable slug naming which check produced the finding (`required-field`,
+`enum`, `undeclared-field`, `identity`, `slug-drift`, `project-drift`,
+`unique-field`, `list-type`, `reference`, `parse-error`) — an agent can filter or dedupe
+on it without parsing `message` prose, which stays free-form and may change
+wording between releases. `--format json` composes with **`--no-notes`**
+(note-kind findings are simply omitted) and with **`--report FILE`** (the
+JSON still goes to stdout; the Markdown note still goes to `FILE`
+unaffected).
+
+### `quest doctor [--root DIR ...] [--format text|json]`
+
+Read-only, environment-wide diagnosis (QST-whcdp) — the counterpart to
+`quest validate`: `validate` checks one log's quest *content* against its
+schema, `doctor` checks everything *around* the logs that `validate` never
+sees. Sweeps every log found downward from `--root` (repeatable; same
+resolution as `-A`/`QST_ROOT`/the git root, see [§9](#9-multi-zone-setup)),
+runs eight checks, and exits `1` if any of them find a problem — never
+writes anything.
+
+1. **Duplicate ids across logs** — nothing else checks this; the normal
+   id-resolution sweep (`resolve_mutation_target`) silently picks the first
+   sorted path and would never tell you two logs disagree.
+2. **Syncthing conflict copies present** (companion to QST-oe92z, §10) —
+   reuses the same detection `list`/`validate` warn with.
+3. **Orphaned quest-shaped files outside any log** — including inside a
+   `.stversions` Syncthing version archive, which every other sweep prunes
+   on purpose (plan v3 §14).
+4. **Broken log configs, aggregated** — `extends`/`#include`/`version`
+   failures collected into one report instead of scrolling past the same
+   warning once per command.
+5. **Stale hook pins** — a consuming repo's `.pre-commit-config.yaml` `rev:`
+   for `quest-format`/`quest-validate`/`quest-bump-modified` compared
+   against the pinned questkit checkout's actual `HEAD` (only checked when
+   `repo:` is a local path this machine can inspect).
+6. **Install sanity** — an editable install's `direct_url.json` target
+   still exists on disk; the `quest` binary on `PATH` (a shared-venv/uv-tool
+   install) reports the same version as this process's questkit.
+7. **Env sanity** — `QUEST_LOG` names a real log, every `QST_ROOT` entry is
+   a real directory.
+8. **Generated-artifact drift** — a log's `_template.md`/`quests.base` older
+   than its own `.questkit.yaml` (the direct case; a schema file reached
+   only through `extends` is not walked).
+
+```bash
+$ quest doctor --root ~/projects
+[quest doctor] [duplicate-id] id 'QST-aaaaa' used by 2 files: ...
+[quest doctor] [sync-conflict] 1 sync-conflict copies present -- resolve by hand (...)
+[quest doctor] 14 log(s) checked, 2 problem(s) found
+```
+
+`--format json` follows `quest validate`'s finding shape (`file`/`id`/
+`kind`/`rule`/`message`, plus a `summary`) — `kind` is always `"problem"`,
+`rule` is one of the check names above (`duplicate-id`, `sync-conflict`,
+`orphaned-quest-file`, `broken-config`, `stale-hook-pin`, `install`, `env`,
+`artifact-drift`).
+
 ### `quest format [PATH ...] [--in DIR] [--check] [--fill-defaults]`
 
 Re-saves every file matching the log's `pattern`, applying `Quest.save()`'s
@@ -943,7 +1181,7 @@ Positional targets narrow it to specific files or log directories:
 
 ```bash
 quest format quests/QST-3ehhu*.md                        # explicit files
-quest format 02-projects/family/quests 99-system/quests  # dirs, each using its own pattern
+quest format projects/app-a/quests projects/app-b/quests  # dirs, each using its own pattern
 quest format --check                                     # report only; exit 1 if anything would change
 ```
 
@@ -973,7 +1211,7 @@ change.
 
 **A no-op `quest format` touches no mtimes.** `Quest.save()` compares the
 rendered content against the file and returns whether it wrote. That is not
-just tidiness: the designated committer ([§10](#10-versioning-syncthing--git))
+just tidiness: an unattended committer ([§10](#10-versioning-syncthing--git))
 gates on "has this log been quiet for N minutes", and a format run that touched
 every file would make that gate permanently see a hot log.
 
@@ -990,7 +1228,7 @@ actually mutates files:
 ```bash
 quest migrate --backfill status_changed=created -A --dry-run
 quest migrate --rename-value status:completed=done --in questkit
-quest migrate --backfill owner={{ env.USER }} --in family --commit
+quest migrate --backfill owner={{ env.USER }} --in my-app --commit
 ```
 
 **Why this is a command and not a documented `sed`.** Quest bodies and
@@ -1004,11 +1242,11 @@ QST-whm2e  ... Completed quests stay exactly where they were created, forever.
 
 A line-oriented substitution corrupts both. Only a frontmatter-aware tool can
 rename a *value of a field* without touching text that happens to use the same
-word — and questkit is the only thing in the Realm that parses this format.
+word — and questkit is the only thing in your toolchain that parses this format.
 
 **Field reference or literal?** Nothing in `FIELD=SOURCE` distinguishes
-`status_changed=created` ("copy the `created` field") from `owner=peter` ("the
-literal string peter"). The decision is made **once per log**, from that log's
+`status_changed=created` ("copy the `created` field") from `owner=alex` ("the
+literal string alex"). The decision is made **once per log**, from that log's
 field vocabulary: `schema.CORE_FIELDS`, its declared custom fields, and the
 union of keys present in its quests. Per-log rather than per-file on purpose —
 deciding per file would make one command mean two things in one directory, with
@@ -1034,7 +1272,7 @@ Shared behavior:
 ### `quest commit [--in LOG ...] [-A] [--root DIR ...] [--no-verify] [--push]`
 
 Owns the commit convention in the app, rather than duplicating it across a
-systemd timer, a Home Assistant `shell_command`, and fingers. Stages and
+systemd timer, a cron job, and fingers. Stages and
 commits **exactly the log's `tracked:` pathspec** via `git commit --
 <pathspec>`, which ignores the index — so staged, unrelated code changes in
 the same repo are never swept into a `quest(...)` commit, even if `git add
@@ -1047,7 +1285,7 @@ the same repo are never swept into a `quest(...)` commit, even if `git add
 - **The message is derived from the frontmatter diff, deterministically —
   no model anywhere in this path**:
   ```
-  quest(family): add 2, update 1
+  quest(shared): add 2, update 1
 
   + QST-9x2kf  Book the chimney sweep
   + QST-p4m1c  Order gutter cleaning
@@ -1063,6 +1301,48 @@ the same repo are never swept into a `quest(...)` commit, even if `git add
   conflict semantics a local command shouldn't default to.
 - Repeatable `--in`/`-A`/`--root`, the same multi-log resolution as `list`.
 
+### Releasing: `scripts/release.py`
+
+Cutting a release used to be five hand-typed steps, each easy to get wrong
+or skip under scoping pressure: bump `pyproject.toml`, reinstall the
+editable venv (or `questkit.__version__` goes stale against it), update
+`CHANGELOG.md`, `git tag -a vX.Y.Z -m ...`, `git push <remote> vX.Y.Z`.
+`scripts/release.py` is that ritual as one script — **a script, not a CLI
+verb**: release conventions differ too much across teams for the core tool
+to own one, so this is questkit's own, scoped to this repo's own `quests/`
+log and `CHANGELOG.md`.
+
+```bash
+.venv/bin/python scripts/release.py --dry-run   # prints the changelog section, mutates nothing
+.venv/bin/python scripts/release.py             # prompts before tagging + pushing
+.venv/bin/python scripts/release.py --yes       # skip the confirmation prompt
+```
+
+Before touching anything, it refuses (never guesses — the same posture
+`quest commit`/`quest migrate --commit` take) on:
+
+- **Version drift** — `pyproject.toml`'s `version` and the installed
+  `questkit.__version__` (via `importlib.metadata`) must agree. This is the
+  exact drift a stale editable install produces after a version bump without
+  a reinstall.
+- **A dirty working tree** — nothing to tag cleanly.
+- **An already-existing `vX.Y.Z` tag.**
+- **Any non-terminal `milestone: X.Y.Z` quest** — every quest carrying that
+  milestone must be `done` or `scrapped` first; the offending ids and
+  statuses are listed.
+
+Once clear, it assembles the `CHANGELOG.md` section from
+`quest list --where "milestone=X;status=done,scrapped" --format md`
+([above](#quest-list-options)), grouped release-drafter-style by `type`:
+`feature` → `### Added`, `bug` → `### Fixed`, `chore`/`task`/`epic` →
+`### Changed` (empty categories are omitted). That section is printed,
+prepended above the previous entry in `CHANGELOG.md`, and becomes the
+message on an annotated, signed tag (`git tag -s -a vX.Y.Z -m ...`), pushed
+to `--remote` (default `origin`). `--dry-run` stops right after printing the
+section — nothing is written, tagged, or pushed. `agentic: hitl`
+([§13](#13-agentic-support)): absent `--yes`, it prompts for confirmation
+before the tag/push step.
+
 ### `quest logs [--root DIR ...] [--format table|json] [--verbose]`
 
 Inventories every quest log found under the swept root(s) — read-only; it
@@ -1071,12 +1351,12 @@ never writes, creates, or migrates. Sorted by project name:
 ```
 $ quest logs
 PROJECT              QUESTS   OPEN ARCHIVED  GIT     PATH
-career-transition        13      0       13  manual  02-projects/peter/2026-career-transition/quests
-family                    0      0        0  auto    02-projects/family/quests
-questkit                 24     13        0  manual  02-projects/lazytarget/questkit/quests
+archived-app             13      0       13  manual  projects/archived-app/quests
+shared                    0      0        0  auto    shared/quests
+questkit                 24     13        0  manual  tools/questkit/quests
 ...
 
-7 logs, 145 quests (132 open), swept from /home/gitops/realm
+7 logs, 145 quests (132 open), swept from ~/work
 ```
 
 - **PROJECT** — the config's `project:`, or `-` for a catch-all log with none.
@@ -1095,11 +1375,10 @@ scope of any sweep is device-dependent and must be stated, not implied. A
 **fully archived log is excluded from the footer totals** (its work is done);
 its own row still reports its real counts.
 
-**`project:` uniqueness is enforced here.** A duplicate `project:` across two
-logs is a hard error naming both paths — `--in`'s name resolution
-([§9](#9-multi-zone-setup)) depends on that uniqueness being true, so a
-collision is caught at the one command whose whole job is inventorying every
-log at once.
+**Duplicate `project:` names are warned about, not rejected.** Two logs
+declaring the same `project:` (typically a git worktree checkout) both get a
+row, told apart by PATH, plus one stderr warning naming both paths. See
+[Duplicate policy](#duplicate-policy).
 
 `--format json` emits one object per log with the full config surface —
 project, path, counts, `git`, declared custom fields, `strict`, `field_order`
@@ -1151,6 +1430,42 @@ it, since an agent or script that already treats every questkit action as
 `quest <verb>` shouldn't need a `--flag`-shaped special case for this one
 fact.
 
+### `quest completion bash|zsh|fish`
+
+Prints a shell completion script to stdout — the `gh completion`
+convention: pipe it into `eval` (or `source` for fish) from your shell rc.
+
+```bash
+# ~/.bashrc
+eval "$(quest completion bash)"
+
+# ~/.zshrc (after compinit)
+eval "$(quest completion zsh)"
+
+# ~/.config/fish/config.fish
+quest completion fish | source
+```
+
+Static completion — subcommand names and each subcommand's flags — is
+introspected straight from the real `argparse` parser, so it can't drift
+from the CLI it describes. Dynamic completion is delegated *inside the
+generated script* back to `quest` itself, so it always reflects your
+current log rather than a snapshot baked in at completion-install time:
+
+- quest ids (after `show`/`edit`/`open`/`set`/`done`/`scrap`/`archive`/
+  `unarchive`/`mv`/`deps`/`brief`): `quest list --format csv --select id
+  --quiet` — deliberately without `-A`, so only the nearest log resolves
+  and completion stays fast (sub-100ms on a normal log).
+- project names (after `--in`): `quest logs --format json`.
+- schema field names (after `--where`/`--any`/`--select`/`--sort`/
+  `--group-by`): `quest schema quest --format json` (`fields` +
+  `core_fields` combined).
+
+The generated script reads the actually-typed program name off the command
+line (`COMP_WORDS[0]` in bash, `$words[1]` in zsh, `commandline` in fish)
+rather than hardcoding `quest`, so the same script works identically once
+registered for both `quest` and its `qst` alias.
+
 ```bash
 $ quest --version
 questkit 0.3.0
@@ -1182,17 +1497,17 @@ you will never see a raw Python traceback from normal usage.
 | `created` | Yes | `YYYY-MM-DD` | Set once, at creation. Also the fallback for `status_changed`. |
 | `modified` | Yes | `YYYY-MM-DD` | Bumped by `quest set`/`done`/`mv` and by the `quest-bump-modified` hook on every commit that touches the file. Normalizes to a real, unquoted `date` value on save. |
 | `type` | Yes | enum | `feature \| task \| bug \| epic \| chore` |
-| `tier` | No | enum | `spark \| brief \| blueprint` — spec-workflow weight, inherited unchanged from the Realm's three-tier model. Sits directly after `type` by convention. |
+| `tier` | No | enum | `spark \| brief \| blueprint` — spec-workflow weight, a three-tier model (spark / brief / blueprint). Sits directly after `type` by convention. |
 | `status` | Yes | enum | `draft \| todo \| in-progress \| parked \| done \| scrapped` |
 | `status_changed` | No | date | the day `status` last changed. Written **only on a real transition** — by `quest set`/`quest done`/etc. when the CLI made the change, or backfilled by the `quest-bump-modified` hook (see [§11](#11-git-hooks-and-validation)) when a raw text edit changed `status` without touching this field. Either way it measures staleness where `modified` cannot — `modified` is bumped by that same hook on every commit, changed or not. Absent means never changed; consumers fall back to `created`. |
 | `priority` | Yes | enum | `critical \| high \| medium \| low \| deferred` |
 | `effort` | No | enum | `xs \| s \| m \| l \| xl` |
-| `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (In The Realm specifically, the convention is `peter`/`jenika`, but that's a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
-| `agentic` | No | enum | `afk \| hitl`. Declared by the **`development`** schema, not the core — `afk\|hitl` is not a universal vocabulary, and household work has no unsupervised-agent axis. See [§13](#13-agentic-support). |
+| `owner` | No | free text | Deliberately **not** a closed enum — questkit doesn't know who's on your team. (A convention such as a short first name per person is a usage pattern, not a schema constraint — see `QST-whm2e`'s Open Follow-ups.) |
+| `agentic` | No | enum | `afk \| hitl`. Declared by a shared named schema (e.g. the example `schemas/development.yaml`), not the core — `afk\|hitl` is not a universal vocabulary, and plenty of work (chores, errands) has no unsupervised-agent axis. See [§13](#13-agentic-support). |
 | `archived` | No | bool | Whether this quest should still be in front of you. **Orthogonal to `status`**: archiving answers a retention question, scrapping answers what happened to the work, and a `done` quest in a wound-up project is archived and emphatically not scrapped. Sorts into the alphabetical tail of `field_order` — rarely set, never scanned. |
-| `milestone` | No | free text | A planning bucket (`0.4.0`, `spring-2027`), declared by the `development` schema. Named `milestone` because it is a bucket that can slip, not a fact. **Not** a membership link — questkit has no parent/child concept. |
+| `milestone` | No | free text | A planning bucket (`0.4.0`, `spring-2027`), declared by a shared named schema such as `development`. Named `milestone` because it is a bucket that can slip, not a fact. **Not** a membership link — questkit has no parent/child concept. |
 | `project` | No | free text | CLI-stamped from the log's config at creation if the log declares one (see [§8](#8-questkityaml-configuration-reference)); `quest validate` flags disagreement between a quest's own value and its log's declared value, but only if the log declares one at all. |
-| `due` | No | `YYYY-MM-DD` | Rarely used in practice — most quests never need a hard date. |
+| `due` | No | `YYYY-MM-DD` | Rarely used in practice — most quests never need a hard date. Drives the computed `overdue`/`due_in` fields and the `due` view ([§6](#6-cli-reference)), so setting it is what actually surfaces a dated quest without a hand-written date comparison. |
 | `tags` | Yes | list of strings | Presence of the *key* is required (an empty list is fine); lowercase kebab-case by convention. |
 | `blocked_by` | No | list of `QST-xxxxx` or `project/QST-xxxxx` | Stored as one direction only — `blocks` is a *computed* field (see [§6](#6-cli-reference)), not stored here, and storing both directions invites drift when only one side gets updated. A bare id always means "this log"; a qualified `project/QST-xxxxx` id declares a reference into another log by its `project:` name. `quest validate` resolves a bare id against the current log (hard error if missing) and a qualified id against the named log **if it is present in the sweep** (hard error if the log resolves but the id doesn't); if the named log simply isn't present on this device, that's a note, never an error — the same file must validate identically everywhere, synced or not. |
 | `aliases` | Yes (CLI-created) | list, always includes own `id` | Drives Obsidian search/quick-switcher/autocomplete. Does **not** make a bare `[[id]]` wikilink resolve on click — see [§12](#12-ide-and-tool-integration). `quest validate` (hard rule) flags a missing self-alias. |
@@ -1229,14 +1544,14 @@ pattern: "QST-*.md"
 prefix: "QST-"
 id_length: 5
 git: manual
-project: pensieve
+project: my-app
 defaults:
   type: task
   status: draft
   priority: medium
 ignore:
   - dist
-  - "#include ../../99-system/templates/dot-files/.stignore-code"
+  - "#include ../../shared/.stignore-code"
 schema:
   extends: "../../.questkit.schema.yaml"
   statuses: [draft, todo, in-progress, in-review, shipped, cancelled]
@@ -1256,7 +1571,7 @@ schema:
 | `git` | `manual` | `manual`: questkit never touches git; you (or your existing commit conventions/agent instructions) commit. `auto`: `new`/`set`/`done` commit their own change immediately, pathspec-limited to the one touched file, with message `quest(<log-dir-name>): <new\|update> ...`. If the log isn't inside a git repo at all, `auto` mode prints a warning and continues rather than erroring. See [§10](#10-versioning-syncthing--git) for when to choose which. |
 | `project` | *(absent)* | If set: `quest new` auto-stamps every new quest's `project:` field with this value (unless `--project` overrides it per-call), and `quest validate` flags any quest whose own `project:` disagrees. If absent (as in the central/catch-all log): no auto-stamping, no drift-checking — quests there can carry any `project:` value, or none, purely as free-form metadata. |
 | `defaults.type` / `.status` / `.priority` | `task` / `draft` / `medium` | Used by `quest new` whenever the corresponding `--type`/`--status`/`--priority` flag isn't given. Loading a config that doesn't specify one of these three falls back to the same hardcoded defaults — `defaults:` in the file only needs to list the ones you want to override. |
-| `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list -A`, cross-log id resolution) walks this log's own tree — see [§9](#9-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention `syncthing.yaml`/`scaffold_syncthing.py` uses elsewhere in the Realm, so a log inside the Realm can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
+| `ignore` | `[]` | Directory-name/glob patterns pruned when a cross-log sweep (`quest list -A`, cross-log id resolution) walks this log's own tree — see [§9](#9-multi-zone-setup). An entry may instead be `#include <path>` (relative to this file's own directory), pulling in another file's patterns recursively — the same convention Syncthing's own `.stignore` files use, so a log can reuse an existing `.stignore-*` template instead of re-declaring `.venv`/`node_modules`/etc. A handful of common noise directories (`.git`, `.stversions`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.pytest_cache`, `.ruff_cache`) are pruned by default regardless of this key. |
 | `schema` | *(absent)* | Overrides/extends the built-in `type`/`status`/`tier`/`priority`/`effort` vocabularies, declares `terminal_statuses`, and/or declares custom fields, for this log only. See the dedicated subsection below — absent entirely, a log behaves exactly as if this key didn't exist at all (full backward compatibility). |
 | `tracked` | *(absent)* | The exact pathspec `quest commit` stages and commits ([§6](#6-cli-reference)). Absent means the derived default: this log's own `pattern`, `.questkit.yaml`, `.gitignore`, `_template.md`, `quests.base` — deliberately never `_validation.md`, which is derived state transported by Syncthing, not git. |
 
@@ -1328,32 +1643,93 @@ so `--sort component:asc` works. `type: enum` with no `values:` is a schema
 error (an enum with no vocabulary validates nothing), and `values:` on a
 non-enum type is too.
 
+**List fields.** The core `tags`, `blocked_by` and `aliases` are list-typed, and
+a custom field joins them with `type: list`. `quest set <id> field=value` and
+`quest new --set field=value` coerce by that declared type rather than by field
+name: `blocked_by=QST-a`, `blocked_by=QST-a,QST-b` and `blocked_by=[QST-a, QST-b]`
+all write a YAML list, and an empty value (`blocked_by=` or `[]`) writes `[]`.
+Other fields keep the raw string. `quest validate` reports a scalar sitting in
+a list field as a single `list-type` error (`blocked_by must be a list, got
+string 'QST-a'`) and does not try to resolve its characters as references.
+
+**Context-varying vocabulary goes in a schema, not the core** (QST-onxad).
+Something a reader might reach for as a new core field — a language hint, a
+per-team label — usually isn't universal; it's a fact about *one* log's
+context. Adding it to the core means every log carries a field most of them
+never use, and questkit shipping an opinion about how work is described. A
+hypothetical `personal` named schema's `language` field is the worked
+example: a personal log wants entries in Swedish by default, a code repo's log
+doesn't want the field at all, and both are correctly expressed by one log declaring it and
+the other simply not extending that schema —
+
+```yaml
+# <schema-dir>/personal.yaml
+schema:
+  fields:
+    language:
+      type: enum
+      values: [sv, en]
+      default: sv
+```
+
+— with no change anywhere else: `quest new` stamps the default, `quest brief`
+surfaces `language=sv` in its header metadata line because that line reads
+whatever custom fields the log's own schema declares, and `quest schema quest
+language` describes it, all for free.
+
 **`required: true` with a *static* default emits a warning.** The requirement
 can never fail, so it enforces nothing — validation theater. It stays legal,
 because a *computed* default that genuinely varies (`{{ env.USER }}` on
 `owner`) carries real information, and the config cannot tell those apart.
 
+**`unique: true`** declares that a custom field's non-null value must not
+repeat across the log — `quest validate` errors when two quests share one,
+naming both files. Absent or blank values are exempt (nothing to collide
+with), and the check is log-scoped like every other validation rule here —
+there is no cross-log uniqueness concept. Enforced only by `quest validate`,
+not the per-file pre-commit hook: the hook validates one file at a time and
+can't see siblings, the same split as cross-reference resolution (`blocked_by`,
+body wikilinks).
+
+```yaml
+schema:
+  fields:
+    external_id:
+      type: string
+      unique: true
+```
+
 **Named schemas.** An `extends:` value carrying a `/`, `\` or a `.yaml`/`.yml`
 suffix is a **path**, resolved relative to the `.questkit.yaml`. Anything else
 is a **name**, looked up as `<dir>/<name>.yaml` along a search path:
 `QST_SCHEMA_PATH` (`os.pathsep`-separated) first, then
-`99-system/questkit/schemas/` in each ancestor directory of the log. And
+`99-system/questkit/schemas/` in each ancestor directory of the log (a fixed
+relative path, `SHARED_SCHEMA_DIR` in `schema.py`; set `QST_SCHEMA_PATH` to use
+any other location). And
 `schema: development` as a bare scalar is shorthand for
-`schema: {extends: development}`, which is the common case — four logs sharing
-one named schema and adding nothing.
+`schema: {extends: development}`, which is the common case — several logs
+sharing one named schema and adding nothing.
 
-Shared schemas live under `99-system/`, **never the Realm root**.
-`99-system/syncthing.yaml` has no folder for `.`: the root is a local
-composition of independently-synced folders, not a synced entity. A schema file
-there would resolve on one machine and fail silently on every other — the worst
-failure shape available. This generalizes to any questkit artifact that must
-reach every device.
+**Example schema.** questkit does not install any named schema. The
+repository carries one example, [`schemas/development.yaml`](../schemas/development.yaml),
+which its own quest log extends by path
+(`schema: ../schemas/development.yaml`); copy it into a shared schema directory
+to use it as `schema: development`. Other names in this document, such as
+`personal`, are illustrations of the pattern.
+
+**Keep shared schemas where every machine sees them.** If your logs live in
+several independently synced folders, put the schema directory inside a
+folder that is synced to every device, not in a parent directory that is only a
+local composition of those folders. A schema file there would resolve on one
+machine and fail silently on every other — the worst failure shape available.
+This generalizes to any questkit artifact that must reach every device.
 
 **Reserved names.** A schema may not declare an enum value or a custom field
-named `blocked`, `blocks`, `idle`, `age` or `archived`. Those are computed
-field names, and a status value sharing a name with a computed field would make
-`--where blocked=true` and `--where status=blocked` two different questions one
-word apart — with a quest able to satisfy either without the other. Enforced at
+named `blocked`, `blocks`, `idle`, `age`, `archived`, `criteria_done`,
+`criteria_total`, `overdue` or `due_in`. Those are computed field names, and a
+status value sharing a name with a computed field would make `--where
+blocked=true` and `--where status=blocked` two different questions one word
+apart — with a quest able to satisfy either without the other. Enforced at
 config load.
 
 - **`extends: <path>`**, if present, must be the *first* key read
@@ -1396,11 +1772,10 @@ hand.
    root if neither matches.
 3. **`QUEST_LOG` environment variable** — deliberately checked *last*, not
    first. Checking it first would break "nearest zone wins" on every
-   machine where it's set. Nothing in the Realm sets this for you
-   automatically (there's no Make wrapper anymore to default it) — if you
-   want `quest`/`qst` run from a directory with no nearby log (e.g. the
-   Realm root itself) to fall back to the central log instead of erroring,
-   export it yourself: `export QUEST_LOG=/path/to/02-projects/common/quests`
+   machine where it's set. Nothing sets this for you automatically — if you
+   want `quest`/`qst` run from a directory with no nearby log (e.g. your
+   home directory) to fall back to the central log instead of erroring,
+   export it yourself: `export QUEST_LOG=/path/to/central/quests`
    in your shell profile.
 4. **An actionable error** — `no quest log found: run 'quest init' here,
    or set QUEST_LOG to your central log.` Never an interactive prompt;
@@ -1429,16 +1804,18 @@ takes a second, explicit path — the destination — which follows the
 regular `--in`-style resolution instead, i.e. must already be a log.)
 Resolution for the id itself:
 
-1. **`--in DIR`**, if given, is the only place searched — a miss there is
-   a miss, full stop. No fallback, no sweep past it. This preserves `--in`
-   as an unambiguous escape hatch for the rare case an id exists in more
-   than one log (shouldn't normally happen, given random ids, but `--in`
-   still lets you be exact).
+1. **`--in LOG`** (a project name or a path), if given, is the only place
+   searched — a miss there is a miss, full stop. No fallback, no sweep past
+   it. This preserves `--in <path>` as an unambiguous escape hatch for the
+   case an id exists in more than one log (a git worktree holds a copy of
+   every quest on its branch). A name that matches several logs, or an id
+   found in several of the searched logs, is an error, not a pick.
 2. Otherwise: the **nearest log** (today's walk-up, see above) is checked
    first.
 3. If the id isn't there: every other quest log found by recursive descent
    from the **sweep root** is checked, in sorted-path order, until one
-   matches. The sweep root is: an explicit `--root`-equivalent (not
+   matches — and if the id turns up in **more than one** of them, that is an
+   error listing each file, not "first sorted path wins". The sweep root is: an explicit `--root`-equivalent (not
    exposed on these three commands directly, but see `QST_ROOT` next) →
    the `QST_ROOT` environment variable → the git root of cwd → cwd itself.
 4. No match anywhere: a clean `no quest matching id '<id>' found` message,
@@ -1458,13 +1835,11 @@ is written as plain text instead.
 `QST_ROOT` is the analogue of `QUEST_LOG` for *sweeps* rather than
 single-log resolution — it names the directory `quest list -A` and the
 id-resolution sweep above start descending from. Set it once, the same way
-`QUEST_LOG` is set today (`make setup-venv`'s Makefile default, or your own
-shell profile), to the Realm root (or any ancestor covering every log you
-care about). Without it, the git root is a reasonable fallback *if* your
-logs share one — they typically don't in The Realm, where `common`,
-`pensieve`, `99-system`, and `career-transition` are four unrelated git
-repos, which is exactly why `QST_ROOT` exists rather than relying on git
-alone.
+`QUEST_LOG` is set (in your shell profile), to a directory that is an
+ancestor of every log you care about. Without it, the git root is a reasonable
+fallback *if* your logs share one — they often don't (several unrelated git
+repos side by side), which is exactly why `QST_ROOT` exists rather than
+relying on git alone.
 
 The sweep (`discovery.find_all_logs()`) walks the tree recursively looking
 for `.questkit.yaml`, pruning as it goes:
@@ -1485,6 +1860,49 @@ for `.questkit.yaml`, pruning as it goes:
   sweep — it's skipped with a `[quest]`/`[quest list]` warning printed to
   stderr, and everything else still gets discovered.
 
+### Duplicate policy
+
+The same quest or log can show up more than once for four reasons. They share
+a root cause — discovery assumes a key is unique and the first match wins —
+and one policy:
+
+| Source | Duplicated key | Handled by |
+|--------|----------------|------------|
+| Git worktree checkouts | `project:` per log, and every quest id inside it | this section |
+| Syncthing conflict copies | quest id (`QST-x.sync-conflict-….md`) | excluded from enumeration and id lookup; `quest doctor` reports them |
+| Re-capturing the same idea | title (different ids) | `quest new` warns on a same-title capture |
+| Ids colliding across logs | quest id | `quest doctor` check `duplicate-id`; id resolution refuses to guess |
+
+**Git worktrees are the common real-world trigger.** A feature-branch
+checkout (`<repo>-worktrees/<branch>/`) is a normal state that can last
+weeks, and it holds real quest state, so it must not be pruned from
+discovery. It does carry the same `project:` as the primary checkout, and a
+copy of every quest id on its branch. That is not a mistake, so it is not a
+failure:
+
+- **Enumeration warns and labels, never fails.** `quest logs`, `quest list
+  -A`, `quest brief`, `quest doctor` and the other sweeps print one stderr
+  warning per colliding name listing every log path, then carry on. `quest
+  logs` lists both checkouts with their paths. `quest list -A` groups by
+  *log*, not by name: colliding groups are headed `── name (parent/quests)`
+  with the shortest trailing path that tells them apart. The `project`
+  column/field of each row is unchanged.
+- **Single-log resolution never guesses.** `--in NAME` (and everything that
+  resolves one log by name: `set`, `done`, `scrap`, `mv`, `edit`, `open`,
+  `show`, `new`, `archive`, ...) errors listing every candidate path when
+  the name matches more than one log. The same goes for an id present in
+  several searched logs. A **path** always works: `--in` accepts a log's
+  `quests/` directory or the project directory above it, everywhere `--in`
+  is accepted (the content of two worktrees on one commit is byte-identical,
+  so only the path can tell them apart).
+- **Obsidian Bases.** The generated `quests/quests.base` filters on file
+  name only (`file.name.startsWith("QST-")`), vault-wide, so a worktree
+  synced into the same vault shows each quest once per checkout. questkit
+  cannot generate a folder filter (`file.inFolder()`) because the
+  vault-relative path of the log is not known at `quest init` time, and the
+  template is deliberately limited to Bases syntax verified to work; keep
+  worktrees outside the vault, or add a folder filter to the Base by hand.
+
 ### `quest list -A`
 
 The read-only, aggregating counterpart to the above — see
@@ -1500,7 +1918,7 @@ is still no command that mutates more than one file per invocation.
 
 ## 10. Versioning: Syncthing + Git
 
-Quest logs in The Realm are typically versioned by **both** Syncthing (for
+Quest logs are often versioned by **both** Syncthing (for
 device-to-device sync) and Git (for history) simultaneously, and the two
 interact in specific ways worth understanding:
 
@@ -1514,8 +1932,8 @@ interact in specific ways worth understanding:
 - **`git: auto` vs `manual` is really a question of who else is committing
   to this repo.** The central/catch-all log's only content is quest files
   — every mutation is self-contained, so auto-committing there is pure
-  convenience with no downside. A log living inside a code repo (pensieve,
-  99-system, career-transition currently all use `manual`) usually wants
+  convenience with no downside. A log living inside a code repo
+  usually wants
   one commit pairing a code change with the ticket update it resolves;
   auto-committing there would force two commits instead of one, and can
   surface git's own failure modes (mid-merge, mid-rebase) as a `quest`
@@ -1532,17 +1950,29 @@ interact in specific ways worth understanding:
   not a Syncthing one. **The actual mitigation for the index-race Syncthing
   hits when two devices write to the same repo is one git writer per
   repo** — see `quest commit` above, which exists precisely so an
-  unattended designated-committer machine can be that one writer for a log
+  unattended committer machine can be that one writer for a log
   currently set to `manual` for that reason.
-- **Syncthing conflicts are handled the same way any other Markdown file's
-  conflicts are** — questkit doesn't do anything special here. A
-  simultaneous edit to the same quest from two offline devices produces a
-  Syncthing conflict-copy file (`QST-x...sync-conflict-....md`), which
-  `quest validate`/`quest list` will not recognize as a quest at all
-  (`config.pattern` only matches `QST-*.md`, and a conflict-suffixed name
-  doesn't match the *end* of that pattern in a way that breaks anything —
-  it just sits there as an unrecognized file until you resolve it by hand,
-  same as any other Syncthing conflict).
+- **Syncthing conflict copies are excluded, and surfaced, not silently
+  ignored** (QST-oe92z). A simultaneous edit to the same quest from two
+  offline devices produces a Syncthing conflict-copy file
+  (`QST-x7k2m--slug.sync-conflict-20260814-120000-ABCDEFG.md`) — the marker
+  lands *before* the extension, so it actually matches `config.pattern`
+  (`QST-*.md`) and `find_by_id`'s `{id}*.md` glob just as well as the real
+  file. Every enumeration site (`list`, `validate`, `logs`, `deps`,
+  `migrate`, `archive`, `brief`, `format`, id resolution) excludes conflict
+  copies explicitly, and `quest commit`'s tracked-pathspec expansion excludes
+  them from staging too, so an unattended committer machine never
+  commits conflict litter into history. Their presence is never silent,
+  though: `quest list` and `quest validate` each print one stderr line when
+  copies exist in the log ("N sync-conflict copies present — resolve by
+  hand"), and `quest doctor` (§6) reports them as one of its checks. You still
+  resolve the conflict by hand — merge or delete the copy — the tooling only
+  stops it from being mistaken for a second quest.
+  **Troubleshooting**: if you suspect conflict litter, a stale hook pin, an
+  orphaned quest file, or drift between logs, `quest doctor --root <DIR>`
+  (§6) is the one command to run first — it aggregates exactly these
+  environment-level problems into one read-only pass instead of scrolling
+  back through several commands' individual warnings.
 - **Random, non-sequential ids exist specifically for this environment.** A
   sequential counter (`QST-0001`, `QST-0002`, ...) has no safe home in a
   system where two devices can each create a new quest while offline from
@@ -1569,7 +1999,8 @@ re-litigating it:
 
 - **`quest-format`** → `hooks.format_main()`. Pure re-save of each staged
   file — normalizes list style, date-field quoting, and quote style (see
-  [§7](#7-frontmatter-reference)) with no field-value changes. Runs
+  [§7](#7-frontmatter-reference)), and ends every file with exactly one blank
+  line after the body, with no field-value changes. Runs
   *first* so a file edited outside questkit (Obsidian, by hand) arrives at
   `quest-validate`/`quest-bump-modified` already in normalized form,
   instead of the three hooks disagreeing with each other about style on
@@ -1579,13 +2010,21 @@ re-litigating it:
   validate_quest()` — and *only* that — against each staged file passed to
   it. Fails (nonzero exit, blocking the commit) if any hard rule fails.
 - **`quest-bump-modified`** → `hooks.bump_modified_main()`. Rewrites
-  `modified:` to today's date on each staged file, if it isn't already
-  today (compared with `str()` on both sides, since `modified` is a real
-  `date` object once normalized — a naive `!=` against a plain string
-  would never match and rewrite every staged file on every commit). Pre-
-  commit's own behavior then applies: a hook that modifies files fails
-  that run so you can review/re-stage — this is standard pre-commit UX,
-  not something questkit does specially.
+  `modified:` to today's date on each file passed to it **whose content
+  differs from `HEAD`** (a brand-new quest counts as changed; an untouched
+  one is skipped, so `pre-commit run --all-files` is a no-op on an unchanged
+  corpus). The comparison of `modified` to today uses `str()` on both sides,
+  since `modified` is a real `date` object once normalized — a naive `!=`
+  against a plain string would never match.
+
+  pre-commit marks a hook **Failed** if it leaves *unstaged* changes, whatever
+  its exit code, which used to force a second commit attempt after every raw
+  edit. The hook therefore **stages its own edit** (`git add`), so the bump
+  lands in the same commit, and prints one line per bumped file
+  (`[quest-bump-modified] QST-x…md: modified 2026-10-01 → 2026-10-02`).
+  `verbose: true` in `.pre-commit-hooks.yaml` makes pre-commit show it for a
+  passing hook. Outside a git repo nothing is staged. `quest-format` still
+  fails when it reformats: that is a content change worth seeing.
 
   **It also backfills `status_changed`** when a raw text edit (Obsidian, or
   anyone bypassing the CLI) changed `status` without touching that field
@@ -1624,7 +2063,7 @@ from the hook, even though `quest validate` (the CLI) reports them:
   whenever a migration deliberately chose a better slug than mechanical
   slugify would. Wiring this into the hook would block ordinary commits
   on dozens of already-accepted, intentional cases — confirmed the hard
-  way: running the check for the first time against the whole Realm's
+  way: running the check for the first time against a large
   migrated corpus produced ~30 such findings, none of them bugs.
 - **Cross-reference resolution** (`blocked_by`/backlink checking, in
   `commands/validate_cmd.py`, not `schema.py`) — needs the log's directory to
@@ -1645,11 +2084,10 @@ not by string-matching a marker comment: it parses (or creates)
 entry already exists (skips if so — safe to re-run), and otherwise appends
 a `repo:` entry. Two things worth knowing:
 
-- **The `repo:` value is a local filesystem path**, not a GitHub URL —
-  questkit doesn't have a public remote yet. `pre-commit`'s `repo:` field
-  accepts any git-clonable target, including a local path, so this works
-  today; it can be pointed at a real URL later without changing the
-  mechanism.
+- **The `repo:` value is a local filesystem path** to your questkit
+  checkout, not a remote URL. `pre-commit`'s `repo:` field accepts any
+  git-clonable target, including a local path, and it can be pointed at a
+  remote URL (with a tag or sha as `rev:`) without changing the mechanism.
 - **`rev:` is resolved dynamically** to questkit's own current
   `git rev-parse HEAD` at the moment `--hooks` runs, found by walking up
   from the *installed* package's `__file__` looking for `.git` — meaning
@@ -1664,13 +2102,11 @@ a `repo:` entry. Two things worth knowing:
 Because `rev:` is pinned, a fix landed in questkit's own `hooks.py`/
 `schema.py` does **not** retroactively apply to any repo that already ran
 `--hooks` — their hook still runs whatever code existed at the pinned
-commit. There is currently no automated "refresh the pin" command (that
-gap is exactly what `QST-d8nu7`, in `99-system`'s log, proposes solving with
-a `make plan-git-hooks`/`make apply-git-hooks` pair); until that exists,
-bumping a pin is a manual edit:
+commit. There is currently no automated "refresh the pin" command (`quest doctor`
+only *reports* a stale pin); until one exists, bumping a pin is a manual edit:
 
 ```bash
-cd 02-projects/lazytarget/questkit && git rev-parse HEAD
+cd path/to/questkit && git rev-parse HEAD
 # then, in each consuming repo's .pre-commit-config.yaml:
 #   rev: <that sha>
 ```
@@ -1693,6 +2129,80 @@ pre-commit run quest-format --all-files
 For a log with no git repo at all (hooks can't run there, staged or not),
 use `quest format [--in DIR]` instead ([§6](#6-cli-reference)) — same
 normalization, no git or pre-commit dependency.
+
+### Commit trailers: transitioning quests from code repos (QST-22gdn)
+
+The three hooks above all run inside a *quest log's own* repo, reacting to
+staged quest files. `quest-apply-trailers` is different: it runs in a
+**code repo** — one that has no quest files in it at all — and reads a
+git commit **trailer** to transition a quest that lives somewhere else
+entirely (a different repo, or a central log elsewhere on disk).
+
+**Trailer syntax**, parsed with `git interpret-trailers --parse` — never
+prose regex, so this matches git's own understanding of what a trailer is,
+not questkit's guess at one:
+
+```
+Quest: QST-x7k2m done            # token = the literal status name
+Quest: QST-x7k2m scrapped
+Quest: QST-x7k2m                 # mention only -> `## Log` append
+```
+
+One fixed, canonical key: **`Quest:`**. Never a thematic alias, never a
+`status=X` form. The **token is the exact status value** written to
+`status:`, validated against the *target* quest's own log — a schema that
+overrides its `statuses:` vocabulary ([§8](#8-questkityaml-configuration-reference))
+writes its own words: `Quest: QST-x shipped`, `Quest: QST-x abandoned`.
+There is no verb-to-status mapping table to keep in sync; what the trailer
+says is what the frontmatter gets. A trailer with no status token (a bare
+mention) never changes `status:` — it appends a `## Log` entry noting the
+commit instead.
+
+**Wiring**: `quest init --hooks` (see [§6](#6-cli-reference)) writes (or
+appends to) a `post-commit` git hook script in the *code repo* that calls
+the `quest-apply-trailers` console script with no arguments — so it fires
+once, right after each commit, against `HEAD`. This is deliberately a
+plain native git hook, not a `.pre-commit-config.yaml` entry like the
+other three: it needs the *whole commit message* of an arbitrary commit,
+not a list of staged quest files, so the pre-commit framework's per-file
+model doesn't fit it. Unlike the pre-commit-managed hooks, it has no `rev:`
+pin to go stale — it always runs whatever `quest-apply-trailers` is
+currently on `PATH`.
+
+**Discovery**: with no `--in`/`QUEST_LOG` to go on, `quest-apply-trailers`
+resolves each trailer's quest id the same way `quest set`/`quest done` do
+from inside a log ([§9](#9-multi-zone-setup)) — nearest log by walk-up from
+the code repo's root, then a sweep of every other log under
+`resolve_sweep_root()` (honoring `QST_ROOT` if set) until the id turns up.
+
+**Idempotency, deliberately stateless** — no synced state file tracking
+which commits were already applied:
+
+- A status-token transition to the status the quest **already holds** is a
+  no-op (nothing to write — the current state already reflects it).
+- A bare-mention `## Log` append **dedupes on the commit's short sha**
+  already appearing somewhere in the quest's body.
+
+Both make a re-run safe: the same `post-commit` hook firing twice, or a
+periodic timer sweep re-scanning a commit range it already covered, never
+double-applies a transition or double-logs a mention.
+
+**Unknown id / out-of-vocabulary token**: both are a **warning**, printed
+to stdout, not a blocking failure — `quest-apply-trailers` always exits
+`0`. A code-repo commit should never be blocked by a typo'd or stale
+trailer (the id might simply not have synced to this device yet), and
+`post-commit` hooks can't block a commit that already happened anyway.
+
+**Timer-callable**: `quest-apply-trailers` also accepts explicit
+commit-ish arguments, for a periodic sweep that doesn't rely on every
+commit individually triggering its own hook run (e.g. a systemd
+timer catching up after downtime):
+
+```bash
+quest-apply-trailers                 # default: just HEAD (the post-commit hook's case)
+quest-apply-trailers HEAD~5..HEAD    # a range, expanded via `git rev-list`
+quest-apply-trailers abc1234 def5678 # one or more explicit commits
+```
 
 ## 12. IDE and tool integration
 
@@ -1732,10 +2242,9 @@ normalization, no git or pre-commit dependency.
 - **Wikilinks cannot cross Obsidian vault boundaries, at all** — confirmed
   against upstream behavior, not a setting or a plugin gap. A quest in one
   zone's log linking to a quest in another zone's log will only ever
-  resolve when a vault containing *both* is open (a realm-root vault
-  nesting every zone) — never when a narrower, single-zone vault is open.
-  Every cross-reference in The Realm today happens to be same-zone, so
-  this hasn't caused a real broken link yet, but it's a hard ceiling: for
+  resolve when a vault containing *both* is open (a vault at a parent folder
+  nesting every log) — never when a narrower, single-log vault is open.
+  If your cross-references are all same-log this never bites, but it's a hard ceiling: for
   a genuinely cross-zone reference, write plain text (`QST-x7k2m` — still
   greppable, still `quest show`-able) instead of a wikilink that will
   silently fail to resolve in the common case of a narrower vault.
@@ -1771,8 +2280,8 @@ deliberately **not conflated into one**:
 - **`owner`** — human accountability, in the core schema. Whose quest is this,
   in the sense of who's answerable for it. Free text (§8) — not "who's
   currently running it."
-- **`agentic: afk | hitl`** — execution mode, declared by the **`development`**
-  schema, not the core. Can (and should) an agent run this without a human in
+- **`agentic: afk | hitl`** — execution mode, declared by a shared named schema such as
+  `development`, not the core. Can (and should) an agent run this without a human in
   the loop, or does it need one? Absent means "not yet triaged for handoff" —
   a deliberate third state, distinct from both `afk` and `hitl`: a quest
   doesn't have to declare its agent-readiness at creation time, only once it's
@@ -1783,10 +2292,11 @@ Matt Pocock's `skills`/`sandcastle` framing: **HITL** work is "worked
 *with* a human who speaks for themselves"; **AFK** work is "driven by the
 agent alone."
 
-**`agentic` is not universal, so it is not core.** Household work has no
+**`agentic` is not universal, so it is not core.** Personal errands have no
 unsupervised-agent axis, and shipping this vocabulary in the core would be
 questkit having an opinion about what kind of work its users do. A log adopts
-it by declaring `schema: development` (see [§8](#8-questkityaml-configuration-reference)),
+it by extending a shared schema that declares it (such as the example
+`schemas/development.yaml`; see [§8](#8-questkityaml-configuration-reference)),
 and under `strict: true` (the default) `--set agentic=afk` in a log that
 hasn't is a hard error naming the fields that *are* declared.
 
@@ -1795,7 +2305,7 @@ schema-driven, advisory check.** The old rule was a category error: it turned
 a *grooming judgment* ("is this good enough to hand off?") into a
 *commit-blocking contract* — the same job `quest validate` does for "is this
 file well-formed at all". `quest validate` enforces **none** of this now and
-cannot fail on it. The `development` schema declares the equivalent as a
+cannot fail on it. A shared `development`-style schema might declare the equivalent as a
 conditional rule:
 
 ```yaml
@@ -1815,24 +2325,47 @@ readiness:
 
 The core ships the first four rules (universal — "a spec and acceptance
 criteria make work handoff-ready" is not an opinion about a domain); a
-`household`-style schema can override the list down to as few as it needs.
+schema can override the list down to as few as it needs.
 `schema.evaluate_readiness(quest, schema_config)` returns every failing rule's
 own `message`, in declared order — this is exactly what `quest brief`'s
 READY verdict reads from ([§6](#6-cli-reference)), with no rule hardcoded in
 `brief` itself. `agentic` is not special there either: it's just a
-conditional rule `development` happens to declare.
+conditional rule a schema happens to declare.
+
+**`when:` also lets a schema hold different types to different bars.** A
+schema can add a rule gated on `type`, not just on `agentic`:
+
+```yaml
+readiness:
+  - require: { where: "description:exists" }
+    message: "no description"
+  - require: { where: "status!=draft" }
+    message: "still a draft -- not groomed"
+  - require: { sections: ["## Spec", "## Design"] }
+    message: "no spec or design section"
+  - require: { checklist: "## Acceptance Criteria", min: 1 }
+    message: "no acceptance criteria"
+  - when: "type=bug"
+    require: { sections: ["## Repro"] }
+    message: "no repro steps -- not implementation-ready"
+```
+
+A `type=bug` quest with no `## Repro` section now fails readiness with that
+message, and `quest brief` collapses to NOT READY on it; every other type is
+unaffected because the `when:` guard skips the rule entirely for them.
+Add a per-type rule the same way: a `when:`
+expression in the `--where` grammar, paired with any of the three `require:`
+shapes above.
 
 ### Routing spoken language to quest creation
 
-Inside The Realm, the root `AGENTS.md` carries the instruction that
+A project's `AGENTS.md`/`CLAUDE.md` can carry the instruction that
 "bean", "ticket", and "todo" are spoken synonyms for "quest" — an agent
 told to "create a ticket for this" should create a quest via `quest new
 "<title>"`, landing wherever nearest-zone-wins discovery puts it, with no
-clarifying question needed. This is a Realm
-convention, not something questkit's code enforces (questkit itself has
-no opinion on what a human calls the thing) — but it's worth knowing this
-document's audience includes agents primed on that instruction, arriving
-here specifically to learn *how* to act on it.
+clarifying question needed. This is a per-project convention, not something
+questkit's code enforces (questkit itself has no opinion on what a human
+calls the thing).
 
 ### Practical agent workflow
 
@@ -1841,15 +2374,12 @@ here specifically to learn *how* to act on it.
 2. **Update state as you go**, not just at the end: `quest set <id>
    status=in-progress` when starting real work on something, `quest done
    <id>` when verified complete, `quest set <id> status=scrapped` if
-   abandoned. This mirrors the same authorization the Realm's Beans-era
-   conventions granted agents for ticket state — questkit doesn't gate any
-   of these transitions.
+   abandoned. questkit doesn't gate any of these transitions.
 3. **Before marking something `agentic: afk`** for a *future* agent to
    pick up unsupervised, make sure the body actually has a `## Spec`
    section and real acceptance criteria. `quest validate` no longer checks
    this — it is a `readiness:` rule now, advisory rather than
-   commit-blocking; use `schema.evaluate_readiness()` (or the future
-   `quest brief`) to confirm it mechanically rather than trusting your own
+   commit-blocking; use `quest brief <id>` (its `READY` verdict) to confirm it mechanically rather than trusting your own
    judgment.
 4. **Prefer `quest show`/`grep` over reading a whole log's directory** when
    you only need one quest's content or a targeted search — the same
@@ -1888,14 +2418,8 @@ here specifically to learn *how* to act on it.
   sophisticated part of the Trello setup questkit replaced, and doing it
   justice means not rushing it).
 - **No hook-pin refresh command yet.** Bumping a consuming repo's
-  `rev:` after a questkit change is a manual edit today — tracked as
-  `QST-d8nu7` in `99-system`'s log.
-- **An unexplained Syncthing artifact.** A `.stversions/` version-archive
-  copy of a quest file turned up once, in a Syncthing folder
-  (`90-playground`) that shouldn't have any relationship to the quest logs
-  at all. Noticed, not investigated — flagged in `QST-whm2e`'s Log as
-  worth a look, since it might indicate a folder-scope overlap in the
-  Realm's Syncthing configuration unrelated to questkit itself.
+  `rev:` after a questkit change is a manual edit today (`quest doctor`
+  reports a stale pin but does not fix it).
 - **`owner` has no closed enum, on principle** — but that principle hasn't
   been tested by more than one real person using a shared log yet. Worth
   revisiting if that changes.
@@ -1909,7 +2433,7 @@ and completed — with every field in play:
 ---
 id: QST-x7k2m
 title: Fix the garage door sensor false-triggering at night
-description: The Home Assistant garage door sensor reports "open" for a few seconds around 2-4am with the door physically closed.
+description: The home-automation garage door sensor reports "open" for a few seconds around 2-4am with the door physically closed.
 created: 2026-08-01
 modified: 2026-08-13
 type: bug
@@ -1917,10 +2441,10 @@ tier: spark
 status: done
 priority: high
 effort: s
-owner: peter
+owner: alex
 project: home-lab
 tags:
-  - home-assistant
+  - home-automation
   - sensors
 blocked_by: []
 aliases: [QST-x7k2m]
@@ -1937,19 +2461,19 @@ notification.
 
 - [x] Reproduce reliably or capture enough log data to diagnose
 - [x] Identify root cause (temperature-related contact bounce, RF
-      interference, or a HA automation retriggering the entity)
+      interference, or an automation retriggering the entity)
 - [x] Apply a fix
 - [x] Confirm no false triggers for at least one full week after the fix
 
 ## Log
 
 - 2026-08-01: captured
-- 2026-08-03: confirmed via HA history graph -- happens on cold nights
+- 2026-08-03: confirmed via the sensor's history graph -- happens on cold nights
   specifically, correlates with temperature drop, not motion/RF
 - 2026-08-05: root cause -- reed switch gap widened slightly from cold
   contraction, right at the edge of trigger tolerance
 - 2026-08-06: adjusted magnet mounting bracket closer, added a 5-second
-  debounce to the HA binary_sensor template as a second layer of defense
+  debounce to the sensor template as a second layer of defense
 - 2026-08-13: one full week, zero false triggers -- done
 ```
 

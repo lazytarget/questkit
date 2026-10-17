@@ -15,7 +15,7 @@ from questkit.discovery import (
 
 
 def test_resolve_log_walks_up_to_zone_quests_dir(tmp_path, monkeypatch):
-    zone = tmp_path / "pensieve"
+    zone = tmp_path / "notes"
     quests_dir = zone / "quests"
     quests_dir.mkdir(parents=True)
     QuestLogConfig().save(quests_dir)

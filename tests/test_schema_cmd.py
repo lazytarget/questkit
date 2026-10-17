@@ -52,6 +52,28 @@ def test_schema_quest_unknown_field_errors(quest_log, capsys):
     assert "unknown schema field" in capsys.readouterr().out
 
 
+def test_schema_quest_unique_field_reports_unique_true(quest_log, capsys):
+    config_path = quest_log / ".questkit.yaml"
+    with config_path.open("a", encoding="utf-8") as handle:
+        handle.write("schema:\n  fields:\n    external_id:\n      type: string\n      unique: true\n")
+
+    assert main(["schema", "quest", "external_id"]) == 0
+    data = json.loads(capsys.readouterr().out)
+
+    assert data == {"type": "string", "required": False, "unique": True}
+
+
+def test_schema_quest_non_unique_field_omits_the_key(quest_log, capsys):
+    config_path = quest_log / ".questkit.yaml"
+    with config_path.open("a", encoding="utf-8") as handle:
+        handle.write("schema:\n  fields:\n    sprint:\n      type: string\n")
+
+    assert main(["schema", "quest", "sprint"]) == 0
+    data = json.loads(capsys.readouterr().out)
+
+    assert "unique" not in data
+
+
 def test_schema_quest_table_format_is_not_json(quest_log, capsys):
     assert main(["schema", "quest", "status", "--format", "table"]) == 0
     out = capsys.readouterr().out

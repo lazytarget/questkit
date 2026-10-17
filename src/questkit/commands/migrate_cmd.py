@@ -10,7 +10,7 @@ Verified in questkit's own log on 2026-08-19:
 
 A line-oriented substitution corrupts both. Only a frontmatter-aware tool can
 rename a *value of a field* without touching prose that happens to use the
-same word -- and questkit is the only thing in the Realm that parses this
+same word -- and questkit is the only thing that parses this
 format.
 
 Deliberately absent: schema *file* migration, rollback (git is the undo), and
@@ -31,7 +31,7 @@ from .. import macros, schema
 from ..config import ConfigVersionError, QuestLogConfig
 from ..discovery import resolve_log_set
 from ..gitutil import find_git_root
-from ..quest import Quest, QuestFileError
+from ..quest import Quest, QuestFileError, glob_quests
 
 
 class MigrationError(Exception):
@@ -203,7 +203,7 @@ def _migrate_log(quests_dir: Path, mutate, *, dry_run: bool) -> LogOutcome:
     config = QuestLogConfig.load(quests_dir)
     project = config.project or quests_dir.name
     outcome = LogOutcome(quests_dir=quests_dir, project=project)
-    paths = sorted(quests_dir.glob(config.pattern))
+    paths = glob_quests(quests_dir, config.pattern)
     known_fields = _known_fields(quests_dir, config, paths)
 
     for path in paths:

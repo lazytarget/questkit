@@ -1,10 +1,14 @@
-"""Tests for `--select`, `--distinct`, `--count`, and the retirement of `--columns`.
+"""Tests for `--select`, `--count`, and the retirement of `--columns`.
 
 `--select` is a **widened contract**, not a rename of `--columns`: it applies
 to every `--format` (table, csv, json, prompt), not just the fixed-width
 renderers. Rows are projected to the selected fields exactly once, up front,
 so every renderer downstream sees the same restricted shape rather than each
 one needing its own "did the caller select?" branch.
+
+`--distinct` is gone outright (QST-oguay): unused in practice, and
+`--group-by` (see test_group_by.py) supersedes it -- `--select f --distinct`
+is `--group-by f` minus the count.
 """
 
 from __future__ import annotations
@@ -100,47 +104,16 @@ def test_select_project_works_even_without_a_declared_project(isolated, make_log
     assert "alpha" in result.out
 
 
-# --- --distinct ---------------------------------------------------------------
+def test_distinct_is_gone(isolated, make_log, run):
+    """argparse itself rejects the retired flag -- SystemExit(2), not a Result."""
+    import pytest
 
+    from questkit.cli import main
 
-def test_distinct_collapses_identical_rows(isolated, make_log, write_quest, run, monkeypatch):
-    """Repeatable multi-log --in is QST-iqwjm's job; -A exercises multi-log here."""
-    alpha = make_log(isolated / "alpha", "alpha", project="alpha")
-    beta = make_log(isolated / "beta", "beta", project="beta")
-    write_quest(alpha, "QST-aaaaa", status="todo")
-    write_quest(alpha, "QST-bbbbb", status="in-progress")
-    write_quest(beta, "QST-ccccc", status="todo")
-    monkeypatch.setenv("QST_ROOT", str(isolated))
-
-    # list still uses --all (QST-8hjjk predates the -A rename, which is QST-iqwjm's job)
-    result = run("list", "--all", "--select", "project", "--distinct", "--format", "csv")
-
-    lines = [line for line in result.out.splitlines() if line.strip()]
-    assert lines == ["project", "alpha", "beta"]
-
-
-def test_distinct_preserves_first_seen_order(isolated, make_log, write_quest, run):
-    log = make_log(isolated)
-    write_quest(log, "QST-aaaaa", slug="a", priority="low")
-    write_quest(log, "QST-bbbbb", slug="b", priority="high")
-    write_quest(log, "QST-ccccc", slug="c", priority="low")
-
-    result = run(
-        "list", "--in", str(log), "--where", "status:exists",
-        "--select", "priority", "--distinct", "--format", "csv",
-    )
-
-    lines = [line for line in result.out.splitlines() if line.strip()]
-    assert lines == ["priority", "low", "high"]
-
-
-def test_distinct_without_select_errors(isolated, make_log, run):
     log = make_log(isolated)
 
-    result = run("list", "--in", str(log), "--distinct")
-
-    assert result.code == 1
-    assert "--select" in result.err
+    with pytest.raises(SystemExit):
+        main(["list", "--distinct", "--in", str(log)])
 
 
 # --- --count --------------------------------------------------------------------
@@ -157,7 +130,7 @@ def test_count_prints_a_bare_integer(isolated, make_log, write_quest, run):
     assert result.out.strip() == "2"
 
 
-def test_count_honors_select_and_distinct(isolated, make_log, write_quest, run):
+def test_count_honors_select(isolated, make_log, write_quest, run):
     log = make_log(isolated)
     write_quest(log, "QST-aaaaa", slug="a", priority="low")
     write_quest(log, "QST-bbbbb", slug="b", priority="low")
@@ -165,10 +138,10 @@ def test_count_honors_select_and_distinct(isolated, make_log, write_quest, run):
 
     result = run(
         "list", "--in", str(log), "--where", "status:exists",
-        "--select", "priority", "--distinct", "--count",
+        "--select", "priority", "--count",
     )
 
-    assert result.out.strip() == "2"
+    assert result.out.strip() == "3"
 
 
 def test_count_ignores_limit_and_offset(isolated, make_log, write_quest, run):

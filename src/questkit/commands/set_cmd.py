@@ -22,7 +22,8 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if not args.assignments:
+    log_message = getattr(args, "log_message", None)
+    if not args.assignments and not log_message:
         print(f"[quest] nothing to set. Use: quest set {args.id} field=value [field=value ...]")
         return 1
 
@@ -33,6 +34,7 @@ def run(args: argparse.Namespace) -> int:
     quests_dir, path = found
 
     quest = Quest.load(path)
+    schema_config = QuestLogConfig.load(quests_dir).schema
     # Archival affects listing, never id resolution or mutation -- `set`
     # (and everything sugared over it: `done`, `scrap`, `archive`,
     # `unarchive`) still finds and writes an archived quest, just with a
@@ -53,7 +55,7 @@ def run(args: argparse.Namespace) -> int:
                 f"[quest] '{key}' is a computed field (derived from the corpus), and read-only"
             )
             return 1
-        new_value = _coerce(key, value.strip())
+        new_value = _coerce(key, value.strip(), schema_config)
         # Compare the *coerced* value: `tags=a,b` becomes a list, so comparing
         # the raw string would report a change on every re-assertion.
         if _same(quest.frontmatter.get(key), new_value):
@@ -61,7 +63,7 @@ def run(args: argparse.Namespace) -> int:
         quest.set(key, new_value)
         changed.append(key)
 
-    if not changed:
+    if not changed and not log_message:
         print(f"[quest] {path}: no change")
         return 0
 
@@ -74,7 +76,13 @@ def run(args: argparse.Namespace) -> int:
     if "status" in changed and "status_changed" not in changed:
         quest.set("status_changed", today())
 
-    quest.frontmatter["modified"] = today()
+    today_str = today()
+    if log_message:
+        # QST-46rdv: the journal entry lands in the same save as any field
+        # assignment -- `quest scrap <id> --log "why"` writes one file, not two.
+        quest.append_log(log_message, today_str)
+
+    quest.frontmatter["modified"] = today_str
     quest.save()
     print(str(path))
 
@@ -104,9 +112,7 @@ def _same(current, new_value) -> bool:
     return str(current) == str(new_value)
 
 
-def _coerce(key, value):
-    if key == "tags":
-        return [v.strip() for v in value.split(",") if v.strip()]
+def _coerce(key, value, schema_config):
     if key == "archived":
         return value.strip().lower() in ("true", "1", "yes")
-    return value
+    return schema_config.coerce(key, value)
