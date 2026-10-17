@@ -317,3 +317,29 @@ def test_push_environment_with_no_to_ref_is_a_no_op(repo, capsys, monkeypatch):
     code, _, _ = _run(repo, "push", "--pre-commit", "--term", "acme", capsys=capsys)
 
     assert code == 0
+
+
+# --- not a git repository ------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["history", "tree", "staged"])
+def test_a_directory_that_is_not_a_repository_is_a_clean_error(
+    tmp_path, capsys, monkeypatch, mode
+):
+    """git failing must be reported, never a traceback and never a silent pass: a
+    staged scan that cannot read the diff would otherwise look like 'nothing found'."""
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+
+    code, _, err = _run(tmp_path, mode, "--term", "acme", capsys=capsys)
+
+    assert code == 2
+    assert "not a git repository" in err.lower()
+    assert "Traceback" not in err
+
+
+def test_a_missing_repo_path_is_a_clean_error(tmp_path, capsys):
+    code, _, err = _run(tmp_path / "nope", "history", "--term", "acme", capsys=capsys)
+
+    assert code == 2
+    assert "Traceback" not in err
+    assert err.startswith("sensitive-scan:")
