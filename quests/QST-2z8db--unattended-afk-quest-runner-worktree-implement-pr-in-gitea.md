@@ -12,7 +12,7 @@ tags:
   - automation
   - ci
 created: 2026-10-13
-modified: 2026-10-16
+modified: 2026-10-20
 agentic: hitl
 aliases:
   - QST-2z8db
@@ -227,6 +227,23 @@ How this changes the design, each point a decision to record:
   `/pr` and `grill-with-docs` read `GLOSSARY.md`. questkit has no glossary file today;
   decide whether it should get one so PR bodies use consistent terms.
 
+### 9. Context budget: two windows, not one
+
+The runner should spend as little context as possible. Split it into two fresh windows:
+
+- **Chooser.** A short-lived, fresh agent or sub-agent. It reads the quest list (`quest next`,
+  `quest ready`) and returns one quest id with a one-line reason. It does not read the code, so
+  its output is small and the caller's window stays small.
+- **Implementer.** A fresh session started with only the chosen quest's brief. It loads files per
+  step and clears old test logs by rule.
+
+Compaction is the wrong tool for this split. A summary of the chooser's work would still carry the
+candidate list the implementer does not need. A fresh window carries nothing it does not need.
+
+Leaning: the runner script is the only thing that moves data between the two windows, and it passes
+the quest id and the brief, not the chooser's transcript. Open: does the chooser need a model at all,
+or is a deterministic `quest next --where agentic=afk` plus a stated reason enough for most runs?
+
 ## Spec
 
 Not yet groomed. Once the decisions above are made, the first deliverable is a
@@ -253,6 +270,8 @@ wrapping, model selection tables and the Omnigent link follow as separate quests
       [[QST-u90gs--personalised-implement-quest-skill-for-epic-and-blueprint-quests]]
 
 ## Log
+
+- 2026-10-20: added decision 9 (context budget: a chooser window and a separate implementer window, with compaction ruled out for the split). Source: CCDV-F Lesson 0004 section 7; the design is not built
 
 - 2026-10-14: added decision 8 and acceptance criteria after Matt Pocock's skills v1.3 (`/implement-spec`, `/pr`, `/retro`); personalised `/implement-quest` split out as QST-u90gs; no `blocked_by` between them because the tracer bullet runs on spark quests and does not need the skill
 
