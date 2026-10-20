@@ -1,7 +1,7 @@
 ---
 id: QST-x4zw2
 title: Publish questkit remote package registry and tagged releases
-description: Take questkit public on GitHub with a Gitea PyPI registry and tagged releases; history audited, publishing steps pending.
+description: Take questkit public on GitHub with a Gitea PyPI registry and tagged releases; history rewritten and moved to a fresh Gitea repository, GitHub push, device repair, sync and the release still open.
 project: questkit
 type: epic
 status: in-progress
@@ -12,7 +12,7 @@ tags:
   - infra
 created: 2026-08-22
 status_changed: 2026-10-16
-modified: 2026-10-17
+modified: 2026-10-20
 agentic:
 aliases:
   - QST-x4zw2
@@ -375,15 +375,104 @@ match, more than 85 commits. That cost is accepted.
    `github.com/lazytarget/questkit`, push the rewritten history, then redo what is
    per repository: Actions variable and secrets, runner scope, the registry package
    link. PR numbers restart.
-7. **Re-clone.** Every existing clone and worktree points at ids that no longer
-   exist, so they are recreated rather than repaired.
+7. **Other devices.** Repaired in place, not re-cloned: `questkit` is still a hybrid
+   repo, so deleting, moving or re-cloning it inside the Syncthing folder would be
+   replicated to every device. See "Other devices after the rewrite" below.
 
-Recompute the numbers with `scripts/sensitive_scan.py history` in the fresh clone
-just before step 4; the figure of 85 of 110 predates the 0.4.0 commits.
+Recomputed just before step 4: 100 of 125 commits change id and the 25 oldest keep
+theirs (the earlier figure of 85 of 110 predates the 0.4.0 commits). The rewrite
+did not wait for the remaining 0.4.0 quests.
 
-Still open: how the two remotes stay in sync (next section), whether the rewrite
-waits for the remaining 0.4.0 quests, and whether the private repository names
-stay in history (left as is unless decided otherwise).
+Still open: how the two remotes stay in sync (see the answers below), and whether
+the private repository names stay in history (left as is unless decided otherwise).
+
+### Status of the plan (2026-10-20)
+
+| Step | State |
+|------|-------|
+| 1. Merge #3 | Done 2026-10-17 (merge commit `f50790d` in the backup repository). |
+| 2. Backup | Done 2026-10-17: `06-archive/git-bundles/02-projects-lazytarget-questkit-2026-10-17.bundle`, sha256 `d463e9797c5388b19f272b458f515c0a8cb044e990fa901fdd6aab1e5616bda3`. `git bundle verify` passes, and a scratch clone of it has a clean `git fsck` and the same tip tree as the server. A manifest and the commit map sit beside it. |
+| 3. Rename | Done: `peter/questkit---backup`, private. The local checkout moved to `02-projects/lazytarget/questkit---backup`. |
+| 4. Rewrite | Done 2026-10-17 in a fresh clone with `git filter-repo`: **100 of 125 commits** got new ids, each carries `Rewritten-from: <old id>`, and the 25 oldest keep theirs. Old tip `f50790d` became `4f345cd`. Signatures on rewritten commits are gone. Tags `v0.2.0` and `v0.3.0` were re-pushed unsigned; `v0.3.0`'s message lost its stale SSH signature block and nothing else. |
+| 5. Verify | Done: tip tree identical to the original, 125 commits before and after, 0 deny-list matches in patches, messages, authors, file names, refs and tags, gitleaks clean, 855 tests pass. The five `Reviewed-on:` links in merge commits now name the backup repository. |
+| 6. Fresh repositories | Gitea done: `peter/questkit` (private) holds the rewritten history, CI is green on the Gitea runner, and the Actions variable and secrets were added by the owner. Open: GitHub, and the package link (below). |
+| 7. Other devices | Not started; see the next section. |
+
+New commits in the fresh repository are signed and verify (checked 2026-10-17).
+
+Found while closing the plan:
+
+- The registry package `questkit 0.3.0.dev1` is still linked to
+  `peter/questkit---backup`, because the link followed the renamed repository.
+  Re-link it to `peter/questkit` before the backup repository is deleted.
+- `repos.yaml` needed no change for the move. Only `core.fileMode` drifted on the
+  new clone, and `make apply-repos REPO=questkit` fixed it (`REPO=` is new:
+  realm/99-system PR #13).
+- The new clone on `dev-01` was onboarded with `make onboard-zone` followed by
+  `pre-commit install` (commit and push stages), which reproduces the backup
+  repository's hook chain.
+
+### Other devices after the rewrite (2026-10-20)
+
+Derived from `syncthing.yaml`, `repos.yaml` and the runbook
+`99-system/docs/syncthing-stale-folder-recovery.md`; the live Syncthing settings
+were not checked. The commands were rehearsed in a scratch copy holding the old
+history and a local branch, and have not been run on any real device except
+`dev-01`.
+
+**Why not just re-clone.** The git-zone cutover has not run, so Syncthing still
+carries `questkit`'s working tree while each device keeps its own `.git`. Deleting,
+moving or re-cloning it inside the synced folder is replicated to every device. And
+the rewritten history reaches no device through Syncthing, so every other device's
+`.git` still holds the old history, including the unredacted names, until it is
+reset and pruned.
+
+| Device | Gets the working tree | Own `.git` | Action |
+|--------|-----------------------|-----------|--------|
+| `dev-01` | yes | yes | Done 2026-10-20: fresh clone, onboarded. |
+| `LAZY-PROART`, `LazyNAS` | yes | yes; the two sync `.git` between themselves (neither has an ignore list) | Repair on `LAZY-PROART` only, then check `LazyNAS` once it has caught up. |
+| the work device, `grocy-01` | yes | yes | Repair in place. |
+| MacBook, phone | yes | no (both ignore `.git`) | Nothing: they only receive files. |
+| `realm-prod-01` | no (not in the Syncthing folder) | yes, cloned by `apply-repos` | Not synced, so re-cloning is safe: move the old checkout aside, then `make apply-repos REPO=questkit`. |
+
+`questkit---backup/` will also arrive, as plain files without `.git`, on the devices
+that receive the folder (expected, not verified). Deleting it later removes it
+everywhere.
+
+**Repair in place**, in `02-projects/lazytarget/questkit` on each device:
+
+1. Wait until Syncthing reports the folder idle. Never pause it (runbook, part 1).
+2. Before fetching, find work that exists only on this device. This reads the old
+   remote-tracking refs, so it must come first:
+   ```sh
+   git log --branches --not --remotes --oneline   # unpushed commits, any branch
+   git stash list
+   git status -sb                                 # expect only "Syncthing ran ahead" dirt
+   git bundle create ~/questkit-local-work.bundle --branches --not --remotes   # keeps any of it
+   git merge-base <branch> main                   # per branch to keep: note its old base
+   ```
+3. `git fetch gitea --prune --tags --force`. The `gitea` remote URL does not change,
+   because the new repository reuses the name. `--force` is needed: `v0.3.0` now
+   points elsewhere.
+4. `git reset gitea/main`, a mixed reset and never `--hard`: the working tree is
+   already right, and `--hard` rewrites files and risks the clobber the runbook
+   describes. `git status -sb` must then be clean. If it is not, wait for Syncthing
+   and look again before going on.
+5. Move each branch worth keeping onto the new history:
+   `git rebase --onto main <old base from step 2> <branch>`. Delete the rest with
+   `git branch -D`, and `git worktree prune` registered worktrees that point at old
+   commits. `06-archive/git-bundles/02-projects-lazytarget-questkit-2026-10-17.commit-map.txt`
+   maps every old id to its new one.
+6. Drop the old history from the device, only once step 2 found nothing unsaved:
+   ```sh
+   git reflog expire --expire=now --all && git gc --prune=now
+   git cat-file -e f50790dd76ee2971e19f3e66698916c70b66cc64 && echo STILL THERE
+   ```
+7. Re-wire what is per device: `uv venv && uv pip install -e ".[dev]"` then
+   `.venv/bin/pre-commit install`; once Syncthing has delivered `.realm/`,
+   `make refresh-zones` for the Realm hook; and `make apply-repos REPO=questkit` for
+   `core.fileMode`. `REPO=` needs `99-system` from PR #13; until then run
+   `make apply-repos` without it.
 
 ### Answers recorded (2026-10-17)
 
@@ -415,16 +504,22 @@ documentation. Verify the marked points before relying on them.
 - [x] A private deny-list scanner with history, tree, staged and push modes, and hooks wired in (#4)
 - [x] gitleaks on staged changes (pre-commit) and, on GitHub, over history in CI (#4, not yet run on a real runner)
 - [x] Reusing one deny-list across repos captured as QST-03fim (#5)
-- [x] Gitea PyPI registry: a local `.dev1` upload succeeded, the package is linked to `peter/questkit` and installs from the registry
-- [ ] First real run of `ci.yml` on a runner, after #3 is merged
+- [x] Gitea PyPI registry: a local `.dev1` upload succeeded and installs from the registry (the package link must be redone, see below)
+- [x] `ci.yml` runs green on the Gitea runner (runs 675 to 686, including the rewritten history)
+- [ ] `ci.yml` runs green on GitHub, on the first push to `github.com/lazytarget/questkit`
 - [ ] Manual run of `publish.yml` publishes a `.devN` version
-- [ ] Full history backed up as a `git bundle` in the archive folder and checked with `git bundle verify`, with the filter-repo commit map kept beside it
-- [ ] Current Gitea repository renamed to `questkit---backup` and kept private
-- [ ] History rewritten in a fresh clone: employer names redacted, a `Rewritten-from: <old id>` trailer on every commit whose id changes, `sensitive_scan.py history` reports 0 matches, commit count unchanged, tip tree identical apart from the redacted terms, tests pass
-- [ ] Fresh `questkit` repositories on Gitea and at `github.com/lazytarget/questkit`; Actions variable and secrets re-added; registry package re-linked
+- [x] Full history backed up as a `git bundle` in the archive folder and checked with `git bundle verify`, with the filter-repo commit map kept beside it
+- [x] Current Gitea repository renamed to `questkit---backup` and kept private
+- [x] History rewritten in a fresh clone: employer names redacted, a `Rewritten-from: <old id>` trailer on every commit whose id changes, `sensitive_scan.py history` reports 0 matches, commit count unchanged, tip tree identical apart from the redacted terms, tests pass
+- [x] Fresh `questkit` repository on Gitea with the Actions variable and secrets re-added
+- [ ] Fresh repository at `github.com/lazytarget/questkit`
+- [ ] Registry package `questkit` re-linked to `peter/questkit` (it still points at the backup repository)
+- [x] The new clone on `dev-01` onboarded (`make onboard-zone`, `pre-commit install`, `make apply-repos REPO=questkit`)
+- [ ] Every other device repaired in place (see Other devices after the rewrite) and its old history pruned
 - [ ] Decide how the two remotes stay in sync (non-force push of `main` and `v*` tags, or a push mirror)
 - [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`) on the rewritten history
 - [ ] Publish 0.4.0 to the Gitea registry from the tag
+- [ ] Once the GitHub repository is live: delete the Gitea repository `peter/questkit---backup` and the local `questkit---backup` checkout, after re-linking the package and keeping the bundle in `06-archive`
 
 ## Log
 
@@ -436,4 +531,5 @@ documentation. Verify the marked points before relying on them.
 - 2026-10-16: Measured the cost of each redaction with scripts/sensitive_scan.py (employer names: 85 of 110 rewritten, 25 keep ids); wired gitleaks and the private deny-list into pre-commit and pre-push; registry deploy steps recorded.
 - 2026-10-16: Verified the Gitea registry end to end: uploaded a .dev1 build, linked the package to peter/questkit, installed it from the registry. Recorded the history-sync analysis and a twine guide.
 - 2026-10-17: #4 and #5 merged. Agreed the history plan: bundle backup, rename the current Gitea repo to questkit---backup, redact in a fresh clone with a Rewritten-from trailer, fresh repos on Gitea and GitHub. Recorded answers on remotes, sync, releases and SHA-256 (marked unverified). Placeholders: work-a/b/c and home. op:// paths approved as public.
+- 2026-10-20: History rewrite done: bundle backup, repo renamed to questkit---backup, 100 of 125 commits rewritten with Rewritten-from trailers, fresh private repo on Gitea with CI green, dev-01 onboarded. Recorded the status of each plan step, the per-device repair procedure (rehearsed in a scratch copy), and that the registry package link still points at the backup repo.
 
