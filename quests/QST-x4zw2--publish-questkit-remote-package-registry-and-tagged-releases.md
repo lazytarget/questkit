@@ -501,7 +501,7 @@ documentation. Verify the marked points before relying on them.
 
 - **No sync mechanism between the remotes.** Gitea (`peter/questkit`) and GitHub
   (`lazytarget/questkit`) are two independent remotes. Nothing mirrors either way,
-  so every push goes to each remote by hand (`git push gitea ...`, `git push lazytarget ...`).
+  so every push goes to each remote by hand (`git push gitea ...`, `git push github ...`).
   A push mirror from GitHub to Gitea stays possible later, if outside contributions
   ever land on GitHub.
 - **Pushed everything:** `main` (9cbcb90, 131 commits) and tags `v0.2.0`, `v0.3.0`.
@@ -521,8 +521,10 @@ documentation. Verify the marked points before relying on them.
 - **Scope.** Publishing to PyPI moves from 0.9.0 into 0.4.0, together with
   QST-tf4wc (the workflows). There is no separate PyPI quest: both quests already
   carry `milestone: 0.4.0`, and their text now says so.
-- **Remote name.** The GitHub remote is called `lazytarget`, like the other sibling
-  remotes in `99-system/repos.yaml`, and is declared there (realm/99-system PR #14).
+- **Remote name.** The GitHub remote is called `github`, and is declared under that
+  name in `99-system/repos.yaml`. It was first named `lazytarget` after the account,
+  like the other sibling remotes in that file (realm/99-system PR #14), and was
+  renamed on 2026-10-21 because `github` says what it is.
 - **Account.** The PyPI.org account is `lazytarget`; the GitHub environment `pypi`
   exists with a required reviewer; `PYPI_API_TOKEN` is added there by the owner.
   `questkit` is not registered on PyPI (404 on 2026-10-21), so the first upload
@@ -537,7 +539,7 @@ documentation. Verify the marked points before relying on them.
   `publish` job sees the token and it runs no project code: the build runs in a
   separate job without secrets and hands over its files as an artifact.
 - **Release procedure.** `scripts/release.py` pushes the tag to one remote, so:
-  `release.py --remote gitea`, then `git push lazytarget vX.Y.Z`. Making `--remote`
+  `release.py --remote gitea`, then `git push github vX.Y.Z`. Making `--remote`
   repeatable would remove the second step; not done, to be decided.
 
 ### Settings for the `pypi` environment (recommendation)

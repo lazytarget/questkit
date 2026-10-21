@@ -1372,7 +1372,7 @@ with `--remote gitea` and then push the same tag to the other remote by hand:
 
 ```bash
 .venv/bin/python scripts/release.py --remote gitea
-git push lazytarget vX.Y.Z
+git push github vX.Y.Z
 ```
 
 ### `quest logs [--root DIR ...] [--format table|json] [--verbose]`
