@@ -12,7 +12,7 @@ tags:
   - infra
 created: 2026-08-22
 status_changed: 2026-10-16
-modified: 2026-10-20
+modified: 2026-10-21
 agentic:
 aliases:
   - QST-x4zw2
@@ -497,6 +497,51 @@ documentation. Verify the marked points before relying on them.
 - **SHA-256.** Not now. SHA-1 and SHA-256 repositories cannot exchange objects, and
   GitHub support is unconfirmed. Revisit once GitHub documents it.
 
+### Decisions (2026-10-21)
+
+- **No sync mechanism between the remotes.** Gitea (`peter/questkit`) and GitHub
+  (`lazytarget/questkit`) are two independent remotes. Nothing mirrors either way,
+  so every push goes to each remote by hand (`git push gitea ...`, `git push github ...`).
+  A push mirror from GitHub to Gitea stays possible later, if outside contributions
+  ever land on GitHub.
+- **Pushed everything:** `main` (9cbcb90, 131 commits) and tags `v0.2.0`, `v0.3.0`.
+  The rewritten commits and the two tags are unsigned; only future commits need to be.
+- **The `Reviewed-on:` links are not rewritten.** Five merge commits still point at
+  `peter/questkit---backup/pulls/N`, a private repository that will be deleted, so
+  those links will not resolve for the public.
+- **Before the push:** a full-history deny-list scan (0 of 131 commits), gitleaks
+  over the history (clean), and the same scan over author names, file names, refs and
+  tag text (all 0). The pre-push hook alone would not have covered it: for a new
+  remote it scans only commits that no remote-tracking ref already has.
+- **The `Publish` workflow did not run on GitHub.** The tags were pushed without it,
+  and its job is also guarded by `vars.PYPI_REGISTRY_URL`, which is set only on Gitea.
+
+### Publishing to PyPI from GitHub, without duplicates (design, for 0.9.0)
+
+Written from memory of how PyPI trusted publishing works; not yet tried. `questkit`
+is not registered on PyPI (checked 2026-10-21: the JSON API returns 404).
+
+- **Use trusted publishing, so GitHub needs no secret at all.** On pypi.org, add a
+  pending publisher for the project `questkit`: owner `lazytarget`, repository
+  `questkit`, workflow file name (for example `publish-pypi.yml`) and an environment
+  name (for example `pypi`). The workflow asks GitHub for an identity token with
+  `permissions: id-token: write` and `pypa/gh-action-pypi-publish` exchanges it for a
+  short-lived upload token.
+- **In GitHub:** create an environment `pypi`, with a required reviewer if each
+  release should need a click. Secrets: none. Variables: none required.
+- **A token instead** (only if trusted publishing is not wanted): one secret
+  `PYPI_API_TOKEN`, scoped to the `questkit` project, kept in the `pypi` environment.
+- **Keeping the two runners from both publishing:** Gitea's runner reads
+  `.github/workflows/` too, so each target needs a guard.
+  - The existing Gitea job runs only where the repository variable
+    `PYPI_REGISTRY_URL` is set. Never set that variable on GitHub.
+  - Put the PyPI job in its own file and add
+    `if: github.server_url == 'https://github.com'` to it, so it is skipped on Gitea
+    even if someone adds PyPI credentials there.
+  - They publish to different registries (the Gitea registry and PyPI), so a tag
+    pushed to both remotes is not a duplicate; the guards stop each runner from
+    publishing to the wrong place. Both registries refuse to overwrite a version.
+
 ## Acceptance Criteria (follow-up)
 
 - [x] Redact the family member's name in the current tree
@@ -506,17 +551,18 @@ documentation. Verify the marked points before relying on them.
 - [x] Reusing one deny-list across repos captured as QST-03fim (#5)
 - [x] Gitea PyPI registry: a local `.dev1` upload succeeded and installs from the registry (the package link must be redone, see below)
 - [x] `ci.yml` runs green on the Gitea runner (runs 675 to 686, including the rewritten history)
-- [ ] `ci.yml` runs green on GitHub, on the first push to `github.com/lazytarget/questkit`
+- [x] `ci.yml` runs green on GitHub (run 39551580657 on the first push: pytest 3.11 to 3.13, lint and types, quest log, gitleaks)
 - [ ] Manual run of `publish.yml` publishes a `.devN` version
 - [x] Full history backed up as a `git bundle` in the archive folder and checked with `git bundle verify`, with the filter-repo commit map kept beside it
 - [x] Current Gitea repository renamed to `questkit---backup` and kept private
 - [x] History rewritten in a fresh clone: employer names redacted, a `Rewritten-from: <old id>` trailer on every commit whose id changes, `sensitive_scan.py history` reports 0 matches, commit count unchanged, tip tree identical apart from the redacted terms, tests pass
 - [x] Fresh `questkit` repository on Gitea with the Actions variable and secrets re-added
-- [ ] Fresh repository at `github.com/lazytarget/questkit`
-- [ ] Registry package `questkit` re-linked to `peter/questkit` (it still points at the backup repository)
+- [x] Fresh repository at `github.com/lazytarget/questkit` (public, `main` plus tags `v0.2.0` and `v0.3.0` pushed 2026-10-21)
+- [x] Registry package `questkit` re-linked to `peter/questkit` (done with `tea api` and the owner's PAT)
 - [x] The new clone on `dev-01` onboarded (`make onboard-zone`, `pre-commit install`, `make apply-repos REPO=questkit`)
-- [ ] Every other device repaired in place (see Other devices after the rewrite) and its old history pruned
-- [ ] Decide how the two remotes stay in sync (non-force push of `main` and `v*` tags, or a push mirror)
+- [x] `LAZY-PROART` (not synced for six months, nothing to repair) and `LazyNAS` (will not accept this folder, Model C) need no action
+- [ ] The remaining devices that hold the folder (the work device and `grocy-01`) repaired in place, and `realm-prod-01` re-cloned, with the old history pruned (see Other devices after the rewrite)
+- [x] Decide how the two remotes stay in sync: they do not (see Decisions, 2026-10-21)
 - [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`) on the rewritten history
 - [ ] Publish 0.4.0 to the Gitea registry from the tag
 - [ ] Once the GitHub repository is live: delete the Gitea repository `peter/questkit---backup` and the local `questkit---backup` checkout, after re-linking the package and keeping the bundle in `06-archive`
@@ -532,4 +578,5 @@ documentation. Verify the marked points before relying on them.
 - 2026-10-16: Verified the Gitea registry end to end: uploaded a .dev1 build, linked the package to peter/questkit, installed it from the registry. Recorded the history-sync analysis and a twine guide.
 - 2026-10-17: #4 and #5 merged. Agreed the history plan: bundle backup, rename the current Gitea repo to questkit---backup, redact in a fresh clone with a Rewritten-from trailer, fresh repos on Gitea and GitHub. Recorded answers on remotes, sync, releases and SHA-256 (marked unverified). Placeholders: work-a/b/c and home. op:// paths approved as public.
 - 2026-10-20: History rewrite done: bundle backup, repo renamed to questkit---backup, 100 of 125 commits rewritten with Rewritten-from trailers, fresh private repo on Gitea with CI green, dev-01 onboarded. Recorded the status of each plan step, the per-device repair procedure (rehearsed in a scratch copy), and that the registry package link still points at the backup repo.
+- 2026-10-21: Pushed main and both tags to github.com/lazytarget/questkit; CI green on GitHub. Re-linked the registry package to peter/questkit. Decided: no sync mechanism between the remotes, nothing rewritten further, LAZY-PROART and LazyNAS need no repair. Recorded the PyPI-from-GitHub design for 0.9.0.
 
