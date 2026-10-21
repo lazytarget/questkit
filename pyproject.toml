@@ -14,6 +14,12 @@ dependencies = [
   "ruamel.yaml>=0.18",
 ]
 
+[project.urls]
+Homepage = "https://github.com/lazytarget/questkit"
+Source = "https://github.com/lazytarget/questkit"
+Changelog = "https://github.com/lazytarget/questkit/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/lazytarget/questkit/blob/main/docs/questkit.md"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",

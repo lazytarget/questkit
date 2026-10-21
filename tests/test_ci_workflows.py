@@ -148,16 +148,31 @@ def test_every_pypi_job_runs_on_github_only():
         assert f"github.server_url == '{GITHUB}'" in job["if"], name
 
 
-def test_the_pypi_token_is_only_in_the_publish_job_behind_the_pypi_environment():
+def test_pypi_publishing_is_trusted_publishing_with_no_secret_at_all():
+    """PyPI only accepts attestations (the provenance shown on the project page)
+    from trusted publishing, and the action ignores that path when a password is
+    passed. So there must be no token anywhere in this workflow."""
+    text = _text("publish-pypi.yml")
+    assert "secrets." not in text
+    assert "PYPI_API_TOKEN" not in text
+    assert "twine upload" not in text
+    for job in _load("publish-pypi.yml")["jobs"].values():
+        for step in _steps(job):
+            assert "password" not in step.get("with", {}), step
+            assert not any(k.startswith("TWINE_") for k in step.get("env", {})), step
+
+
+def test_only_the_publish_job_can_request_an_identity_token_and_it_sits_behind_the_pypi_environment():
     jobs = _load("publish-pypi.yml")["jobs"]
-    assert jobs["publish"]["environment"] == "pypi"
+    assert jobs["publish"]["environment"]["name"] == "pypi"
+    assert jobs["publish"]["permissions"] == {"id-token": "write"}
     assert "environment" not in jobs["build"]
-    assert "PYPI_API_TOKEN" in str(jobs["publish"])
-    assert "secrets." not in str(jobs["build"]), "the build runs project code and must not see secrets"
+    assert "permissions" not in jobs["build"], "the build runs project code and inherits read-only contents"
+    assert "id-token" not in str(_load("publish-pypi.yml")["permissions"])
 
 
 def test_the_publish_job_runs_no_project_code():
-    """It holds the token, so it only downloads the built files and uploads them."""
+    """It can mint an identity token, so it only downloads the built files and uploads them."""
     publish = _load("publish-pypi.yml")["jobs"]["publish"]
     assert publish["needs"] == "build"
     for step in _steps(publish):
@@ -180,13 +195,17 @@ def test_pypi_build_checks_the_tag_against_the_package_version():
     assert "pyproject.toml" in check["run"]
 
 
-def test_pypi_upload_can_be_rerun_and_uses_the_token_user():
-    upload = next(
-        s for s in _steps(_load("publish-pypi.yml")["jobs"]["publish"]) if "twine upload" in s.get("run", "")
-    )
-    assert "--skip-existing" in upload["run"]
-    assert upload["env"]["TWINE_USERNAME"] == "__token__"
-    assert upload["env"]["TWINE_PASSWORD"] == "${{ secrets.PYPI_API_TOKEN }}"
+def test_pypi_upload_uses_the_official_action_so_attestations_are_generated():
+    steps = _steps(_load("publish-pypi.yml")["jobs"]["publish"])
+    upload = next(s for s in steps if "pypa/gh-action-pypi-publish" in s.get("uses", ""))
+    assert upload["uses"] == "pypa/gh-action-pypi-publish@release/v1"
+    assert "with" not in upload or "password" not in upload["with"]
+    assert upload.get("with", {}).get("attestations", True) is not False
+
+
+def test_the_publish_job_links_to_the_pypi_project_page():
+    env = _load("publish-pypi.yml")["jobs"]["publish"]["environment"]
+    assert env["url"] == "https://pypi.org/p/questkit"
 
 
 def test_pypi_publishes_do_not_overlap():

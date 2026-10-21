@@ -1351,7 +1351,7 @@ The tag is what publishes. Two workflows in `.github/workflows/` watch for a
 | Workflow | Registry | Runs on | Needs |
 |----------|----------|---------|-------|
 | `publish-gitea.yml` | the Gitea package registry | Gitea only | variable `PYPI_REGISTRY_URL`, secrets `PYPI_REGISTRY_USER` and `PYPI_REGISTRY_TOKEN` |
-| `publish-pypi.yml` | PyPI | GitHub only | environment `pypi` with the secret `PYPI_API_TOKEN` |
+| `publish-pypi.yml` | PyPI | GitHub only | a trusted publisher configured on pypi.org, and the GitHub environment `pypi`; no secret |
 
 Both read the same directory on both hosts, so each job is guarded to run only
 where it belongs: the Gitea job is skipped on github.com, and every PyPI job is
@@ -1362,9 +1362,20 @@ Manual runs (Actions tab, **Run workflow**, once the file is on the default
 branch) are safe by default. `publish-gitea.yml` publishes a `.devN` version of
 the current version. `publish-pypi.yml` builds and checks the package and stops,
 unless it is started from a tag with **publish** ticked, which publishes that tag
-again (`--skip-existing` makes a re-run after a partial upload harmless).
-A registry never lets a version be overwritten, so a failed release gets a new
-version number.
+again. A registry never lets a version be overwritten, so publishing a finished
+release a second time fails on the files already there, and a half-finished one
+gets a new version number.
+
+**PyPI uses trusted publishing, not a token.** On pypi.org the project has a
+publisher for owner `lazytarget`, repository `questkit`, workflow
+`publish-pypi.yml` and environment `pypi` (project, Manage, Publishing). The
+publish job asks GitHub for a short-lived identity token and PyPI exchanges it
+for an upload token, which is what lets the official action sign the files and
+upload attestations (PEP 740). PyPI shows those as the release's provenance, and
+marks the GitHub links under `[project.urls]` as verified. A password passed to
+the action would turn all of that off, so none is configured. PyPI has no
+documented API for adding a publisher, so that one step is done in its web
+interface.
 
 `scripts/release.py` pushes the tag to a single remote (`--remote`, default
 `origin`). This repository has two remotes and no sync between them, so release

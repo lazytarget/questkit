@@ -6,18 +6,27 @@ name: Publish to PyPI
 # A pushed version tag (v*) builds the package and publishes it. A manual run
 # (Actions tab, Run workflow; available once this file is on the default branch)
 # builds and checks the package and stops there, unless it is started from a tag
-# with "publish" ticked, which publishes that tag again (a PyPI version can never
-# be overwritten, so `--skip-existing` makes a re-run after a partial upload safe).
+# with "publish" ticked, which publishes that tag again. A PyPI version can never
+# be overwritten, so a second publish of a finished release fails on the files
+# already there; a half-finished release gets a new version number.
 #
-# Setup, in the GitHub repository settings:
-#   environment "pypi"        limit it to the tag pattern v*, and add yourself as a
-#                             required reviewer
-#   environment secret        PYPI_API_TOKEN, a PyPI token scoped to the questkit
-#                             project (not the whole account)
+# This is trusted publishing: there is no token and no secret. The publish job asks
+# GitHub for a short-lived identity token and PyPI exchanges it for an upload token.
+# That is also what lets the action sign the files and upload attestations (PEP 740),
+# which PyPI shows as the release's provenance, and what makes the repository links
+# in pyproject.toml show as verified. Passing a password to the action would switch
+# all of that off, so none is configured.
+#
+# Setup:
+#   on pypi.org   questkit -> Manage -> Publishing -> GitHub Actions:
+#                 owner lazytarget, repository questkit,
+#                 workflow publish-pypi.yml, environment pypi
+#   in GitHub     environment "pypi": limit it to the tag pattern v*, and add
+#                 yourself as a required reviewer
 #
 # Gitea's runner reads this directory too; every job here is guarded so that it
-# is skipped there (Gitea does not support v4 of the artifact actions, and must
-# never see a PyPI credential).
+# is skipped there (Gitea does not support v4 of the artifact actions, and has no
+# identity provider for PyPI).
 
 on:
   push:
@@ -62,24 +71,21 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  # The only job that sees the token. It runs no project code: it downloads what
-  # `build` produced and uploads it, so a build script cannot read the secret.
+  # The only job that can mint an identity token. It runs no project code: it
+  # downloads what `build` produced and uploads it, so a build script cannot use it.
   publish:
     needs: build
     if: ${{ github.server_url == 'https://github.com' && github.ref_type == 'tag' && (github.event_name == 'push' || inputs.publish) }}
     runs-on: ubuntu-latest
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/p/questkit
+    permissions:
+      id-token: write # required for trusted publishing; granted to this job only
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install twine
-      - name: Upload to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload --skip-existing dist/*
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
