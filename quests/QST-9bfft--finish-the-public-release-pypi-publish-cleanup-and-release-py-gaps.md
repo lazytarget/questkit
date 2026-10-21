@@ -30,7 +30,8 @@ closed with the release. This quest holds what they could not finish.
 ## Spec
 
 **PyPI.** The tag `v0.4.0` is on GitHub, so its `Publish to PyPI` run is waiting for
-approval in the `pypi` environment. The environment has no `PYPI_API_TOKEN` yet.
+approval in the `pypi` environment (GitHub run 39580254037: `build` passed, `publish`
+waiting). The environment has no `PYPI_API_TOKEN` yet.
 Once the PyPI account is reachable:
 
 1. Create an account-wide token (a project-scoped token needs the project to exist
@@ -62,7 +63,7 @@ gaps, so 0.4.0 was cut by hand with the script's own functions:
 
 ## Acceptance Criteria
 
-- [ ] The `v0.4.0` tag is on the Gitea registry and installs from it
+- [x] The `v0.4.0` tag published to the Gitea registry (Gitea run 720) and `questkit==0.4.0` installs from it with pip
 - [ ] `PYPI_API_TOKEN` added to the `pypi` environment
 - [ ] `questkit 0.4.0` is on PyPI and installs from it
 - [ ] The token is replaced by one scoped to the `questkit` project
@@ -73,4 +74,5 @@ gaps, so 0.4.0 was cut by hand with the script's own functions:
 ## Log
 
 - 2026-10-21: captured when v0.4.0 shipped. Moved here from QST-x4zw2 and QST-tf4wc: the PyPI publish (blocked on the API token), the realm-prod-01 re-clone, deleting the backup repository, and the release.py gaps found while cutting the release.
+- 2026-10-21: v0.4.0 published to the Gitea registry by the tag push (run 720) and verified by installing questkit==0.4.0. On GitHub the tag's PyPI run is waiting at the pypi environment; PyPI still has no questkit project.
 
