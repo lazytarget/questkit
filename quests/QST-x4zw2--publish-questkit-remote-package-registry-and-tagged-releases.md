@@ -1,7 +1,7 @@
 ---
 id: QST-x4zw2
 title: Publish questkit remote package registry and tagged releases
-description: Take questkit public on GitHub with a Gitea PyPI registry and tagged releases; history rewritten and moved to a fresh Gitea repository, GitHub push, device repair, sync and the release still open.
+description: Take questkit public on GitHub with a Gitea registry, PyPI and tagged releases; live on GitHub with CI green, PyPI workflow written; the PyPI secret, environment rules, first publish and the 0.4.0 release still open.
 project: questkit
 type: epic
 status: in-progress
@@ -47,7 +47,7 @@ Pulled into 0.4.0, and widened: questkit goes **public on GitHub**
 away; it stays the private-first working remote, and GitHub is the public
 mirror. Registry decision: the Gitea PyPI-compatible
 registry for now; GitHub / PyPI publishing follows once the setup is more
-mature (0.9.0).
+mature (0.9.0). (Superseded 2026-10-21: PyPI is in the 0.4.0 scope.)
 
 ## Acceptance Criteria
 
@@ -91,7 +91,7 @@ hostnames, addresses and email addresses.
 - **Deferred:** bumping `pyproject.toml` and tagging `v0.4.0` wait until every
   `milestone: 0.4.0` quest is complete.
 - **Registry:** Gitea PyPI-compatible registry, owner `peter`. GitHub / PyPI
-  publishing follows at 0.9.0.
+  publishing follows at 0.9.0. (Superseded 2026-10-21: PyPI is in the 0.4.0 scope.)
 - **Approved to publish (2026-10-17):** 1Password item paths such as
   `op://The Realm/...`. They name a vault and an item, not a secret.
 - **Placeholders in the tree:** employer and client names became `work-a`,
@@ -501,7 +501,7 @@ documentation. Verify the marked points before relying on them.
 
 - **No sync mechanism between the remotes.** Gitea (`peter/questkit`) and GitHub
   (`lazytarget/questkit`) are two independent remotes. Nothing mirrors either way,
-  so every push goes to each remote by hand (`git push gitea ...`, `git push github ...`).
+  so every push goes to each remote by hand (`git push gitea ...`, `git push lazytarget ...`).
   A push mirror from GitHub to Gitea stays possible later, if outside contributions
   ever land on GitHub.
 - **Pushed everything:** `main` (9cbcb90, 131 commits) and tags `v0.2.0`, `v0.3.0`.
@@ -516,31 +516,60 @@ documentation. Verify the marked points before relying on them.
 - **The `Publish` workflow did not run on GitHub.** The tags were pushed without it,
   and its job is also guarded by `vars.PYPI_REGISTRY_URL`, which is set only on Gitea.
 
-### Publishing to PyPI from GitHub, without duplicates (design, for 0.9.0)
+### Decisions (2026-10-21): PyPI is in 0.4.0
 
-Written from memory of how PyPI trusted publishing works; not yet tried. `questkit`
-is not registered on PyPI (checked 2026-10-21: the JSON API returns 404).
+- **Scope.** Publishing to PyPI moves from 0.9.0 into 0.4.0, together with
+  QST-tf4wc (the workflows). There is no separate PyPI quest: both quests already
+  carry `milestone: 0.4.0`, and their text now says so.
+- **Remote name.** The GitHub remote is called `lazytarget`, like the other sibling
+  remotes in `99-system/repos.yaml`, and is declared there (realm/99-system PR #14).
+- **Account.** The PyPI.org account is `lazytarget`; the GitHub environment `pypi`
+  exists with a required reviewer; `PYPI_API_TOKEN` is added there by the owner.
+  `questkit` is not registered on PyPI (404 on 2026-10-21), so the first upload
+  creates the project.
+- **Workflows.** `publish-gitea.yml` and `publish-pypi.yml`, one per registry and
+  each guarded so it runs only on its own host (Gitea's runner reads
+  `.github/workflows/` too). The Gitea job needs `PYPI_REGISTRY_URL` and never runs
+  on github.com; every PyPI job runs on github.com only. Neither mentions the other's
+  credentials, and tests enforce that. Both start from a `v*` tag or by hand.
+- **Manual runs are safe.** Gitea publishes a `.devN` version. PyPI builds and
+  checks only, unless started from a tag with "publish" ticked. Only the PyPI
+  `publish` job sees the token and it runs no project code: the build runs in a
+  separate job without secrets and hands over its files as an artifact.
+- **Release procedure.** `scripts/release.py` pushes the tag to one remote, so:
+  `release.py --remote gitea`, then `git push lazytarget vX.Y.Z`. Making `--remote`
+  repeatable would remove the second step; not done, to be decided.
 
-- **Use trusted publishing, so GitHub needs no secret at all.** On pypi.org, add a
-  pending publisher for the project `questkit`: owner `lazytarget`, repository
-  `questkit`, workflow file name (for example `publish-pypi.yml`) and an environment
-  name (for example `pypi`). The workflow asks GitHub for an identity token with
-  `permissions: id-token: write` and `pypa/gh-action-pypi-publish` exchanges it for a
-  short-lived upload token.
-- **In GitHub:** create an environment `pypi`, with a required reviewer if each
-  release should need a click. Secrets: none. Variables: none required.
-- **A token instead** (only if trusted publishing is not wanted): one secret
-  `PYPI_API_TOKEN`, scoped to the `questkit` project, kept in the `pypi` environment.
-- **Keeping the two runners from both publishing:** Gitea's runner reads
-  `.github/workflows/` too, so each target needs a guard.
-  - The existing Gitea job runs only where the repository variable
-    `PYPI_REGISTRY_URL` is set. Never set that variable on GitHub.
-  - Put the PyPI job in its own file and add
-    `if: github.server_url == 'https://github.com'` to it, so it is skipped on Gitea
-    even if someone adds PyPI credentials there.
-  - They publish to different registries (the Gitea registry and PyPI), so a tag
-    pushed to both remotes is not a duplicate; the guards stop each runner from
-    publishing to the wrong place. Both registries refuse to overwrite a version.
+### Settings for the `pypi` environment (recommendation)
+
+From memory of how GitHub behaves, not yet exercised: a dry run cannot prove the
+tag rule, because the dry run never enters the environment.
+
+- **Deployment branches and tags: "Selected branches and tags", with one tag rule
+  `v*`.** Not "Protected branches only": the publish job is triggered by a tag, and
+  a tag is not a branch, so that option would refuse the release. It would only
+  suit a workflow that published from `main`, which this one does not. A manual
+  re-publish started from a tag passes the same rule.
+- **Required reviewers: keep you.** Leave "Prevent self-review" off while you are the
+  only reviewer, because it blocks whoever started the run from approving it.
+- **Administrator bypass: off,** if the setting is offered, so the rules also apply
+  to you.
+- **Secret in the environment**, not a repository secret, so only jobs that use
+  `environment: pypi` can read it.
+- **A ruleset on the tags `v*`** (Settings, Rules, Rulesets, target: tags), restricting
+  creation to administrators and blocking updates and deletions. The environment rule
+  only checks the tag's name; the ruleset stops a published tag being moved or
+  deleted, and anyone else creating one.
+- **A branch ruleset for `main`** is a separate choice (pull requests required, signed
+  commits). The environment does not need it.
+- **Token scope.** From memory: PyPI can only scope a token to a project that already
+  exists, so the first release needs an account-wide token. Replace the secret with a
+  token scoped to `questkit` straight after the first upload. Trusted publishing
+  (a pending publisher on pypi.org, no secret at all) avoids this and is the
+  alternative if the token is not wanted.
+- **Not yet verified:** that the Run workflow button shows on GitHub (the file must
+  first be on the default branch there) and that `twine upload` accepts the token.
+  Nothing has been published to PyPI.
 
 ## Acceptance Criteria (follow-up)
 
@@ -564,7 +593,12 @@ is not registered on PyPI (checked 2026-10-21: the JSON API returns 404).
 - [ ] The remaining devices that hold the folder (the work device and `grocy-01`) repaired in place, and `realm-prod-01` re-cloned, with the old history pruned (see Other devices after the rewrite)
 - [x] Decide how the two remotes stay in sync: they do not (see Decisions, 2026-10-21)
 - [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`) on the rewritten history
+- [x] `publish-gitea.yml` and `publish-pypi.yml` written, tested and guarded per host (QST-tf4wc); the GitHub remote declared in `repos.yaml` (realm/99-system PR #14)
+- [ ] PyPI: `PYPI_API_TOKEN` added to the `pypi` environment, the environment limited to the tag rule `v*`, and a ruleset protecting `v*` tags
+- [ ] Both publish workflows pushed to GitHub and run by hand once (Gitea: `.devN`, GitHub: build and check)
 - [ ] Publish 0.4.0 to the Gitea registry from the tag
+- [ ] Publish 0.4.0 to PyPI from the tag, then replace the token with one scoped to the project
+- [ ] Decide whether `scripts/release.py --remote` should accept several remotes
 - [ ] Once the GitHub repository is live: delete the Gitea repository `peter/questkit---backup` and the local `questkit---backup` checkout, after re-linking the package and keeping the bundle in `06-archive`
 
 ## Log
@@ -579,4 +613,5 @@ is not registered on PyPI (checked 2026-10-21: the JSON API returns 404).
 - 2026-10-17: #4 and #5 merged. Agreed the history plan: bundle backup, rename the current Gitea repo to questkit---backup, redact in a fresh clone with a Rewritten-from trailer, fresh repos on Gitea and GitHub. Recorded answers on remotes, sync, releases and SHA-256 (marked unverified). Placeholders: work-a/b/c and home. op:// paths approved as public.
 - 2026-10-20: History rewrite done: bundle backup, repo renamed to questkit---backup, 100 of 125 commits rewritten with Rewritten-from trailers, fresh private repo on Gitea with CI green, dev-01 onboarded. Recorded the status of each plan step, the per-device repair procedure (rehearsed in a scratch copy), and that the registry package link still points at the backup repo.
 - 2026-10-21: Pushed main and both tags to github.com/lazytarget/questkit; CI green on GitHub. Re-linked the registry package to peter/questkit. Decided: no sync mechanism between the remotes, nothing rewritten further, LAZY-PROART and LazyNAS need no repair. Recorded the PyPI-from-GitHub design for 0.9.0.
+- 2026-10-21: PyPI moved into the 0.4.0 scope. Declared the GitHub remote as lazytarget in repos.yaml (99-system PR #14); wrote publish-gitea.yml and publish-pypi.yml; recorded the settings recommended for the pypi environment and the release procedure for two remotes.
 
