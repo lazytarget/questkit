@@ -128,7 +128,7 @@ effort: m                      # xs | s | m | l | xl — optional
 owner: alex                    # free text — whose quest this is
 project: some-project          # optional; stamped from the log's own config, if it declares one
 tags: []
-blocked_by: []                  # ids this quest is blocked by
+blocked_by: []                  # ids this depends on; keep them once done
 aliases: [QST-x7k2m]             # surfaces the short id in Obsidian search/quick-switcher/autocomplete
 ---
 ```
