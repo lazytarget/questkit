@@ -4,6 +4,42 @@ All notable changes to questkit are documented here. Each release corresponds to
 one epic quest in `quests/`; see the linked quest for full design rationale,
 rejected alternatives, and acceptance criteria.
 
+## [0.4.0] — 2026-10-21
+
+### Added
+
+- **QST-00myv** Any-groups and semicolon expression lists in the where grammar
+- **QST-22gdn** Commit trailers transition quests from code repos
+- **QST-46rdv** Log flag appends dated entries on set done and scrap
+- **QST-5brm7** Unique custom-field constraint enforced by quest validate
+- **QST-bo3xs** Checklist-progress computed fields criteria_done and criteria_total
+- **QST-cv23q** quest release: tag and push a version in one command
+- **QST-f6otu** Markdown output format for quest list and views
+- **QST-grmbv** Quest edit opens the resolved quest in the editor
+- **QST-lc3d7** Check for duplicates when adding with same title
+- **QST-lh95o** Quest open opens the resolved quest in Obsidian
+- **QST-nij1y** Due-derived computed fields overdue and due_in plus a due view
+- **QST-njwu7** Machine-readable output for quest validate via format json
+- **QST-oguay** Group-by aggregation in quest list
+- **QST-onxad** New frontmatter attributes
+- **QST-qfbm3** Shell completions for bash zsh and fish
+- **QST-reakz** quest-bump-modified stages its own bump instead of failing the commit
+- **QST-tok0k** Milestone view and burnup in the development schema
+- **QST-vy4vt** Body as a lazily-loaded queryable field
+- **QST-whcdp** Quest doctor diagnoses environment logs and installs
+
+### Fixed
+
+- **QST-f0329** Duplicate project: names across logs resolve inconsistently
+- **QST-hzlny** quest set / new --set store blocked_by as a string; validate then checks it character by character
+- **QST-oe92z** Exclude Syncthing conflict copies from quest enumeration
+
+### Changed
+
+- **QST-tf4wc** GitHub Actions CI for the questkit repo
+- **QST-x4zw2** Publish questkit remote package registry and tagged releases
+- **QST-z1exq** Per-type readiness rules in the development schema
+
 ## [0.3.0] — 2026-08-22
 
 [[QST-bmzl2--questkit-v3-loop-closure-multi-log-ux-and-agent-handoff]] — closing
