@@ -1313,9 +1313,10 @@ to own one, so this is questkit's own, scoped to this repo's own `quests/`
 log and `CHANGELOG.md`.
 
 ```bash
-.venv/bin/python scripts/release.py --dry-run   # prints the changelog section, mutates nothing
-.venv/bin/python scripts/release.py             # prompts before tagging + pushing
+.venv/bin/python scripts/release.py --dry-run   # prints the changelog section and the plan, mutates nothing
+.venv/bin/python scripts/release.py             # prompts before committing, tagging and pushing
 .venv/bin/python scripts/release.py --yes       # skip the confirmation prompt
+.venv/bin/python scripts/release.py --remote gitea --remote github   # push to each, in this order
 ```
 
 Before touching anything, it refuses (never guesses — the same posture
@@ -1327,6 +1328,10 @@ Before touching anything, it refuses (never guesses — the same posture
   a reinstall.
 - **A dirty working tree** — nothing to tag cleanly.
 - **An already-existing `vX.Y.Z` tag.**
+- **An unknown remote, or a detached HEAD.** Which remotes: each `--remote` is
+  checked against `git remote`. With none given it uses `origin`, or the only
+  remote there is; a repository with several remotes and no `origin` is
+  refused rather than guessed at, because pushing a release is outward-facing.
 - **Any non-terminal `milestone: X.Y.Z` quest** — every quest carrying that
   milestone must be `done` or `scrapped` first; the offending ids and
   statuses are listed.
@@ -1335,13 +1340,31 @@ Once clear, it assembles the `CHANGELOG.md` section from
 `quest list --where "milestone=X;status=done,scrapped" --format md`
 ([above](#quest-list-options)), grouped release-drafter-style by `type`:
 `feature` → `### Added`, `bug` → `### Fixed`, `chore`/`task`/`epic` →
-`### Changed` (empty categories are omitted). That section is printed,
-prepended above the previous entry in `CHANGELOG.md`, and becomes the
-message on an annotated, signed tag (`git tag -s -a vX.Y.Z -m ...`), pushed
-to `--remote` (default `origin`). `--dry-run` stops right after printing the
-section — nothing is written, tagged, or pushed. `agentic: hitl`
-([§13](#13-agentic-support)): absent `--yes`, it prompts for confirmation
-before the tag/push step.
+`### Changed` (empty categories are omitted). That section is printed and
+prepended above the previous entry in `CHANGELOG.md`. Then, in order:
+
+1. **The changelog is committed on its own** (`chore(release): changelog for
+   X.Y.Z`), so the tag holds its own changelog entry. If a hook refuses the
+   commit, the file is put back as it was and the tree is clean again.
+2. **The tag is created on that commit**: annotated and signed
+   (`git tag -s -a vX.Y.Z`), with the section as its message. The script then
+   checks the tag object really carries a signature, because git 2.43 with ssh
+   signing prints "Couldn't load public key" and still exits 0, leaving an
+   *unsigned* tag. An unsigned tag is deleted and the release stops; the
+   script's own changelog commit is undone, so nothing is left behind.
+3. **The branch and the tag are pushed together** to every `--remote`, in the
+   order given, with `git push --atomic`, so a remote never holds a tag whose
+   commit is missing from its branch. Listing a private remote first means a
+   failure there stops before a public one is touched.
+
+Once a push has succeeded the release is public and nothing is rolled back. If a
+later remote fails, the error says which remotes already have it and prints the
+exact `git push --atomic ...` commands that finish the job.
+
+`--dry-run` stops right after printing the section and the plan - nothing is
+written, committed, tagged, or pushed, and an unknown remote is still rejected.
+`agentic: hitl` ([§13](#13-agentic-support)): absent `--yes`, it prompts before
+the commit/tag/push step, naming the tag, the branch and every remote.
 
 #### Publishing a release
 
@@ -1377,13 +1400,13 @@ the action would turn all of that off, so none is configured. PyPI has no
 documented API for adding a publisher, so that one step is done in its web
 interface.
 
-`scripts/release.py` pushes the tag to a single remote (`--remote`, default
-`origin`). This repository has two remotes and no sync between them, so release
-with `--remote gitea` and then push the same tag to the other remote by hand:
+This repository has two remotes, `gitea` and `github`, and no sync between them.
+It has no `origin`, so `release.py` needs them named, once each. Pushing to
+`gitea` first publishes to the private registry before the public remote is
+touched (the GitHub tag push starts the PyPI workflow):
 
 ```bash
-.venv/bin/python scripts/release.py --remote gitea
-git push github vX.Y.Z
+.venv/bin/python scripts/release.py --remote gitea --remote github
 ```
 
 ### `quest logs [--root DIR ...] [--format table|json] [--verbose]`
