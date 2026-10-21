@@ -1350,7 +1350,7 @@ prepended above the previous entry in `CHANGELOG.md`. Then, in order:
    (`git tag -s -a vX.Y.Z`), with the section as its message. The script then
    checks the tag object really carries a signature, because git 2.43 with ssh
    signing prints "Couldn't load public key" and still exits 0, leaving an
-   *unsigned* tag. An unsigned tag is deleted and the release stops; the
+   *unsigned* tag (git 2.55 refuses properly). An unsigned tag is deleted and the release stops; the
    script's own changelog commit is undone, so nothing is left behind.
 3. **The branch and the tag are pushed together** to every `--remote`, in the
    order given, with `git push --atomic`, so a remote never holds a tag whose

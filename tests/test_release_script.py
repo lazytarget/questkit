@@ -426,11 +426,30 @@ def test_create_tag_makes_a_signed_annotated_tag(tmp_path):
 
 
 @needs_ssh_keygen
-def test_create_tag_refuses_to_leave_an_unsigned_tag_behind(tmp_path):
-    """git 2.43 with ssh signing prints 'Couldn't load public key' and still exits 0,
-    creating an UNSIGNED annotated tag. A release must not be published that way."""
+def test_create_tag_leaves_no_tag_when_the_signing_key_cannot_be_read(tmp_path):
+    """Whatever the git version does: 2.43 prints 'Couldn't load public key' and exits 0
+    with an UNSIGNED tag (the guard catches that), while 2.55 refuses to create it."""
     repo = _init_repo(tmp_path)
     _signing(repo, tmp_path, working=False)
+
+    with pytest.raises(release.ReleaseError):
+        release.create_tag(repo, "v1.0.0", "the message")
+
+    assert not release.tag_exists(repo, "v1.0.0")
+
+
+def test_create_tag_deletes_an_unsigned_tag_that_git_reported_as_created(tmp_path, monkeypatch):
+    """The guard's own branch, forced on any git version: git exits 0 but the tag
+    object carries no signature."""
+    repo = _init_repo(tmp_path)
+    real_run = release._run
+
+    def unsigned(argv, cwd):
+        if argv[:4] == ["git", "tag", "-s", "-a"]:
+            argv = ["git", "tag", "-a", *argv[4:]]  # the same tag, without -s
+        return real_run(argv, cwd)
+
+    monkeypatch.setattr(release, "_run", unsigned)
 
     with pytest.raises(release.ReleaseError, match="did not sign"):
         release.create_tag(repo, "v1.0.0", "the message")

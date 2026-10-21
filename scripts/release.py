@@ -319,9 +319,9 @@ def create_tag(repo_root: Path, tag: str, message: str) -> None:
     """Create the annotated, signed tag, and make sure it really is signed.
 
     git exits 0 after some ssh signing errors (git 2.43 with a signing key that
-    cannot be loaded prints the error and still creates an unsigned annotated tag),
-    so the exit status proves nothing: the tag object itself must carry a signature
-    block, or it is deleted and the release stops.
+    cannot be loaded prints the error and still creates an unsigned annotated tag;
+    git 2.55 refuses properly), so the exit status proves nothing: the tag object
+    itself must carry a signature block, or it is deleted and the release stops.
     """
     _run(["git", "tag", "-s", "-a", tag, "-m", message], repo_root)
     body = _run(["git", "cat-file", "tag", tag], repo_root).stdout
