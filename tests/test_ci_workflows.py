@@ -1,6 +1,8 @@
 """Guards for QST-tf4wc: CI lives in `.github/workflows`, covers the supported
-Python range, and publishing goes to the Gitea registry only (GitHub / PyPI
-publishing is deferred to 0.9.0)."""
+Python range, and each registry has its own publish workflow: `publish-gitea.yml`
+for the private Gitea registry and `publish-pypi.yml` for PyPI. Both live in the
+same directory and both runners read it, so each is guarded to run only on the
+host it is meant for."""
 
 from __future__ import annotations
 
@@ -71,36 +73,133 @@ def test_ci_scans_the_history_for_secrets_on_github():
     assert job["steps"][0]["with"]["fetch-depth"] == 0
 
 
-def test_publish_triggers_on_version_tags_and_targets_the_private_registry():
-    workflow = _load("publish.yml")
-    assert workflow["on"]["push"]["tags"] == ["v*"]
-    text = (WORKFLOWS / "publish.yml").read_text(encoding="utf-8")
+GITHUB = "https://github.com"
+
+
+def _text(name: str) -> str:
+    return (WORKFLOWS / name).read_text(encoding="utf-8")
+
+
+def _steps(job: dict) -> list:
+    return job["steps"]
+
+
+# --- publish-gitea.yml: the private Gitea registry ---------------------------------
+
+
+def test_the_old_publish_workflow_name_is_gone():
+    assert not (WORKFLOWS / "publish.yml").exists()
+    assert (WORKFLOWS / "publish-gitea.yml").exists()
+
+
+def test_gitea_publish_runs_on_version_tags_and_by_hand():
+    on = _load("publish-gitea.yml")["on"]
+    assert on["push"]["tags"] == ["v*"]
+    assert "workflow_dispatch" in on
+
+
+def test_gitea_publish_targets_the_private_registry_and_never_pypi():
+    text = _text("publish-gitea.yml")
     assert "PYPI_REGISTRY_URL" in text
     assert "upload.pypi.org" not in text
     assert "pypa/gh-action-pypi-publish" not in text
+    assert "PYPI_API_TOKEN" not in text
 
 
-def test_publish_avoids_what_gitea_actions_does_not_support():
+def test_gitea_publish_avoids_what_gitea_actions_does_not_support():
     """Gitea reserves the GITEA_/GITHUB_ prefixes for secrets and variables, and
     does not support v4 of the artifact actions."""
-    text = (WORKFLOWS / "publish.yml").read_text(encoding="utf-8")
+    text = _text("publish-gitea.yml")
     assert "secrets.GITEA_" not in text and "vars.GITEA_" not in text
     assert "upload-artifact" not in text and "download-artifact" not in text
 
 
-def test_publish_can_be_dry_run_with_a_dev_version():
-    workflow = _load("publish.yml")
-    assert "workflow_dispatch" in workflow["on"]
-    steps = workflow["jobs"]["publish"]["steps"]
+def test_gitea_manual_runs_publish_a_dev_version_only():
+    steps = _steps(_load("publish-gitea.yml")["jobs"]["publish"])
     dev = next(s for s in steps if "dev version" in s.get("name", ""))
     tag = next(s for s in steps if "Tag matches" in s.get("name", ""))
     assert "ref_type != 'tag'" in dev["if"] and ".dev" in dev["run"]
     assert "ref_type == 'tag'" in tag["if"]
 
 
-def test_publish_is_skipped_where_no_registry_is_configured():
-    job = _load("publish.yml")["jobs"]["publish"]
-    assert "vars.PYPI_REGISTRY_URL" in job["if"]
+def test_gitea_publish_needs_a_configured_registry_and_never_runs_on_github():
+    """Skipped where no registry is configured, and also on github.com even if
+    someone sets the variable there."""
+    condition = _load("publish-gitea.yml")["jobs"]["publish"]["if"]
+    assert "vars.PYPI_REGISTRY_URL" in condition
+    assert f"github.server_url != '{GITHUB}'" in condition
+
+
+# --- publish-pypi.yml: PyPI, from GitHub only --------------------------------------
+
+
+def test_pypi_publish_runs_on_version_tags_and_by_hand():
+    on = _load("publish-pypi.yml")["on"]
+    assert on["push"]["tags"] == ["v*"]
+    publish = on["workflow_dispatch"]["inputs"]["publish"]
+    assert publish["type"] == "boolean"
+    assert publish["default"] is False, "a manual run must be a dry run unless asked"
+
+
+def test_every_pypi_job_runs_on_github_only():
+    """The Gitea runner reads this directory too. Its artifact actions are v3-only,
+    so a PyPI job there could only fail, and must never see PyPI credentials."""
+    for name, job in _load("publish-pypi.yml")["jobs"].items():
+        assert f"github.server_url == '{GITHUB}'" in job["if"], name
+
+
+def test_the_pypi_token_is_only_in_the_publish_job_behind_the_pypi_environment():
+    jobs = _load("publish-pypi.yml")["jobs"]
+    assert jobs["publish"]["environment"] == "pypi"
+    assert "environment" not in jobs["build"]
+    assert "PYPI_API_TOKEN" in str(jobs["publish"])
+    assert "secrets." not in str(jobs["build"]), "the build runs project code and must not see secrets"
+
+
+def test_the_publish_job_runs_no_project_code():
+    """It holds the token, so it only downloads the built files and uploads them."""
+    publish = _load("publish-pypi.yml")["jobs"]["publish"]
+    assert publish["needs"] == "build"
+    for step in _steps(publish):
+        assert "actions/checkout" not in step.get("uses", "")
+        run = step.get("run", "")
+        assert "python -m build" not in run and "pip install -e" not in run
+
+
+def test_pypi_publishes_only_from_a_tag_and_a_manual_run_must_ask_for_it():
+    condition = _load("publish-pypi.yml")["jobs"]["publish"]["if"]
+    assert "github.ref_type == 'tag'" in condition
+    assert "github.event_name == 'push'" in condition
+    assert "inputs.publish" in condition
+
+
+def test_pypi_build_checks_the_tag_against_the_package_version():
+    steps = _steps(_load("publish-pypi.yml")["jobs"]["build"])
+    check = next(s for s in steps if "Tag matches" in s.get("name", ""))
+    assert "ref_type == 'tag'" in check["if"]
+    assert "pyproject.toml" in check["run"]
+
+
+def test_pypi_upload_can_be_rerun_and_uses_the_token_user():
+    upload = next(
+        s for s in _steps(_load("publish-pypi.yml")["jobs"]["publish"]) if "twine upload" in s.get("run", "")
+    )
+    assert "--skip-existing" in upload["run"]
+    assert upload["env"]["TWINE_USERNAME"] == "__token__"
+    assert upload["env"]["TWINE_PASSWORD"] == "${{ secrets.PYPI_API_TOKEN }}"
+
+
+def test_pypi_publishes_do_not_overlap():
+    assert _load("publish-pypi.yml")["concurrency"]["cancel-in-progress"] is False
+
+
+# --- the two workflows must never publish to each other's registry ----------------
+
+
+def test_each_registry_has_its_own_credentials_and_neither_crosses_over():
+    gitea, pypi = _text("publish-gitea.yml"), _text("publish-pypi.yml")
+    assert "PYPI_API_TOKEN" not in gitea
+    assert "PYPI_REGISTRY" not in pypi
 
 
 def _hook_config() -> dict:

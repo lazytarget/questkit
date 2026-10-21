@@ -1,0 +1,85 @@
+name: Publish to PyPI
+
+# Publishes to PyPI, from GitHub only. The Gitea registry is publish-gitea.yml, and
+# the two never share credentials.
+#
+# A pushed version tag (v*) builds the package and publishes it. A manual run
+# (Actions tab, Run workflow; available once this file is on the default branch)
+# builds and checks the package and stops there, unless it is started from a tag
+# with "publish" ticked, which publishes that tag again (a PyPI version can never
+# be overwritten, so `--skip-existing` makes a re-run after a partial upload safe).
+#
+# Setup, in the GitHub repository settings:
+#   environment "pypi"        limit it to the tag pattern v*, and add yourself as a
+#                             required reviewer
+#   environment secret        PYPI_API_TOKEN, a PyPI token scoped to the questkit
+#                             project (not the whole account)
+#
+# Gitea's runner reads this directory too; every job here is guarded so that it
+# is skipped there (Gitea does not support v4 of the artifact actions, and must
+# never see a PyPI credential).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to PyPI (only from a v* tag); leave off to build and check only"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.server_url == 'https://github.com' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - name: Tag matches pyproject version
+        if: ${{ github.ref_type == 'tag' }}
+        run: |
+          version=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match pyproject version $version" >&2
+            exit 1
+          fi
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  # The only job that sees the token. It runs no project code: it downloads what
+  # `build` produced and uploads it, so a build script cannot read the secret.
+  publish:
+    needs: build
+    if: ${{ github.server_url == 'https://github.com' && github.ref_type == 'tag' && (github.event_name == 'push' || inputs.publish) }}
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install twine
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload --skip-existing dist/*

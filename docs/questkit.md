@@ -1343,6 +1343,38 @@ section — nothing is written, tagged, or pushed. `agentic: hitl`
 ([§13](#13-agentic-support)): absent `--yes`, it prompts for confirmation
 before the tag/push step.
 
+#### Publishing a release
+
+The tag is what publishes. Two workflows in `.github/workflows/` watch for a
+`v*` tag, one per registry, and neither shares credentials with the other:
+
+| Workflow | Registry | Runs on | Needs |
+|----------|----------|---------|-------|
+| `publish-gitea.yml` | the Gitea package registry | Gitea only | variable `PYPI_REGISTRY_URL`, secrets `PYPI_REGISTRY_USER` and `PYPI_REGISTRY_TOKEN` |
+| `publish-pypi.yml` | PyPI | GitHub only | environment `pypi` with the secret `PYPI_API_TOKEN` |
+
+Both read the same directory on both hosts, so each job is guarded to run only
+where it belongs: the Gitea job is skipped on github.com, and every PyPI job is
+skipped anywhere else. A tag whose name does not match `pyproject.toml`'s version
+fails the build before anything is uploaded.
+
+Manual runs (Actions tab, **Run workflow**, once the file is on the default
+branch) are safe by default. `publish-gitea.yml` publishes a `.devN` version of
+the current version. `publish-pypi.yml` builds and checks the package and stops,
+unless it is started from a tag with **publish** ticked, which publishes that tag
+again (`--skip-existing` makes a re-run after a partial upload harmless).
+A registry never lets a version be overwritten, so a failed release gets a new
+version number.
+
+`scripts/release.py` pushes the tag to a single remote (`--remote`, default
+`origin`). This repository has two remotes and no sync between them, so release
+with `--remote gitea` and then push the same tag to the other remote by hand:
+
+```bash
+.venv/bin/python scripts/release.py --remote gitea
+git push lazytarget vX.Y.Z
+```
+
 ### `quest logs [--root DIR ...] [--format table|json] [--verbose]`
 
 Inventories every quest log found under the swept root(s) — read-only; it
