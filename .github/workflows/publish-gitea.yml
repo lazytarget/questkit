@@ -1,12 +1,13 @@
-name: Publish
+name: Publish to the Gitea registry
 
-# On a version tag: build the package and upload it to a PyPI-compatible
-# package registry (Gitea's, for now). GitHub / PyPI publishing is out of
-# scope until 0.9.0.
+# On a version tag: build the package and upload it to Gitea's PyPI-compatible
+# package registry. Publishing to PyPI is publish-pypi.yml, and the two never
+# share credentials.
 #
-# This job is meant for a self-hosted Gitea Actions runner: a registry behind
-# a private network is not reachable from GitHub-hosted runners, so the job
-# is skipped wherever PYPI_REGISTRY_URL is not set (e.g. on github.com).
+# Gitea's runner also reads this directory, and so does GitHub's, so this job
+# is guarded both ways: it needs PYPI_REGISTRY_URL to be set (a registry behind a
+# private network is not reachable from GitHub-hosted runners) and it never runs
+# on github.com, even if someone sets the variable there.
 #
 # Configure in the Gitea repository settings (Actions):
 #   variable PYPI_REGISTRY_URL    https://<gitea-host>/api/packages/<owner>/pypi
@@ -16,10 +17,10 @@ name: Publish
 # No artifact upload/download actions are used: v4 of those is not supported
 # by Gitea Actions, so build and upload happen in one job.
 
-# A manual run (workflow_dispatch, available once this file is on the default
-# branch) is a dry run of the same path: it publishes a `.devN` pre-release of
-# the current version and never the real version number, which a registry
-# will not let you overwrite.
+# A manual run (Actions tab, Run workflow; available once this file is on the
+# default branch) is a dry run of the same path: it publishes a `.devN`
+# pre-release of the current version and never the real version number, which a
+# registry will not let you overwrite.
 on:
   push:
     tags: ["v*"]
@@ -30,7 +31,7 @@ permissions:
 
 jobs:
   publish:
-    if: ${{ vars.PYPI_REGISTRY_URL != '' }}
+    if: ${{ vars.PYPI_REGISTRY_URL != '' && github.server_url != 'https://github.com' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
