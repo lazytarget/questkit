@@ -1500,9 +1500,9 @@ registered for both `quest` and its `qst` alias.
 
 ```bash
 $ quest --version
-questkit 0.3.0
+questkit 0.4.0
 $ quest version
-questkit 0.3.0
+questkit 0.4.0
 ```
 
 **A stale editable install will report the old version until reinstalled**
