@@ -1,17 +1,17 @@
 ---
 id: QST-x4zw2
 title: Publish questkit remote package registry and tagged releases
-description: Take questkit public on GitHub with a Gitea registry, PyPI and tagged releases; live on GitHub with CI green, PyPI workflow written; the PyPI secret, environment rules, first publish and the 0.4.0 release still open.
+description: "Took questkit public: rewritten history, live on GitHub with CI, a Gitea registry, tagged v0.1.0 to v0.4.0. The PyPI publish, remaining cleanup and release.py gaps moved to QST-9bfft."
 project: questkit
 type: epic
-status: in-progress
+status: done
 priority: medium
 tags:
   - questkit
   - release
   - infra
 created: 2026-08-22
-status_changed: 2026-10-16
+status_changed: 2026-10-21
 modified: 2026-10-21
 agentic:
 aliases:
@@ -52,8 +52,8 @@ mature (0.9.0). (Superseded 2026-10-21: PyPI is in the 0.4.0 scope.)
 ## Acceptance Criteria
 
 - [x] Audit the Gitea Git repo history for secrets and sensitive data (tokens, hostnames, personal data, Realm-internal paths) before anything is published to GitHub. The Gitea remote continues to live after GitHub goes live
-- [ ] Push the code to the public GitHub repo `github.com/lazytarget/questkit`
-- [ ] Set up a Gitea PyPI-compatible package registry so `pip install --index-url <gitea>/api/packages/<owner>/pypi/simple questkit` works. GitHub / PyPI publishing follows once the setup is more mature (0.9.0)
+- [x] Push the code to the public GitHub repo `github.com/lazytarget/questkit` (main and every tag are there)
+- [x] A Gitea PyPI-compatible package registry works: the workflow published `questkit 0.4.0.dev13` and it installs with pip from the registry (the real 0.4.0 is checked in QST-9bfft)
 
 ### History audit (2026-10-16)
 
@@ -583,7 +583,7 @@ tag rule, because the dry run never enters the environment.
 - [x] Gitea PyPI registry: a local `.dev1` upload succeeded and installs from the registry (the package link must be redone, see below)
 - [x] `ci.yml` runs green on the Gitea runner (runs 675 to 686, including the rewritten history)
 - [x] `ci.yml` runs green on GitHub (run 39551580657 on the first push: pytest 3.11 to 3.13, lint and types, quest log, gitleaks)
-- [ ] Manual run of `publish.yml` publishes a `.devN` version
+- [x] A manual run of `publish-gitea.yml` publishes a `.devN` version (Gitea run 718, `0.4.0.dev13`)
 - [x] Full history backed up as a `git bundle` in the archive folder and checked with `git bundle verify`, with the filter-repo commit map kept beside it
 - [x] Current Gitea repository renamed to `questkit---backup` and kept private
 - [x] History rewritten in a fresh clone: employer names redacted, a `Rewritten-from: <old id>` trailer on every commit whose id changes, `sensitive_scan.py history` reports 0 matches, commit count unchanged, tip tree identical apart from the redacted terms, tests pass
@@ -592,16 +592,17 @@ tag rule, because the dry run never enters the environment.
 - [x] Registry package `questkit` re-linked to `peter/questkit` (done with `tea api` and the owner's PAT)
 - [x] The new clone on `dev-01` onboarded (`make onboard-zone`, `pre-commit install`, `make apply-repos REPO=questkit`)
 - [x] `LAZY-PROART` (not synced for six months, nothing to repair) and `LazyNAS` (will not accept this folder, Model C) need no action
-- [ ] The remaining devices that hold the folder (the work device and `grocy-01`) repaired in place, and `realm-prod-01` re-cloned, with the old history pruned (see Other devices after the rewrite)
+- [x] The work device, `grocy-01` and `dev-01` repaired in place (reported by Peter on 2026-10-21; `LAZY-PROART` and `LazyNAS` need no action)
 - [x] Decide how the two remotes stay in sync: they do not (see Decisions, 2026-10-21)
-- [ ] Once every `milestone: 0.4.0` quest is complete: bump `pyproject.toml` to 0.4.0, run `scripts/release.py`, tag `v0.4.0` (and retro-tag `v0.1.0`) on the rewritten history
+- [x] `pyproject.toml` bumped to 0.4.0, `v0.1.0` tagged on 0b06868, and `v0.4.0` tagged. Done by hand with `release.py`'s own functions, because the script tags before it commits the changelog (see QST-9bfft)
 - [x] `publish-gitea.yml` and `publish-pypi.yml` written, tested and guarded per host (QST-tf4wc); the GitHub remote declared in `repos.yaml` (realm/99-system PR #14)
-- [ ] PyPI: `PYPI_API_TOKEN` added to the `pypi` environment, the environment limited to the tag rule `v*`, and a ruleset protecting `v*` tags
-- [ ] Both publish workflows pushed to GitHub and run by hand once (Gitea: `.devN`, GitHub: build and check)
-- [ ] Publish 0.4.0 to the Gitea registry from the tag
-- [ ] Publish 0.4.0 to PyPI from the tag, then replace the token with one scoped to the project
-- [ ] Decide whether `scripts/release.py --remote` should accept several remotes
-- [ ] Once the GitHub repository is live: delete the Gitea repository `peter/questkit---backup` and the local `questkit---backup` checkout, after re-linking the package and keeping the bundle in `06-archive`
+- [x] The `pypi` environment is limited to the tag rule `v*`, and an active ruleset protects the `v*` tags (read from the GitHub API on 2026-10-21)
+- [x] Both publish workflows pushed to GitHub and run by hand once (Gitea run 718 published `0.4.0.dev13`; GitHub run 39579351494 built and checked, `publish` skipped)
+
+Moved to QST-9bfft on 2026-10-21, because the PyPI account was not reachable when
+v0.4.0 shipped: the `PYPI_API_TOKEN` secret and the PyPI publish of 0.4.0, the
+check that the tag published to the Gitea registry, the `realm-prod-01` re-clone,
+deleting the backup repository, and the decision on `release.py --remote`.
 
 ## Log
 
@@ -616,4 +617,5 @@ tag rule, because the dry run never enters the environment.
 - 2026-10-20: History rewrite done: bundle backup, repo renamed to questkit---backup, 100 of 125 commits rewritten with Rewritten-from trailers, fresh private repo on Gitea with CI green, dev-01 onboarded. Recorded the status of each plan step, the per-device repair procedure (rehearsed in a scratch copy), and that the registry package link still points at the backup repo.
 - 2026-10-21: Pushed main and both tags to github.com/lazytarget/questkit; CI green on GitHub. Re-linked the registry package to peter/questkit. Decided: no sync mechanism between the remotes, nothing rewritten further, LAZY-PROART and LazyNAS need no repair. Recorded the PyPI-from-GitHub design for 0.9.0.
 - 2026-10-21: PyPI moved into the 0.4.0 scope. Declared the GitHub remote as lazytarget in repos.yaml (99-system PR #14); wrote publish-gitea.yml and publish-pypi.yml; recorded the settings recommended for the pypi environment and the release procedure for two remotes.
+- 2026-10-21: Closed with the 0.4.0 release: history rewritten, live on GitHub with CI, Gitea registry working, v0.1.0 to v0.4.0 tagged. The PyPI publish (blocked on the API token), the realm-prod-01 re-clone, deleting the backup repo and the release.py gaps moved to QST-9bfft.
 

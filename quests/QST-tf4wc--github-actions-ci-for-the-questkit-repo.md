@@ -1,17 +1,17 @@
 ---
 id: QST-tf4wc
 title: GitHub Actions CI for the questkit repo
-description: "CI for the questkit repo in .github/workflows (tests on 3.11-3.13, lint, types, quest log) and one publish workflow per registry, Gitea and PyPI, each guarded to its own host."
+description: "CI for the questkit repo in .github/workflows (tests on 3.11-3.13, lint, types, quest log) and one publish workflow per registry, each guarded to its own host and startable by hand."
 project: questkit
 type: chore
-status: in-progress
+status: done
 priority: medium
 tags:
   - questkit
   - ci
   - infra
 created: 2026-08-22
-status_changed: 2026-10-16
+status_changed: 2026-10-21
 modified: 2026-10-21
 agentic:
 aliases:
@@ -50,9 +50,10 @@ From R&D catalog CI-1.
 - [x] No workflow lives under `.gitea/workflows/`
 - [x] Two publish workflows, `publish-gitea.yml` and `publish-pypi.yml`, each guarded to run only on its own host, so neither runner publishes to the other's registry
 - [x] Both workflows can be started by hand (Run workflow); a manual run never publishes a release version by accident
-- [ ] A tag push builds the package and publishes it to the Gitea PyPI registry
-- [ ] A tag push builds the package and publishes it to PyPI
-- [ ] A manual run of each workflow succeeds once the files are on the default branch (Gitea: `.devN` publish, GitHub: build and check)
+- [x] A manual run of each workflow succeeds on the default branch (Gitea: `.devN` publish, run 718; GitHub: build and check, run 39579351494)
+
+Moved to QST-9bfft on 2026-10-21: that a tag push publishes to the Gitea registry
+(verified right after the v0.4.0 tag) and to PyPI (blocked on the API token).
 
 ## Log
 
@@ -60,4 +61,5 @@ From R&D catalog CI-1.
 - 2026-10-16: Bumped 0.9.0 -> 0.4.0; workflows live in .github/workflows (repo is going public on GitHub); package registry is Gitea PyPI for now, GitHub/PyPI at 0.9.0.
 - 2026-10-16: Workflows written (ci.yml, publish.yml) and checked locally on Python 3.11, 3.12 and 3.13 from a copy with no private directory tree; not yet run on a real GitHub runner. Repo made self-contained by vendoring schemas/development.yaml.
 - 2026-10-21: Scope widened: PyPI moved into 0.4.0. Replaced publish.yml with publish-gitea.yml and added publish-pypi.yml, both startable by hand; guarded so neither runner publishes to the other's registry; tests and actionlint pass.
+- 2026-10-21: Closed with the 0.4.0 release. Verifying that the v0.4.0 tag publishes to the Gitea registry, and the PyPI publish, moved to QST-9bfft.
 
