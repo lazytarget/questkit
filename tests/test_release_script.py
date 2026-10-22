@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import shutil
 import subprocess
 import sys
 from datetime import date
@@ -35,6 +36,7 @@ def _init_repo(tmp_path: Path) -> Path:
     _git(["init"], repo)
     _git(["config", "user.email", "test@example.com"], repo)
     _git(["config", "user.name", "Test"], repo)
+    _git(["config", "commit.gpgsign", "false"], repo)  # never inherit a machine's signing setup
     (repo / "README.md").write_text("hi\n", encoding="utf-8")
     _git(["add", "README.md"], repo)
     _git(["commit", "-m", "init"], repo)
@@ -48,7 +50,7 @@ def _write_pyproject(repo: Path, version: str) -> None:
 
 
 def _args(repo: Path, **overrides) -> argparse.Namespace:
-    defaults = dict(yes=True, dry_run=False, remote="origin", repo_root=repo, quests_dir=None)
+    defaults = dict(yes=True, dry_run=False, remote=["origin"], repo_root=repo, quests_dir=None)
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
 
@@ -206,6 +208,324 @@ def test_write_changelog_inserts_new_section_above_existing(tmp_path):
     assert "Some preamble." in text
 
 
+# --- helpers for real repositories, bare remotes and signing ------------------------
+
+
+def _out(args: list[str], cwd: Path) -> str:
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def _head(repo: Path) -> str:
+    return _out(["rev-parse", "HEAD"], repo)
+
+
+def _branch(repo: Path) -> str:
+    return _out(["branch", "--show-current"], repo)
+
+
+def _add_remote(repo: Path, tmp_path: Path, name: str = "origin") -> Path:
+    bare = tmp_path / f"{name}.git"
+    _git(["init", "--bare", str(bare)], tmp_path)
+    _git(["remote", "add", name, str(bare)], repo)
+    return bare
+
+
+def _remote_ref(bare: Path, ref: str) -> str | None:
+    result = subprocess.run(
+        ["git", "--git-dir", str(bare), "rev-parse", "--verify", "--quiet", ref],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() or None
+
+
+def _refuse_pushes(bare: Path) -> None:
+    hook = bare / "hooks" / "pre-receive"
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text("#!/bin/sh\necho 'no pushes today' >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+
+
+def _refuse_commits(repo: Path) -> None:
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 'hook says no' >&2\nexit 1\n", encoding="utf-8")
+    hook.chmod(0o755)
+
+
+needs_ssh_keygen = pytest.mark.skipif(shutil.which("ssh-keygen") is None, reason="needs ssh-keygen to sign a tag")
+
+
+def _signing(repo: Path, tmp_path: Path, *, working: bool = True) -> None:
+    """Sign tags with a throwaway ssh key, or point at a key that does not exist."""
+    key = tmp_path / "sign_key"
+    if working and not key.exists():
+        subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
+    _git(["config", "gpg.format", "ssh"], repo)
+    _git(["config", "user.signingkey", str(key) if working else str(tmp_path / "no-such-key")], repo)
+
+
+def _release_repo(tmp_path, monkeypatch, make_log, *, remotes=("origin",), signing=True) -> Path:
+    """A repo ready to release 0.4.0: one finished milestone quest, a clean tree."""
+    repo = _init_repo(tmp_path)
+    _write_pyproject(repo, "0.4.0")
+    quests_dir = _seed_quest_log(repo, make_log)
+    _git(["add", "-A"], repo)
+    _git(["commit", "-m", "bump + log"], repo)
+    for name in remotes:
+        _add_remote(repo, tmp_path, name)
+    _signing(repo, tmp_path, working=signing)
+    monkeypatch.setattr(release, "installed_version", lambda: "0.4.0")
+
+    from questkit.cli import main as quest_main
+
+    assert quest_main([
+        "new", "Shipped feature", "--in", str(quests_dir), "--type", "feature",
+        "--status", "done", "--set", "milestone=0.4.0",
+    ]) == 0
+    _git(["add", "-A"], repo)
+    _git(["commit", "-m", "add quest"], repo)
+    return repo
+
+
+# --- which remotes -----------------------------------------------------------------
+
+
+def test_resolve_remotes_keeps_the_explicit_remotes_in_the_order_given(tmp_path):
+    repo = _init_repo(tmp_path)
+    _add_remote(repo, tmp_path, "alpha")
+    _add_remote(repo, tmp_path, "beta")
+
+    assert release.resolve_remotes(repo, ["beta", "alpha"]) == ["beta", "alpha"]
+
+
+def test_resolve_remotes_names_the_unknown_remote_and_the_real_ones(tmp_path):
+    repo = _init_repo(tmp_path)
+    _add_remote(repo, tmp_path, "alpha")
+
+    with pytest.raises(release.ReleaseError) as exc:
+        release.resolve_remotes(repo, ["nope"])
+
+    assert "'nope'" in str(exc.value)
+    assert "alpha" in str(exc.value)
+
+
+def test_resolve_remotes_asks_for_each_remote_once(tmp_path):
+    repo = _init_repo(tmp_path)
+    _add_remote(repo, tmp_path, "alpha")
+
+    assert release.resolve_remotes(repo, ["alpha", "alpha"]) == ["alpha"]
+
+
+def test_resolve_remotes_defaults_to_origin(tmp_path):
+    repo = _init_repo(tmp_path)
+    _add_remote(repo, tmp_path, "origin")
+    _add_remote(repo, tmp_path, "other")
+
+    assert release.resolve_remotes(repo, None) == ["origin"]
+
+
+def test_resolve_remotes_defaults_to_the_only_remote_when_there_is_no_origin(tmp_path):
+    repo = _init_repo(tmp_path)
+    _add_remote(repo, tmp_path, "gitea")
+
+    assert release.resolve_remotes(repo, None) == ["gitea"]
+
+
+def test_resolve_remotes_refuses_to_pick_between_several_remotes(tmp_path):
+    """Pushing a release is outward-facing: with two remotes and no origin, the
+    caller has to say where it goes."""
+    repo = _init_repo(tmp_path)
+    _add_remote(repo, tmp_path, "gitea")
+    _add_remote(repo, tmp_path, "github")
+
+    with pytest.raises(release.ReleaseError, match="--remote") as exc:
+        release.resolve_remotes(repo, None)
+
+    assert "gitea" in str(exc.value) and "github" in str(exc.value)
+
+
+def test_resolve_remotes_refuses_a_repository_with_no_remote(tmp_path):
+    repo = _init_repo(tmp_path)
+
+    with pytest.raises(release.ReleaseError, match="no git remote"):
+        release.resolve_remotes(repo, None)
+
+
+def test_current_branch_names_the_checked_out_branch(tmp_path):
+    repo = _init_repo(tmp_path)
+    _git(["checkout", "-q", "-b", "release-branch"], repo)
+
+    assert release.current_branch(repo) == "release-branch"
+
+
+def test_current_branch_refuses_a_detached_head(tmp_path):
+    repo = _init_repo(tmp_path)
+    _git(["checkout", "-q", "--detach"], repo)
+
+    with pytest.raises(release.ReleaseError, match="detached"):
+        release.current_branch(repo)
+
+
+# --- committing the changelog ------------------------------------------------------
+
+
+def test_commit_changelog_commits_only_the_changelog(tmp_path):
+    repo = _init_repo(tmp_path)
+    before = _head(repo)
+    (repo / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+
+    sha = release.commit_changelog(repo, "0.4.0")
+
+    assert sha == _head(repo)
+    assert _out(["rev-parse", "HEAD~1"], repo) == before
+    assert _out(["show", "--name-only", "--format=", "HEAD"], repo) == "CHANGELOG.md"
+    assert _out(["log", "-1", "--format=%s"], repo) == "chore(release): changelog for 0.4.0"
+    assert _out(["status", "--porcelain"], repo) == ""
+
+
+def test_commit_changelog_restores_an_existing_file_when_the_commit_is_refused(tmp_path):
+    repo = _init_repo(tmp_path)
+    (repo / "CHANGELOG.md").write_text("old\n", encoding="utf-8")
+    _git(["add", "CHANGELOG.md"], repo)
+    _git(["commit", "-m", "add changelog"], repo)
+    before = _head(repo)
+    (repo / "CHANGELOG.md").write_text("new\n", encoding="utf-8")
+    _refuse_commits(repo)
+
+    with pytest.raises(release.ReleaseError, match="hook says no"):
+        release.commit_changelog(repo, "0.4.0")
+
+    assert (repo / "CHANGELOG.md").read_text(encoding="utf-8") == "old\n"
+    assert _head(repo) == before
+    assert _out(["status", "--porcelain"], repo) == ""
+
+
+def test_commit_changelog_removes_a_file_it_created_when_the_commit_is_refused(tmp_path):
+    repo = _init_repo(tmp_path)
+    (repo / "CHANGELOG.md").write_text("brand new\n", encoding="utf-8")
+    _refuse_commits(repo)
+
+    with pytest.raises(release.ReleaseError):
+        release.commit_changelog(repo, "0.4.0")
+
+    assert not (repo / "CHANGELOG.md").exists()
+    assert _out(["status", "--porcelain"], repo) == ""
+
+
+# --- creating the tag ----------------------------------------------------------------
+
+
+@needs_ssh_keygen
+def test_create_tag_makes_a_signed_annotated_tag(tmp_path):
+    repo = _init_repo(tmp_path)
+    _signing(repo, tmp_path)
+
+    release.create_tag(repo, "v1.0.0", "the message")
+
+    assert _out(["cat-file", "-t", "v1.0.0"], repo) == "tag"
+    assert "SSH SIGNATURE" in _out(["cat-file", "-p", "v1.0.0"], repo)
+
+
+@needs_ssh_keygen
+def test_create_tag_leaves_no_tag_when_the_signing_key_cannot_be_read(tmp_path):
+    """Whatever the git version does: 2.43 prints 'Couldn't load public key' and exits 0
+    with an UNSIGNED tag (the guard catches that), while 2.55 refuses to create it."""
+    repo = _init_repo(tmp_path)
+    _signing(repo, tmp_path, working=False)
+
+    with pytest.raises(release.ReleaseError):
+        release.create_tag(repo, "v1.0.0", "the message")
+
+    assert not release.tag_exists(repo, "v1.0.0")
+
+
+def test_create_tag_deletes_an_unsigned_tag_that_git_reported_as_created(tmp_path, monkeypatch):
+    """The guard's own branch, forced on any git version: git exits 0 but the tag
+    object carries no signature."""
+    repo = _init_repo(tmp_path)
+    real_run = release._run
+
+    def unsigned(argv, cwd):
+        if argv[:4] == ["git", "tag", "-s", "-a"]:
+            argv = ["git", "tag", "-a", *argv[4:]]  # the same tag, without -s
+        return real_run(argv, cwd)
+
+    monkeypatch.setattr(release, "_run", unsigned)
+
+    with pytest.raises(release.ReleaseError, match="did not sign"):
+        release.create_tag(repo, "v1.0.0", "the message")
+
+    assert not release.tag_exists(repo, "v1.0.0")
+
+
+# --- pushing the release -----------------------------------------------------------
+
+
+def _tagged_repo(tmp_path: Path, *remotes: str) -> tuple[Path, str]:
+    repo = _init_repo(tmp_path)
+    for name in remotes:
+        _add_remote(repo, tmp_path, name)
+    _git(["tag", "-a", "v1.0.0", "-m", "release"], repo)
+    return repo, _branch(repo)
+
+
+def test_push_release_sends_the_branch_and_the_tag_to_every_remote(tmp_path):
+    repo, branch = _tagged_repo(tmp_path, "alpha", "beta")
+
+    release.push_release(repo, branch, "v1.0.0", ["alpha", "beta"])
+
+    for name in ("alpha", "beta"):
+        bare = tmp_path / f"{name}.git"
+        assert _remote_ref(bare, f"refs/heads/{branch}") == _head(repo)
+        assert _remote_ref(bare, "refs/tags/v1.0.0^{commit}") == _head(repo)
+
+
+def test_push_release_is_atomic_so_a_rejected_branch_keeps_the_tag_off_the_remote(tmp_path):
+    """A tag whose commit is not on the branch is the half-published state to avoid."""
+    repo, branch = _tagged_repo(tmp_path, "alpha")
+    bare = tmp_path / "alpha.git"
+    other = tmp_path / "other"
+    _git(["clone", "-q", str(bare), str(other)], tmp_path)  # an empty remote: seed it with a diverging commit
+    _git(["config", "user.email", "o@example.com"], other)
+    _git(["config", "user.name", "Other"], other)
+    (other / "x.txt").write_text("x", encoding="utf-8")
+    _git(["add", "x.txt"], other)
+    _git(["commit", "-m", "elsewhere"], other)
+    _git(["push", "-q", "origin", f"HEAD:refs/heads/{branch}"], other)
+
+    with pytest.raises(release.ReleaseError):
+        release.push_release(repo, branch, "v1.0.0", ["alpha"])
+
+    assert _remote_ref(bare, "refs/tags/v1.0.0") is None
+
+
+def test_push_release_failure_names_what_was_pushed_and_how_to_finish(tmp_path):
+    repo, branch = _tagged_repo(tmp_path, "alpha", "beta")
+    _refuse_pushes(tmp_path / "beta.git")
+
+    with pytest.raises(release.ReleaseError) as exc:
+        release.push_release(repo, branch, "v1.0.0", ["alpha", "beta"])
+
+    message = str(exc.value)
+    assert "'beta'" in message
+    assert "no pushes today" in message
+    assert "already pushed to: alpha" in message
+    assert f"git push --atomic beta refs/heads/{branch} refs/tags/v1.0.0" in message
+    assert _remote_ref(tmp_path / "alpha.git", "refs/tags/v1.0.0") is not None
+
+
+def test_push_release_stops_at_the_first_failing_remote(tmp_path):
+    """The order given is the order published: a private remote first means a
+    failure there keeps the public one untouched."""
+    repo, branch = _tagged_repo(tmp_path, "alpha", "beta")
+    _refuse_pushes(tmp_path / "alpha.git")
+
+    with pytest.raises(release.ReleaseError) as exc:
+        release.push_release(repo, branch, "v1.0.0", ["alpha", "beta"])
+
+    assert "already pushed to: (none)" in str(exc.value)
+    assert _remote_ref(tmp_path / "beta.git", "refs/tags/v1.0.0") is None
+
+
 # --- orchestration -------------------------------------------------------------------
 
 
@@ -269,91 +589,177 @@ def test_run_refuses_on_non_terminal_milestone_quests(tmp_path, monkeypatch, mak
         release.run(_args(repo))
 
 
-def test_run_dry_run_prints_section_and_does_not_write_or_tag(tmp_path, monkeypatch, capsys, make_log):
-    repo = _init_repo(tmp_path)
-    _write_pyproject(repo, "0.4.0")
-    quests_dir = _seed_quest_log(repo, make_log)
-    _git(["add", "-A"], repo)
-    _git(["commit", "-m", "bump + log"], repo)
-    monkeypatch.setattr(release, "installed_version", lambda: "0.4.0")
+def test_run_refuses_an_unknown_remote_before_changing_anything(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log)
+    before = _head(repo)
 
-    from questkit.cli import main as quest_main
+    with pytest.raises(release.ReleaseError, match="'nope'"):
+        release.run(_args(repo, remote=["origin", "nope"]))
 
-    assert quest_main([
-        "new", "Shipped", "--in", str(quests_dir), "--type", "feature",
-        "--status", "done", "--set", "milestone=0.4.0",
-    ]) == 0
-    _git(["add", "-A"], repo)
-    _git(["commit", "-m", "add quest"], repo)
+    assert _head(repo) == before
+    assert not (repo / "CHANGELOG.md").exists()
+    assert not release.tag_exists(repo, "v0.4.0")
 
-    def _boom(*a, **k):
-        raise AssertionError("create_and_push_tag must not be called on --dry-run")
 
-    monkeypatch.setattr(release, "create_and_push_tag", _boom)
+def test_run_refuses_a_detached_head_before_changing_anything(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log)
+    _git(["checkout", "-q", "--detach"], repo)
 
-    release.run(_args(repo, dry_run=True))
+    with pytest.raises(release.ReleaseError, match="detached"):
+        release.run(_args(repo))
 
-    out = capsys.readouterr().out
-    assert "### Added" in out
-    assert "Shipped" in out
     assert not (repo / "CHANGELOG.md").exists()
 
 
+def test_run_dry_run_prints_section_and_plan_and_changes_nothing(tmp_path, monkeypatch, capsys, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log, remotes=("gitea", "github"))
+    before = _head(repo)
+
+    release.run(_args(repo, dry_run=True, remote=["gitea", "github"]))
+
+    captured = capsys.readouterr()
+    assert "### Added" in captured.out
+    assert "Shipped feature" in captured.out
+    assert "would commit the changelog" in captured.err
+    assert "v0.4.0" in captured.err
+    assert "gitea, github" in captured.err
+    assert _head(repo) == before
+    assert not (repo / "CHANGELOG.md").exists()
+    assert not release.tag_exists(repo, "v0.4.0")
+    assert _remote_ref(tmp_path / "gitea.git", "refs/tags/v0.4.0") is None
+
+
+def test_run_dry_run_still_rejects_an_unknown_remote(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log)
+
+    with pytest.raises(release.ReleaseError, match="'nope'"):
+        release.run(_args(repo, dry_run=True, remote=["nope"]))
+
+
+def test_confirm_prompt_names_the_tag_the_branch_and_every_remote(monkeypatch):
+    seen = []
+    monkeypatch.setattr("builtins.input", lambda prompt: seen.append(prompt) or "y")
+
+    assert release._confirm("v0.4.0", "main", ["gitea", "github"]) is True
+
+    assert "v0.4.0" in seen[0] and "main" in seen[0] and "gitea, github" in seen[0]
+
+
 def test_run_aborts_without_yes_when_user_declines(tmp_path, monkeypatch, make_log):
-    repo = _init_repo(tmp_path)
-    _write_pyproject(repo, "0.4.0")
-    _seed_quest_log(repo, make_log)
-    _git(["add", "-A"], repo)
-    _git(["commit", "-m", "bump + log"], repo)
-    monkeypatch.setattr(release, "installed_version", lambda: "0.4.0")
-    monkeypatch.setattr(release, "_confirm", lambda tag: False)
-
-    def _boom(*a, **k):
-        raise AssertionError("create_and_push_tag must not be called when the user declines")
-
-    monkeypatch.setattr(release, "create_and_push_tag", _boom)
+    repo = _release_repo(tmp_path, monkeypatch, make_log)
+    before = _head(repo)
+    monkeypatch.setattr(release, "_confirm", lambda tag, branch, remotes: False)
 
     with pytest.raises(release.ReleaseError, match="aborted"):
         release.run(_args(repo, yes=False))
 
+    assert _head(repo) == before
     assert not (repo / "CHANGELOG.md").exists()
+    assert not release.tag_exists(repo, "v0.4.0")
 
 
-def test_run_happy_path_writes_changelog_and_tags(tmp_path, monkeypatch, make_log):
-    repo = _init_repo(tmp_path)
-    _write_pyproject(repo, "0.4.0")
-    quests_dir = _seed_quest_log(repo, make_log)
-    _git(["add", "-A"], repo)
-    _git(["commit", "-m", "bump + log"], repo)
-    monkeypatch.setattr(release, "installed_version", lambda: "0.4.0")
+@needs_ssh_keygen
+def test_run_commits_the_changelog_then_tags_that_commit_and_pushes_both(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log)
+    before = _head(repo)
 
-    from questkit.cli import main as quest_main
+    release.run(_args(repo, remote=["origin"]))
 
-    assert quest_main([
-        "new", "Shipped feature", "--in", str(quests_dir), "--type", "feature",
-        "--status", "done", "--set", "milestone=0.4.0",
-    ]) == 0
-    _git(["add", "-A"], repo)
-    _git(["commit", "-m", "add quest"], repo)
+    head = _head(repo)
+    assert head != before
+    assert _out(["rev-parse", "HEAD~1"], repo) == before
+    assert _out(["log", "-1", "--format=%s"], repo) == "chore(release): changelog for 0.4.0"
+    assert _out(["status", "--porcelain"], repo) == ""
+    # the tag is on the changelog commit, so it contains its own changelog entry
+    assert _out(["rev-parse", "v0.4.0^{commit}"], repo) == head
+    assert "## [0.4.0]" in _out(["show", "v0.4.0:CHANGELOG.md"], repo)
+    assert "Shipped feature" in _out(["show", "v0.4.0:CHANGELOG.md"], repo)
+    # an annotated, signed tag whose message is the changelog section
+    tag_object = _out(["cat-file", "-p", "v0.4.0"], repo)
+    assert "SSH SIGNATURE" in tag_object
+    assert "Shipped feature" in tag_object
+    # and the branch and the tag both reached the remote
+    bare = tmp_path / "origin.git"
+    assert _remote_ref(bare, f"refs/heads/{_branch(repo)}") == head
+    assert _remote_ref(bare, "refs/tags/v0.4.0^{commit}") == head
 
-    calls = []
-    monkeypatch.setattr(
-        release, "create_and_push_tag",
-        lambda repo_root, tag, message, *, remote: calls.append((repo_root, tag, message, remote)),
-    )
 
-    release.run(_args(repo, yes=True, remote="upstream"))
+@needs_ssh_keygen
+def test_run_publishes_to_every_remote_asked_for(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log, remotes=("gitea", "github"))
 
-    assert len(calls) == 1
-    called_repo, tag, message, remote = calls[0]
-    assert called_repo == repo
-    assert tag == "v0.4.0"
-    assert "Shipped feature" in message
-    assert remote == "upstream"
+    release.run(_args(repo, remote=["gitea", "github"]))
 
-    changelog = (repo / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "## [0.4.0]" in changelog
-    assert "Shipped feature" in changelog
+    for name in ("gitea", "github"):
+        assert _remote_ref(tmp_path / f"{name}.git", "refs/tags/v0.4.0^{commit}") == _head(repo)
+
+
+@needs_ssh_keygen
+def test_run_leaves_a_remote_it_was_not_told_about_alone(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log, remotes=("gitea", "github"))
+
+    release.run(_args(repo, remote=["gitea"]))
+
+    assert _remote_ref(tmp_path / "gitea.git", "refs/tags/v0.4.0") is not None
+    assert _remote_ref(tmp_path / "github.git", "refs/tags/v0.4.0") is None
+
+
+def test_run_rolls_the_changelog_back_when_the_commit_is_refused(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log)
+    before = _head(repo)
+    _refuse_commits(repo)
+
+    with pytest.raises(release.ReleaseError, match="hook says no"):
+        release.run(_args(repo))
+
+    assert _head(repo) == before
+    assert not (repo / "CHANGELOG.md").exists()
+    assert _out(["status", "--porcelain"], repo) == ""
+    assert not release.tag_exists(repo, "v0.4.0")
+    assert _remote_ref(tmp_path / "origin.git", "refs/tags/v0.4.0") is None
+
+
+@needs_ssh_keygen
+def test_run_undoes_its_own_commit_when_the_tag_cannot_be_signed(tmp_path, monkeypatch, make_log):
+    """No tag and no changelog commit may be left behind to trip the next attempt."""
+    repo = _release_repo(tmp_path, monkeypatch, make_log, signing=False)
+    before = _head(repo)
+
+    with pytest.raises(release.ReleaseError):
+        release.run(_args(repo))
+
+    assert _head(repo) == before
+    assert not (repo / "CHANGELOG.md").exists()
+    assert _out(["status", "--porcelain"], repo) == ""
+    assert not release.tag_exists(repo, "v0.4.0")
+    assert _remote_ref(tmp_path / "origin.git", "refs/tags/v0.4.0") is None
+
+
+@needs_ssh_keygen
+def test_run_keeps_the_commit_and_tag_when_a_push_fails_and_says_how_to_finish(tmp_path, monkeypatch, make_log):
+    repo = _release_repo(tmp_path, monkeypatch, make_log, remotes=("gitea", "github"))
+    _refuse_pushes(tmp_path / "github.git")
+
+    with pytest.raises(release.ReleaseError) as exc:
+        release.run(_args(repo, remote=["gitea", "github"]))
+
+    assert "already pushed to: gitea" in str(exc.value)
+    assert "git push --atomic github" in str(exc.value)
+    assert release.tag_exists(repo, "v0.4.0")  # published on gitea already: not rolled back
+    assert _out(["rev-parse", "v0.4.0^{commit}"], repo) == _head(repo)
+
+
+# --- command line ------------------------------------------------------------------------
+
+
+def test_remote_can_be_given_more_than_once():
+    args = release._parse_args(["--remote", "gitea", "--remote", "github"])
+
+    assert args.remote == ["gitea", "github"]
+
+
+def test_remote_defaults_to_none_so_the_repository_decides():
+    assert release._parse_args([]).remote is None
 
 
 def test_main_reports_release_error_and_returns_1(tmp_path, monkeypatch, capsys):
